@@ -11,9 +11,22 @@ $makeromSha256 = "88df4455e60556374e202d507f54ee03fac7493ec9554ab853157524b6d69d
 $drive = $app.Substring(0, 1).ToLowerInvariant()
 $msysApp = "/$drive" + $app.Substring(2).Replace("\", "/")
 $clientConfig = Get-Content (Join-Path $app "config\server.mk") -Raw
+$buildConfig = Get-Content (Join-Path $app "include\BuildConfig.hpp") -Raw
+$versionMatch = [regex]::Match($buildConfig, 'Version\s*=\s*"(\d+)\.(\d+)\.(\d+)"')
+if (-not $versionMatch.Success) {
+    throw "BuildConfig version must use major.minor.patch."
+}
+$major = [int]$versionMatch.Groups[1].Value
+$minor = [int]$versionMatch.Groups[2].Value
+$patch = [int]$versionMatch.Groups[3].Value
+if ($major -gt 63 -or $minor -gt 63 -or $patch -gt 15) {
+    throw "BuildConfig version exceeds Nintendo title-version limits."
+}
+$titleVersion = ($major -shl 10) -bor ($minor -shl 4) -bor $patch
 
 Write-Host "Building with app\config\server.mk:" -ForegroundColor Cyan
 $clientConfig.Trim().Split([Environment]::NewLine) | ForEach-Object { Write-Host "  $_" }
+Write-Host "Nintendo title version: $titleVersion" -ForegroundColor Cyan
 
 if (-not (Test-Path $makerom)) {
     curl.exe -L --fail --retry 3 -o $archive $makeromUrl
@@ -38,11 +51,11 @@ if ($LASTEXITCODE -ne 0) {
 New-Item -ItemType Directory -Path (Join-Path $output "cia") -Force | Out-Null
 Push-Location $app
 try {
-    & $makerom -f cia -o "..\output\cia\ReBank.cia" -rsf "packaging\rebank.rsf" -target t -elf "rebank.elf" -icon "rebank.smdh" -desc "app:7"
+    & $makerom -f cia -o "..\output\cia\ReBank.cia" -rsf "packaging\rebank.rsf" -target t -elf "rebank.elf" -icon "rebank.smdh" -desc "app:7" -ver $titleVersion
     if ($LASTEXITCODE -ne 0) {
         throw "CIA packaging failed."
     }
-    & $makerom -f cci -o "..\output\ReBank.3ds" -rsf "packaging\rebank.rsf" -target t -elf "rebank.elf" -icon "rebank.smdh" -desc "app:7"
+    & $makerom -f cci -o "..\output\ReBank.3ds" -rsf "packaging\rebank.rsf" -target t -elf "rebank.elf" -icon "rebank.smdh" -desc "app:7" -ver $titleVersion
     if ($LASTEXITCODE -ne 0) {
         throw "3DS packaging failed."
     }

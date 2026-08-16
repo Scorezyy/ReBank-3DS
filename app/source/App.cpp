@@ -170,7 +170,7 @@ bool UiRect::contains(touchPosition point) const {
     return point.px >= x && point.px <= x + width && point.py >= y && point.py <= y + height;
 }
 
-App::App()
+App::App(std::string executablePath, bool homebrew)
     : screen_(Screen::Intro),
     previousScreen_(Screen::Welcome),
       topLeft_(nullptr),
@@ -180,6 +180,10 @@ App::App()
             textFont_(nullptr),
     pokemonSprites_(nullptr),
       introStartedAt_(svcGetSystemTick()),
+        executablePath_(std::move(executablePath)),
+        homebrew_(homebrew),
+        updateThread_(nullptr),
+        updateState_(UpdateState::Idle),
     authThread_(nullptr),
     authState_(AuthState::Idle),
     authOperation_(AuthOperation::Login),
@@ -237,21 +241,14 @@ App::App()
         Logger::instance().error("Pokemon sprite sheet could not be loaded");
     }
     credentials_.init();
-    std::string refreshToken;
-    if (sessionStore_.load(refreshToken)) {
-        authPassword_ = std::move(refreshToken);
-        beginAuth(AuthOperation::Refresh);
-    } else if (auto stored = credentials_.load()) {
-        username_ = stored->username;
-        password_ = stored->password;
-        autoLogin_ = true;
-        authUsername_ = stored->username;
-        authPassword_ = stored->password;
-        beginAuth(AuthOperation::Login);
-    }
+    beginUpdate();
 }
 
 App::~App() {
+    if (updateThread_) {
+        threadJoin(updateThread_, U64_MAX);
+        threadFree(updateThread_);
+    }
     if (loadThread_) {
         threadJoin(loadThread_, U64_MAX);
         threadFree(loadThread_);
@@ -311,6 +308,7 @@ void App::update(u32 keysDown, u32 keysHeld, circlePosition circle, touchPositio
         return;
     }
 
+    pollUpdate();
     pollAuth();
     pollLoad();
     pollUpload();
@@ -860,6 +858,40 @@ void App::updateForm(u32 keysDown, u32 keysHeld, circlePosition circle, touchPos
     }
 }
 
+void App::beginUpdate() {
+    status_ = "Checking for updates...";
+    updateState_.store(UpdateState::Running, std::memory_order_release);
+    updateThread_ = threadCreate(updateWorker, this, 128 * 1024, 0x30, -2, false);
+    if (!updateThread_) {
+        updateState_.store(UpdateState::Idle, std::memory_order_release);
+        status_ = "Update check could not start.";
+        Logger::instance().warning("Update worker creation failed");
+    }
+}
+
+void App::pollUpdate() {
+    if (updateState_.load(std::memory_order_acquire) != UpdateState::Completed) {
+        return;
+    }
+    threadJoin(updateThread_, U64_MAX);
+    threadFree(updateThread_);
+    updateThread_ = nullptr;
+    updateState_.store(UpdateState::Idle, std::memory_order_release);
+    status_ = updateResult_.message;
+    if (updateResult_.updated) {
+        Logger::instance().info(updateResult_.message);
+        running_ = false;
+    } else if (!updateResult_.success) {
+        Logger::instance().warning(updateResult_.message);
+    }
+}
+
+void App::updateWorker(void* argument) {
+    auto* app = static_cast<App*>(argument);
+    app->updateResult_ = UpdateInstaller::run(app->api_, app->executablePath_, app->homebrew_);
+    app->updateState_.store(UpdateState::Completed, std::memory_order_release);
+}
+
 void App::beginAuth(AuthOperation operation) {
     if (authState_.load(std::memory_order_acquire) == AuthState::Running) {
         return;
@@ -1191,7 +1223,8 @@ void App::pollLoad() {
 }
 
 bool App::isLoading() const {
-    return authState_.load(std::memory_order_acquire) == AuthState::Running
+    return updateState_.load(std::memory_order_acquire) == UpdateState::Running
+        || authState_.load(std::memory_order_acquire) == AuthState::Running
         || (loadState_.load(std::memory_order_acquire) == LoadState::Running
             && loadOperation_ != LoadOperation::CloudBox);
 }
@@ -1733,7 +1766,9 @@ void App::renderLoadingTop(float eyeOffset) {
     }
 
     std::string_view message = "Bitte warten...";
-    if (authState_.load(std::memory_order_acquire) == AuthState::Running) {
+    if (updateState_.load(std::memory_order_acquire) == UpdateState::Running) {
+        message = "Pruefe Updates...";
+    } else if (authState_.load(std::memory_order_acquire) == AuthState::Running) {
         message = "Anmelden...";
     } else {
         switch (loadingPhase_.load(std::memory_order_acquire)) {
@@ -1750,7 +1785,9 @@ void App::renderLoadingTop(float eyeOffset) {
 
 void App::renderLoadingBottom() {
     std::string_view detail = "Initialisiere...";
-    if (authState_.load(std::memory_order_acquire) == AuthState::Running) {
+    if (updateState_.load(std::memory_order_acquire) == UpdateState::Running) {
+        detail = "Lade und verifiziere neue Versionen sicher...";
+    } else if (authState_.load(std::memory_order_acquire) == AuthState::Running) {
         detail = "Pruefe Server und Sitzung...";
     } else {
         switch (loadingPhase_.load(std::memory_order_acquire)) {
