@@ -1,0 +1,7 @@
+app/build/
+app/rebank.3dsx
+app/rebank.elf
+app/rebank.map
+app/rebank.smdh
+output/
+*.log

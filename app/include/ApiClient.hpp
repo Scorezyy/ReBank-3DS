@@ -1,0 +1,121 @@
+#pragma once
+
+#include <array>
+#include <cstdint>
+#include <string>
+#include <vector>
+
+#include "SaveAdapter.hpp"
+
+struct AccountSession {
+    std::string accountId;
+    std::string accessToken;
+    std::string refreshToken;
+    std::uint16_t boxLimit = 50;
+};
+
+struct AuthResult {
+    bool success = false;
+    std::string message;
+    AccountSession session;
+};
+
+struct UploadPokemon {
+    std::uint16_t boxPosition = 1;
+    std::uint8_t slot = 1;
+    std::uint8_t format = 0;
+    std::vector<std::uint8_t> payload;
+    std::uint16_t species = 0;
+    std::string nickname;
+    std::string trainerName;
+    std::uint8_t level = 0;
+    std::string gameCode;
+};
+
+struct UploadResult {
+    bool success = false;
+    std::string message;
+    std::uint8_t storedCount = 0;
+};
+
+struct DownloadPokemon {
+    std::uint16_t boxPosition = 1;
+    std::uint8_t slot = 1;
+    std::uint8_t format = 0;
+    std::vector<std::uint8_t> payload;
+    std::uint16_t species = 0;
+    std::string nickname;
+    std::string trainerName;
+    std::uint8_t level = 0;
+    std::string gameCode;
+};
+
+struct DownloadResult {
+    bool success = false;
+    std::string message;
+    DownloadPokemon pokemon;
+};
+
+struct DeleteResult {
+    bool success = false;
+    std::string message;
+};
+
+struct BoxListResult {
+    bool success = false;
+    std::string message;
+    std::array<PokemonSummary, 30> pokemon{};
+};
+
+class ApiClient {
+public:
+    ApiClient();
+    ~ApiClient();
+    bool available() const;
+    AuthResult login(const std::string& username, const std::string& password);
+    AuthResult registerAccount(
+        const std::string& username,
+        const std::string& email,
+        const std::string& password
+    );
+    AuthResult refresh(const std::string& refreshToken);
+    AuthResult requestPasswordReset(const std::string& email);
+    UploadResult uploadPokemon(const std::vector<UploadPokemon>& pokemon, const std::string& accessToken);
+    DownloadResult downloadPokemon(
+        std::uint16_t boxPosition,
+        std::uint8_t slot,
+        const std::string& accessToken
+    );
+    DeleteResult deleteCloudPokemon(
+        std::uint16_t boxPosition,
+        std::uint8_t slot,
+        const std::string& accessToken
+    );
+    BoxListResult listCloudBox(
+        std::uint16_t boxPosition,
+        const std::string& accessToken
+    );
+
+private:
+    struct HttpResult {
+        bool success = false;
+        std::uint32_t status = 0;
+        std::string body;
+        std::string message;
+    };
+
+    AuthResult credentialsRequest(
+        const char* path,
+        const std::string& username,
+        const std::string& password,
+        const std::string& email = {}
+    );
+    AuthResult post(const char* path, const std::string& body);
+    HttpResult request(
+        const char* path,
+        const std::string& body,
+        const std::string& authorization = {},
+        const char* method = nullptr
+    );
+    bool initialized_ = false;
+};

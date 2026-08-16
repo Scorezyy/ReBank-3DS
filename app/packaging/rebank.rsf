@@ -1,0 +1,47 @@
+BasicInfo:
+  Title: ReBank
+  ProductCode: CTR-H-RBNK
+  Logo: Nintendo
+
+RomFs:
+  RootPath: romfs
+
+TitleInfo:
+  Category: Application
+  UniqueId: 0xEB001
+
+Option:
+  UseOnSD: true
+  FreeProductCode: true
+  MediaFootPadding: false
+  EnableCrypt: false
+  EnableCompress: true
+  AllowUnalignedSection: false
+
+AccessControlInfo:
+  FileSystemAccess:
+    - CategoryFileSystemTool
+    - TwlCardBackup
+    - DirectSdmc
+    - DirectSdmcWrite
+  IoAccessControl:
+    - FsMountCardSpi
+    - UseCardSpi
+  ServiceAccessControl:
+    - APT:U
+    - ac:u
+    - cfg:u
+    - dsp::DSP
+    - fs:USER
+    - gsp::Gpu
+    - hid:USER
+    - http:C
+    - ndm:u
+    - ptm:u
+    - pxi:dev
+    - ssl:C
+
+SystemControlInfo:
+  SaveDataSize: 1MB
+  RemasterVersion: 0
+  StackSize: 0x40000
