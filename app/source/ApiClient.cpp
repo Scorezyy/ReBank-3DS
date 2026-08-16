@@ -17,6 +17,12 @@ constexpr std::size_t MaximumResponseSize = 64 * 1024;
 constexpr std::size_t MaximumCertificateSize = 16 * 1024;
 constexpr u64 RequestTimeout = 30'000'000'000ULL;
 
+std::string resultCode(Result result) {
+    char text[11]{};
+    std::snprintf(text, sizeof(text), "0x%08lX", static_cast<unsigned long>(result));
+    return text;
+}
+
 const std::vector<u8>& trustedRootCertificate() {
     static const std::vector<u8> certificate = [] {
         FILE* file = std::fopen("romfs:/assets/rebank-ca.der", "rb");
@@ -436,8 +442,9 @@ ApiClient::HttpResult ApiClient::request(
     httpcContext context{};
     Result result = httpcOpenContext(&context, httpMethod, url.c_str(), 0);
     if (R_FAILED(result)) {
-        Logger::instance().error("Connection context failed");
-        return {false, 0, {}, "Could not connect to the configured server."};
+        const std::string code = resultCode(result);
+        Logger::instance().error("HTTP context failed: " + code);
+        return {false, 0, {}, "Connection setup failed (" + code + ")."};
     }
 
     const auto& rootCertificate = trustedRootCertificate();
@@ -451,6 +458,12 @@ ApiClient::HttpResult ApiClient::request(
         rootCertificate.data(),
         static_cast<u32>(rootCertificate.size())
     );
+    if (R_FAILED(result)) {
+        const std::string code = resultCode(result);
+        httpcCloseContext(&context);
+        Logger::instance().error("Trusted root CA failed: " + code);
+        return {false, 0, {}, "TLS certificate setup failed (" + code + ")."};
+    }
 
     std::vector<u32> upload;
     if (hasBody) {
@@ -472,15 +485,20 @@ ApiClient::HttpResult ApiClient::request(
     if (R_SUCCEEDED(result)) {
         result = httpcBeginRequest(&context);
     }
+    if (R_FAILED(result)) {
+        const std::string code = resultCode(result);
+        httpcCloseContext(&context);
+        Logger::instance().error("HTTP request setup failed: " + code);
+        return {false, 0, {}, "Secure connection failed (" + code + ")."};
+    }
 
     u32 status = 0;
-    if (R_SUCCEEDED(result)) {
-        result = httpcGetResponseStatusCodeTimeout(&context, &status, RequestTimeout);
-    }
+    result = httpcGetResponseStatusCodeTimeout(&context, &status, RequestTimeout);
     if (R_FAILED(result)) {
+        const std::string code = resultCode(result);
         httpcCloseContext(&context);
-        Logger::instance().error("HTTP request failed");
-        return {false, 0, {}, "The server did not respond in time."};
+        Logger::instance().error("HTTP response failed: " + code);
+        return {false, 0, {}, "The server response failed (" + code + ")."};
     }
 
     u32 downloaded = 0;
@@ -496,7 +514,9 @@ ApiClient::HttpResult ApiClient::request(
     httpcGetDownloadSizeState(&context, &downloaded, &contentSize);
     httpcCloseContext(&context);
     if (R_FAILED(result) && static_cast<u32>(result) != HTTPC_RESULTCODE_DOWNLOADPENDING) {
-        return {false, 0, {}, "The server response could not be downloaded."};
+        const std::string code = resultCode(result);
+        Logger::instance().error("HTTP download failed: " + code);
+        return {false, 0, {}, "The server response could not be downloaded (" + code + ")."};
     }
     if (downloaded > MaximumResponseSize) {
         return {false, 0, {}, "The server response is too large."};
