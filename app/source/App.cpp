@@ -998,6 +998,7 @@ void App::beginLoad(LoadOperation operation) {
     }
     loadOperation_ = operation;
     loadingStartedAt_ = svcGetSystemTick();
+    loadProgress_.store(0, std::memory_order_release);
     switch (operation) {
         case LoadOperation::DiscoverGames:
             discoveredGames_.clear();
@@ -1041,8 +1042,13 @@ void App::loadWorker(void* argument) {
                 game.save = candidate.summary();
                 game.cartridge = candidate.isCartridge();
                 app->discoveredGames_.push_back(std::move(game));
+                app->loadProgress_.store(
+                    games.empty() ? 0 : static_cast<int>((index + 1) * 50 / games.size()),
+                    std::memory_order_release);
             }
             app->loadingPhase_.store(LoadingPhase::ReadingIcons, std::memory_order_release);
+            const std::size_t iconCount = app->discoveredGames_.size();
+            std::size_t iconIndex = 0;
             for (DiscoveredGame& game : app->discoveredGames_) {
                 game.iconPixels.reset(
                     new (std::nothrow) std::array<std::uint16_t, 48 * 48>());
@@ -1051,6 +1057,10 @@ void App::loadWorker(void* argument) {
                         games[game.catalogIndex], game.cartridge, *game.iconPixels)) {
                     game.iconPixels.reset();
                 }
+                ++iconIndex;
+                app->loadProgress_.store(
+                    iconCount == 0 ? 100 : static_cast<int>(50 + iconIndex * 50 / iconCount),
+                    std::memory_order_release);
             }
         } else if (app->loadOperation_ == LoadOperation::OpenGame) {
             const auto games = supportedGames();
@@ -1062,24 +1072,30 @@ void App::loadWorker(void* argument) {
                 app->openGameResult_.localBox = app->saveAdapter_.currentBox();
                 app->openGameResult_.localBoxName =
                     app->saveAdapter_.boxName(app->openGameResult_.localBox);
+                app->loadProgress_.store(10, std::memory_order_release);
                 app->loadingPhase_.store(LoadingPhase::SearchingPokemon, std::memory_order_release);
                 app->openGameResult_.localPokemon =
                     app->saveAdapter_.readBox(app->openGameResult_.localBox);
                 for (std::size_t slot = 0; slot < 30; ++slot) {
                     app->openGameResult_.localPayloads[slot] =
                         app->saveAdapter_.readPokemon(app->openGameResult_.localBox, slot);
+                    app->loadProgress_.store(
+                        10 + static_cast<int>((slot + 1) * 80 / 30),
+                        std::memory_order_release);
                 }
                 app->loadingPhase_.store(LoadingPhase::LoadingBank, std::memory_order_release);
                 if (!app->session_.accessToken.empty()) {
                     app->openGameResult_.cloudBox =
                         app->api_.listCloudBox(1, app->session_.accessToken);
                 }
+                app->loadProgress_.store(100, std::memory_order_release);
                 app->openGameResult_.success = true;
             }
         } else if (app->loadOperation_ == LoadOperation::CloudBox) {
             app->cloudLoadResult_ = app->api_.listCloudBox(
                 static_cast<std::uint16_t>(app->loadingCloudBox_ + 1),
                 app->session_.accessToken);
+            app->loadProgress_.store(100, std::memory_order_release);
         }
     } catch (...) {
         if (app->loadOperation_ == LoadOperation::OpenGame) {
@@ -1803,6 +1819,20 @@ void App::renderLoadingBottom() {
     }
     drawCentered(detail, 160.0F, 76.0F, 0.50F, Ink);
 
+    const bool determinate = updateState_.load(std::memory_order_acquire) != UpdateState::Running
+        && authState_.load(std::memory_order_acquire) != AuthState::Running
+        && loadingPhase_.load(std::memory_order_acquire) != LoadingPhase::Idle;
+
+    if (determinate) {
+        const int percent = std::clamp(loadProgress_.load(std::memory_order_acquire), 0, 100);
+        drawCentered("Progress: " + std::to_string(percent) + "%",
+                     160.0F, 110.0F, 0.62F, Ink);
+        C2D_DrawRectSolid(36.0F, 138.0F, 0.2F, 248.0F, 10.0F, C2D_Color32(205, 220, 211, 255));
+        C2D_DrawRectSolid(36.0F, 138.0F, 0.3F, 248.0F * static_cast<float>(percent) / 100.0F,
+                          10.0F, Brand);
+        return;
+    }
+
     const double seconds = static_cast<double>(svcGetSystemTick()) / SYSCLOCK_ARM11;
     const float cycle = std::fmod(static_cast<float>(seconds) * 0.65F, 1.0F);
     C2D_DrawRectSolid(36.0F, 122.0F, 0.2F, 248.0F, 8.0F, C2D_Color32(205, 220, 211, 255));
@@ -2150,22 +2180,10 @@ void App::renderStorageTop(float eyeOffset) {
             const std::uint8_t monFormat = pokemon.format != 0
                 ? pokemon.format
                 : pokemonFormatFromCode(pokemon.gameCode);
-            bool incompatible = false;
-            if (saveGen != 0 && monFormat != 0 && monFormat != saveGen) {
-                if (monFormat < saveGen) {
-                    incompatible = false;
-                } else {
-                    const PokemonPayload* payload = nullptr;
-                    if (!pendingUploadPayloads_[slot].data.empty()) {
-                        payload = &pendingUploadPayloads_[slot];
-                    } else if (!cachedCloudPayloads_[slot].data.empty()) {
-                        payload = &cachedCloudPayloads_[slot];
-                    }
-                    incompatible = payload
-                        ? !saveAdapter_.canImportPokemon(payload->format, payload->data)
-                        : true;
-                }
-            }
+            // Greyed out when the mon is newer than the save: it can never move
+            // down a generation. Pure integer compare, so no per-frame parsing.
+            const bool incompatible = saveGen != 0 && monFormat != 0
+                && monFormat > saveGen;
             C2D_ImageTint tint{};
             C2D_PlainImageTint(&tint, C2D_Color32(72, 72, 72, 255), 0.82F);
             C2D_DrawImageAt(image, spriteX, spriteY, 0.3F,

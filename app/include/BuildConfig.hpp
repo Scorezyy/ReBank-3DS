@@ -4,7 +4,7 @@
 #include <string_view>
 
 namespace BuildConfig {
-inline constexpr std::string_view Version = "0.1.3";
+inline constexpr std::string_view Version = "0.1.4";
 inline constexpr std::string_view Channel = "BETA";
 inline constexpr std::string_view Author = "Jxstn";
 
