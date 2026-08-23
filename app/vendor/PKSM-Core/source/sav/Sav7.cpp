@@ -246,6 +246,8 @@ namespace pksm
                 trade(*pkm);
             }
 
+            pkm->encrypt();
+
             std::ranges::copy(
                 pkm->rawData().subspan(0, PK7::BOX_LENGTH), &data[boxOffset(box, slot)]);
         }

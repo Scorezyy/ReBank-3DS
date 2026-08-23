@@ -51,11 +51,11 @@ if ($LASTEXITCODE -ne 0) {
 New-Item -ItemType Directory -Path (Join-Path $output "cia") -Force | Out-Null
 Push-Location $app
 try {
-    & $makerom -f cia -o "..\output\cia\ReBank.cia" -rsf "packaging\rebank.rsf" -target t -elf "rebank.elf" -icon "rebank.smdh" -desc "app:7" -ver $titleVersion
+    & $makerom -f cia -o "..\output\cia\ReBank.cia" -rsf "packaging\rebank.rsf" -target t -elf "rebank.elf" -icon "rebank.smdh" -banner "packaging\icon\banner.bnr" -desc "app:7" -ver $titleVersion
     if ($LASTEXITCODE -ne 0) {
         throw "CIA packaging failed."
     }
-    & $makerom -f cci -o "..\output\ReBank.3ds" -rsf "packaging\rebank.rsf" -target t -elf "rebank.elf" -icon "rebank.smdh" -desc "app:7" -ver $titleVersion
+    & $makerom -f cci -o "..\output\ReBank.3ds" -rsf "packaging\rebank.rsf" -target t -elf "rebank.elf" -icon "rebank.smdh" -banner "packaging\icon\banner.bnr" -desc "app:7" -ver $titleVersion
     if ($LASTEXITCODE -ne 0) {
         throw "3DS packaging failed."
     }

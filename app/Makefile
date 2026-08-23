@@ -24,6 +24,7 @@ ROMFS := romfs
 APP_TITLE := ReBank
 APP_DESCRIPTION := Secure Pokemon storage client
 APP_AUTHOR := ReBank contributors
+APP_ICON := $(TOPDIR)/packaging/icon/icon48.png
 
 ARCH := -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 CFLAGS := -g -Wall -Wextra -O2 -mword-relocations -ffunction-sections $(ARCH)

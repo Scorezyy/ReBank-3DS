@@ -258,38 +258,6 @@ std::unique_ptr<pksm::PKX> convertG4ToG5Stable(const pksm::PKX& source) {
     return target;
 }
 
-void repairLegacyGen5Transfer(pksm::PKX& pokemon) {
-    if (pokemon.generation() != pksm::Generation::FIVE || !pokemon.originGen4()) {
-        return;
-    }
-    auto& pk5 = static_cast<pksm::PK5&>(pokemon);
-    bool changed = false;
-    auto raw = pokemon.rawData();
-    const bool hasStaleGen4Data = std::any_of(raw.begin() + 0x44, raw.begin() + 0x48,
-                                              [](std::uint8_t value) { return value != 0; })
-        || std::any_of(raw.begin() + 0x86, raw.begin() + 0x88,
-                       [](std::uint8_t value) { return value != 0; });
-    if (hasStaleGen4Data) {
-        std::fill(raw.begin() + 0x44, raw.begin() + 0x48, 0);
-        std::fill(raw.begin() + 0x86, raw.begin() + 0x88, 0);
-        changed = true;
-    }
-    if (pk5.hiddenAbility() || pk5.nPokemon()) {
-        pk5.hiddenAbility(false);
-        pk5.nPokemon(false);
-        changed = true;
-    }
-    const std::uint16_t expectedLocation = gen4TransferLocation(pokemon);
-    if (pokemon.metLocation() != expectedLocation) {
-        pokemon.metLocation(expectedLocation);
-        changed = true;
-    }
-    if (changed) {
-        pokemon.refreshChecksum();
-        Logger::instance().info("Repaired Gen 4-origin PK5 transfer metadata");
-    }
-}
-
 std::uint8_t gen6AbilitySlot(
     const pksm::PKX& pokemon,
     pksm::Ability ability,
@@ -308,22 +276,6 @@ std::uint8_t gen6AbilitySlot(
         return 4;
     }
     return hiddenAbility ? 4 : 1;
-}
-
-void repairLegacyGen6Ability(pksm::PKX& pokemon) {
-    if (pokemon.generation() != pksm::Generation::SIX
-        || (!pokemon.originGen4() && !pokemon.originGen5())) {
-        return;
-    }
-    const std::uint8_t expected = gen6AbilitySlot(
-        pokemon, pokemon.ability(), pokemon.originGen5() && pokemon.abilityNumber() == 4);
-    if (pokemon.abilityNumber() != expected) {
-        Logger::instance().info("Repairing legacy Gen 6 ability slot "
-                                + std::to_string(pokemon.abilityNumber()) + " -> "
-                                + std::to_string(expected));
-        pokemon.abilityNumber(expected);
-        pokemon.refreshChecksum();
-    }
 }
 
 std::unique_ptr<pksm::PKX> convertLegacyToG6Stable(const pksm::PKX& source, pksm::Sav& save) {
@@ -732,9 +684,18 @@ PokemonPayload SaveAdapter::readPokemon(std::size_t box, std::size_t slot) const
         if (static_cast<std::uint16_t>(parsed->species()) == 0) {
             return {};
         }
-        repairLegacyGen5Transfer(*parsed);
-        repairLegacyGen6Ability(*parsed);
         const auto raw = parsed->rawData();
+        Logger::instance().info("readPokemon: box " + std::to_string(box + 1) + " slot "
+                                + std::to_string(slot + 1) + " species "
+                                + std::to_string(static_cast<std::uint16_t>(parsed->species()))
+                                + " format " + std::to_string(pokemonFormat(save_->generation()))
+                                + " checksum 0x" + std::to_string(parsed->checksum())
+                                + " egg=" + (parsed->egg() ? "1" : "0")
+                                + " metLocation=" + std::to_string(parsed->metLocation())
+                                + " metDate=" + std::to_string(parsed->metDate().year()) + "-"
+                                + std::to_string(parsed->metDate().month()) + "-"
+                                + std::to_string(parsed->metDate().day())
+                                + " bytes " + std::to_string(raw.size()));
         return {
             pokemonFormat(save_->generation()),
             std::vector<std::uint8_t>(raw.begin(), raw.end())
@@ -784,6 +745,11 @@ bool SaveAdapter::clearSlot(std::size_t box, std::size_t slot) {
             return false;
         }
         save_->pkm(*empty, static_cast<std::uint8_t>(box), static_cast<std::uint8_t>(slot), false);
+        auto written = save_->pkm(static_cast<std::uint8_t>(box), static_cast<std::uint8_t>(slot));
+        Logger::instance().info("clearSlot: box " + std::to_string(box + 1) + " slot "
+                                + std::to_string(slot + 1) + " readback species "
+                                + std::to_string(written ? static_cast<std::uint16_t>(written->species()) : 0)
+                                + " egg=" + (written && written->egg() ? "1" : "0"));
         dirty_ = true;
         return true;
     } catch (const std::exception& exception) {
@@ -817,8 +783,15 @@ bool SaveAdapter::writePokemon(
             Logger::instance().warning("writePokemon: getPKM returned null/empty species");
             return false;
         }
-        Logger::instance().info("writePokemon: parsed gen " + std::to_string(format)
-                                + " species " + std::to_string(static_cast<std::uint16_t>(pkx->species())));
+        Logger::instance().info("writePokemon: box " + std::to_string(box + 1) + " slot "
+                                + std::to_string(slot + 1) + " parsed gen " + std::to_string(format)
+                                + " species " + std::to_string(static_cast<std::uint16_t>(pkx->species()))
+                                + " egg=" + (pkx->egg() ? "1" : "0")
+                                + " metLocation=" + std::to_string(pkx->metLocation())
+                                + " metDate=" + std::to_string(pkx->metDate().year()) + "-"
+                                + std::to_string(pkx->metDate().month()) + "-"
+                                + std::to_string(pkx->metDate().day())
+                                + " bytes=" + std::to_string(data.size()));
         std::unique_ptr<pksm::PKX> converted;
         if (format != saveGen) {
             Logger::instance().info("writePokemon: converting Gen " + std::to_string(format)
@@ -836,6 +809,17 @@ bool SaveAdapter::writePokemon(
         pksm::PKX& pkmRef = converted ? *converted : *pkx;
         const auto expectedGeneration = pkmRef.generation();
         const auto expectedSpecies = pkmRef.species();
+        const std::uint16_t storedChecksum = pkmRef.checksum();
+        pkmRef.refreshChecksum();
+        const std::uint16_t recomputedChecksum = pkmRef.checksum();
+        if (storedChecksum != recomputedChecksum) {
+            Logger::instance().warning("writePokemon: checksum mismatch before write (stored 0x"
+                                       + std::to_string(storedChecksum) + " recomputed 0x"
+                                       + std::to_string(recomputedChecksum) + ") format "
+                                       + std::to_string(format) + " species "
+                                       + std::to_string(static_cast<std::uint16_t>(expectedSpecies)));
+            pkmRef.checksum(storedChecksum);
+        }
         save_->pkm(pkmRef, static_cast<std::uint8_t>(box), static_cast<std::uint8_t>(slot), false);
         auto written = save_->pkm(static_cast<std::uint8_t>(box), static_cast<std::uint8_t>(slot));
         if (!written || written->generation() != expectedGeneration
@@ -844,8 +828,19 @@ bool SaveAdapter::writePokemon(
                                      + " slot " + std::to_string(slot + 1));
             return false;
         }
+        if (written->egg() && !pkx->egg()) {
+            Logger::instance().error("writePokemon: write turned a non-egg into an egg for box "
+                                     + std::to_string(box + 1) + " slot " + std::to_string(slot + 1)
+                                     + "; refusing to persist this write");
+            return false;
+        }
         Logger::instance().info("writePokemon readback verified species "
-                                + std::to_string(static_cast<std::uint16_t>(written->species())));
+                                + std::to_string(static_cast<std::uint16_t>(written->species()))
+                                + " egg=" + (written->egg() ? "1" : "0")
+                                + " metLocation=" + std::to_string(written->metLocation())
+                                + " metDate=" + std::to_string(written->metDate().year()) + "-"
+                                + std::to_string(written->metDate().month()) + "-"
+                                + std::to_string(written->metDate().day()));
         dirty_ = true;
         return true;
     } catch (const std::exception& exception) {
@@ -999,5 +994,36 @@ bool SaveAdapter::writeSave(std::string& error) {
     previousBuffer_.assign(bytes, bytes + size);
     dirty_ = false;
     Logger::instance().info("Save written for " + gameCode_);
+
+    if (source_->kind == Source::Kind::ArchiveGameCard || source_->kind == Source::Kind::ArchiveSd) {
+        std::size_t verifySize = 0;
+        Result verifyResult = 0;
+        const FS_MediaType mediaType = source_->kind == Source::Kind::ArchiveGameCard
+            ? MEDIATYPE_GAME_CARD : MEDIATYPE_SD;
+        auto reread = readArchive(source_->titleId, mediaType, verifySize, verifyResult);
+        if (!reread || verifySize != size) {
+            Logger::instance().error("writeSave verify: re-read failed or size mismatch (got "
+                                     + std::to_string(verifySize) + " expected "
+                                     + std::to_string(size) + ")");
+        } else {
+            std::size_t firstMismatch = SIZE_MAX;
+            std::size_t mismatchCount = 0;
+            for (std::size_t i = 0; i < size; ++i) {
+                if (reread[i] != bytes[i]) {
+                    if (firstMismatch == SIZE_MAX) {
+                        firstMismatch = i;
+                    }
+                    ++mismatchCount;
+                }
+            }
+            if (mismatchCount == 0) {
+                Logger::instance().info("writeSave verify: on-disk bytes match in-memory buffer");
+            } else {
+                Logger::instance().error("writeSave verify: " + std::to_string(mismatchCount)
+                                         + " byte(s) differ, first at offset 0x"
+                                         + std::to_string(firstMismatch));
+            }
+        }
+    }
     return true;
 }
