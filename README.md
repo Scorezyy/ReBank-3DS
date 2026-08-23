@@ -49,6 +49,35 @@ Pokémon can move upward across these generations as you go — catch something 
 
 <br />
 
+## Screenshots
+
+<div align="center">
+  <table>
+    <tr>
+      <td align="center" width="50%">
+        <img src="screenshots/login-screen.png" alt="Login screen" width="100%" /><br />
+        <sub>Login</sub>
+      </td>
+      <td align="center" width="50%">
+        <img src="screenshots/register-screen.png" alt="Account creation screen" width="100%" /><br />
+        <sub>Creating an account</sub>
+      </td>
+    </tr>
+    <tr>
+      <td align="center" width="50%">
+        <img src="screenshots/game-selection.png" alt="Game selection screen" width="100%" /><br />
+        <sub>Picking a game</sub>
+      </td>
+      <td align="center" width="50%">
+        <img src="screenshots/bank-screen.png" alt="Cloud bank box screen" width="100%" /><br />
+        <sub>Your cloud bank</sub>
+      </td>
+    </tr>
+  </table>
+</div>
+
+<br />
+
 ## Getting started
 
 1. Grab the latest build from the **[Releases](../../releases)** page — the `.cia` file is what most people want.
