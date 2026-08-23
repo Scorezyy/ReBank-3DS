@@ -1,4 +1,5 @@
 #include "Logger.hpp"
+#include "FsGuard.hpp"
 
 #include <3ds.h>
 
@@ -30,10 +31,13 @@ Logger::Logger() {
 }
 
 void Logger::initialize() {
-    mkdir("sdmc:/3ds", 0777);
-    mkdir("sdmc:/3ds/ReBank", 0777);
-    if (FILE* file = std::fopen("sdmc:/3ds/ReBank/rebank.log", "w")) {
-        std::fclose(file);
+    {
+        const FsGuard guard;
+        mkdir("sdmc:/3ds", 0777);
+        mkdir("sdmc:/3ds/ReBank", 0777);
+        if (FILE* file = std::fopen("sdmc:/3ds/ReBank/rebank.log", "w")) {
+            std::fclose(file);
+        }
     }
     info("Logger initialized");
 }
@@ -63,20 +67,33 @@ void Logger::write(LogLevel level, std::string_view message) {
     if (entries_.size() > MaximumEntries) {
         entries_.pop_front();
     }
+    pendingWrites_.push_back({level, std::string(message)});
+    LightLock_Unlock(&lock_);
+}
 
-    FILE* file = std::fopen("sdmc:/3ds/ReBank/rebank.log", "a");
-    if (!file) {
-        LightLock_Unlock(&lock_);
+void Logger::flush() {
+    LightLock_Lock(&lock_);
+    std::deque<LogEntry> pending;
+    pending.swap(pendingWrites_);
+    LightLock_Unlock(&lock_);
+    if (pending.empty()) {
         return;
     }
-    std::fprintf(
-        file,
-        "%llu [%s] %.*s\n",
-        static_cast<unsigned long long>(osGetTime()),
-        label(level),
-        static_cast<int>(message.size()),
-        message.data()
-    );
+
+    const FsGuard guard;
+    FILE* file = std::fopen("sdmc:/3ds/ReBank/rebank.log", "a");
+    if (!file) {
+        return;
+    }
+    for (const LogEntry& entry : pending) {
+        std::fprintf(
+            file,
+            "%llu [%s] %.*s\n",
+            static_cast<unsigned long long>(osGetTime()),
+            label(entry.level),
+            static_cast<int>(entry.message.size()),
+            entry.message.data()
+        );
+    }
     std::fclose(file);
-    LightLock_Unlock(&lock_);
 }

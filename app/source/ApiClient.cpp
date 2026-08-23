@@ -263,6 +263,8 @@ UploadResult ApiClient::uploadPokemon(
         json_object_set_new(entry, "trainerName", json_string(trainerName.c_str()));
         json_object_set_new(entry, "level", json_integer(item.level));
         json_object_set_new(entry, "gameCode", json_string(gameCode.c_str()));
+        json_object_set_new(entry, "shiny", json_boolean(item.shiny));
+        json_object_set_new(entry, "heldItem", json_integer(item.heldItem));
         json_array_append_new(entries, entry);
     }
     json_object_set_new(root, "pokemon", entries);
@@ -421,6 +423,11 @@ BoxListResult ApiClient::listCloudBox(
             summary.gameCode = stringField(entry, "gameCode");
             json_t* formatValue = json_object_get(entry, "format");
             summary.format = static_cast<std::uint8_t>(json_is_integer(formatValue) ? json_integer_value(formatValue) : 0);
+            json_t* shinyValue = json_object_get(entry, "shiny");
+            summary.shiny = json_is_true(shinyValue);
+            json_t* heldItemValue = json_object_get(entry, "heldItem");
+            summary.heldItem = static_cast<std::uint16_t>(
+                json_is_integer(heldItemValue) ? json_integer_value(heldItemValue) : 0);
             result.pokemon[static_cast<std::size_t>(slot - 1)] = std::move(summary);
         }
     }
@@ -428,6 +435,87 @@ BoxListResult ApiClient::listCloudBox(
     result.success = true;
     result.message = "Box loaded.";
     return result;
+}
+
+RenameBoxResult ApiClient::renameBox(
+    std::uint16_t boxPosition,
+    const std::string& name,
+    const std::string& accessToken
+) {
+    if (accessToken.empty()) {
+        return {false, "Not signed in.", {}};
+    }
+    if (name.empty()) {
+        return {false, "The box name cannot be blank.", {}};
+    }
+    json_t* root = json_object();
+    json_object_set_new(root, "name", json_string(name.c_str()));
+    const std::string body = dumpJson(root);
+    json_decref(root);
+
+    const std::string path = "/v1/boxes/" + std::to_string(boxPosition) + "/name";
+    const HttpResult response = request(path.c_str(), body, "Bearer " + accessToken, "PUT");
+    if (!response.success) {
+        return {false, response.message, {}};
+    }
+    json_error_t error{};
+    json_t* parsed = json_loadb(response.body.data(), response.body.size(), JSON_REJECT_DUPLICATES, &error);
+    if (!parsed || !json_is_object(parsed)) {
+        json_decref(parsed);
+        return {false, "The server returned an invalid response.", {}};
+    }
+    if (response.status < 200 || response.status >= 300) {
+        std::string message = stringField(parsed, "message");
+        json_decref(parsed);
+        return {false, message.empty() ? "Rename rejected." : std::move(message), {}};
+    }
+    std::string storedName = stringField(parsed, "name");
+    json_decref(parsed);
+    return {true, "Box renamed.", storedName.empty() ? name : std::move(storedName)};
+}
+
+BoxNamesResult ApiClient::listBoxNames(const std::string& accessToken) {
+    if (accessToken.empty()) {
+        return {false, "Not signed in.", {}};
+    }
+    const HttpResult response = request("/v1/boxes", {}, "Bearer " + accessToken, "GET");
+    if (!response.success) {
+        return {false, response.message, {}};
+    }
+    json_error_t error{};
+    json_t* parsed = json_loadb(response.body.data(), response.body.size(), JSON_REJECT_DUPLICATES, &error);
+    if (!parsed || !json_is_object(parsed)) {
+        json_decref(parsed);
+        return {false, "The server returned an invalid response.", {}};
+    }
+    if (response.status < 200 || response.status >= 300) {
+        std::string message = stringField(parsed, "message");
+        json_decref(parsed);
+        return {false, message.empty() ? "Box listing rejected." : std::move(message), {}};
+    }
+    std::vector<BoxNameEntry> boxes;
+    json_t* array = json_object_get(parsed, "boxes");
+    if (json_is_array(array)) {
+        const std::size_t count = json_array_size(array);
+        for (std::size_t i = 0; i < count; ++i) {
+            json_t* entry = json_array_get(array, i);
+            if (!json_is_object(entry)) {
+                continue;
+            }
+            json_t* positionValue = json_object_get(entry, "position");
+            if (!json_is_integer(positionValue)) {
+                continue;
+            }
+            BoxNameEntry item;
+            item.position = static_cast<std::uint16_t>(json_integer_value(positionValue));
+            item.name = stringField(entry, "name");
+            if (!item.name.empty()) {
+                boxes.push_back(std::move(item));
+            }
+        }
+    }
+    json_decref(parsed);
+    return {true, "Boxes loaded.", std::move(boxes)};
 }
 
 ClientUpdate ApiClient::latestClientUpdate() {
@@ -567,13 +655,16 @@ ApiClient::HttpResult ApiClient::request(
             httpMethod = HTTPC_METHOD_GET;
         } else if (std::strcmp(method, "DELETE") == 0) {
             httpMethod = HTTPC_METHOD_DELETE;
+        } else if (std::strcmp(method, "PUT") == 0) {
+            httpMethod = HTTPC_METHOD_PUT;
         }
     }
 
     const std::string url = ServerConfig::baseUrl() + path;
     Logger::instance().info(std::string(
         httpMethod == HTTPC_METHOD_GET ? "GET " :
-        httpMethod == HTTPC_METHOD_DELETE ? "DELETE " : "POST "
+        httpMethod == HTTPC_METHOD_DELETE ? "DELETE " :
+        httpMethod == HTTPC_METHOD_PUT ? "PUT " : "POST "
     ) + path);
     httpcContext context{};
     Result result = httpcOpenContext(&context, httpMethod, url.c_str(), 0);

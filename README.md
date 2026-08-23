@@ -1,48 +1,38 @@
-# ReBank 3DS
+<div align="center">
+  <img src=".github/logo.png" alt="ReBank" width="160" />
 
-ReBank is a Nintendo 3DS homebrew Pokemon bank client for generation 4 through generation 7 games.
+  # ReBank
 
-## Features
+  **Your Pokémon collection, safe in the cloud — right from your 3DS.**
+</div>
 
-- Native Citro2D interface with stereoscopic presentation
-- Username-based authentication and automatic session refresh
-- Direct save access for supported DS and 3DS titles
-- PKSM-Core-backed PK4-PK7 parsing and generation-aware conversion
-- Local and cloud box views with atomic, legality-checked transfers
-- Verified save writes and cloud deletion only after local persistence
-- English, German, French, Spanish, Italian, and Portuguese UI
+<br />
 
-## Security
+## Why ReBank exists
 
-Production requests use pinned HTTPS at `https://88.99.242.28:6969`. The trusted public ReBank CA is embedded in the ROMFS. The client fails closed if the certificate is missing or invalid and never falls back to plaintext HTTP.
+For years, Pokémon Bank was the only official way to store your Pokémon in the cloud and move them between games. But Pokémon Bank is being shut down, and with it, a huge part of many trainers' collections would be left stranded on old cartridges with nowhere safe to go.
 
-No server source, database configuration, deployment topology, credentials, or private keys are included in this repository.
+ReBank was built to fill that gap. It's a free, independent cloud storage service for your Pokémon, built specifically for the Nintendo 3DS — no official service required, no collection left behind.
 
-## Build
+## What you can do right now
 
-Requirements:
+- **Store your Pokémon in the cloud.** Move Pokémon from your game cartridge into your personal online bank, and back again, whenever you want.
+- **Organize your boxes.** Give your cloud boxes their own names so your collection stays easy to navigate.
+- **Move Pokémon across generations.** ReBank understands Pokémon from Generation 4 all the way through Generation 7, so your collection isn't locked to a single game.
+- **Keep your account safe.** Sign up with a username and password, and your session stays remembered on your device.
+- **See your Pokémon at a glance.** Shiny sprites, held items, and box art are all shown right on the touch screen.
+- **Use it in your language.** ReBank is available in English, German, French, Spanish, Italian, and Portuguese.
 
-- devkitPro with the `3ds-dev` group
-- `3ds-libvorbisidec`
-- PowerShell on Windows for the packaging script
+## Getting started
 
-```powershell
-.\tools\package.ps1
-```
+1. Download the latest release from the [Releases](../../releases) page.
+2. Install it on your Nintendo 3DS like any other homebrew application.
+3. Create a free account from the app and start moving your Pokémon into the cloud.
 
-Release outputs are written to `output/` as `.3dsx`, `.cia`, and `.3ds` files.
+## A project made with care
 
-The endpoint compiled into a build is configured in `app/config/server.mk`.
+ReBank is built and maintained independently, with the simple goal of making sure no one loses their Pokémon collection when official support disappears. It's still growing — new features and improvements are on the way.
 
-## Controls
+---
 
-- D-pad or Circle Pad: move the box cursor
-- `A`: select with the active single/multi tool
-- `Y`: switch between single and multi selection
-- `L` / `R`: change the active local or cloud box
-- Up from the first local row: stage selected Pokemon in the cloud box
-- Down or `B`: cancel a staged transfer
-- `X`: confirm a staged upload
-- `SELECT`: open the in-app log console
-
-The current session log is stored at `sdmc:/3ds/ReBank/rebank.log` and is replaced at the next app start.
+<sub>Licensed under [GPLv3](LICENSE). Built on some open-source components — see [NOTICE](NOTICE.md) for details. Pokémon and all related assets are property of Nintendo, Game Freak, and Creatures Inc.</sub>

@@ -30,6 +30,8 @@ struct UploadPokemon {
     std::string trainerName;
     std::uint8_t level = 0;
     std::string gameCode;
+    bool shiny = false;
+    std::uint16_t heldItem = 0;
 };
 
 struct UploadResult {
@@ -59,6 +61,23 @@ struct DownloadResult {
 struct DeleteResult {
     bool success = false;
     std::string message;
+};
+
+struct RenameBoxResult {
+    bool success = false;
+    std::string message;
+    std::string name;
+};
+
+struct BoxNameEntry {
+    std::uint16_t position = 0;
+    std::string name;
+};
+
+struct BoxNamesResult {
+    bool success = false;
+    std::string message;
+    std::vector<BoxNameEntry> boxes;
 };
 
 struct BoxListResult {
@@ -112,6 +131,12 @@ public:
         std::uint16_t boxPosition,
         const std::string& accessToken
     );
+    RenameBoxResult renameBox(
+        std::uint16_t boxPosition,
+        const std::string& name,
+        const std::string& accessToken
+    );
+    BoxNamesResult listBoxNames(const std::string& accessToken);
     ClientUpdate latestClientUpdate();
     FileDownloadResult downloadClientUpdate(
         const std::string& tag,

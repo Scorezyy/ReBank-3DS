@@ -1,5 +1,6 @@
 #include "App.hpp"
 #include "BuildConfig.hpp"
+#include "FsGuard.hpp"
 #include "ServerConfig.hpp"
 
 #include <algorithm>
@@ -18,14 +19,17 @@ constexpr u32 Muted = C2D_Color32(86, 111, 99, 255);
 constexpr u32 Brand = C2D_Color32(31, 145, 94, 255);
 constexpr u32 Accent = C2D_Color32(242, 184, 39, 255);
 constexpr u32 Error = C2D_Color32(190, 48, 48, 255);
-constexpr u32 GrassLight = C2D_Color32(198, 232, 156, 255);
-constexpr u32 GrassMid = C2D_Color32(163, 213, 116, 255);
+constexpr int BoxBgAnimSquaresIdx = 0;
+constexpr int OverlayItemIdx = 0;
+constexpr int OverlayShinyIdx = 1;
+constexpr int BoxBgTopGradientIdx = 1;
+constexpr int BoxBgBottomGradientIdx = 2;
 constexpr u32 HeaderPill = C2D_Color32(246, 244, 224, 250);
 constexpr u32 HeaderInk = C2D_Color32(64, 66, 40, 255);
 constexpr u32 CountBlock = C2D_Color32(174, 44, 44, 255);
-constexpr u32 BankYellow = C2D_Color32(238, 184, 68, 255);
-constexpr u32 BankYellowDark = C2D_Color32(202, 148, 40, 255);
-constexpr u32 ArrowInk = C2D_Color32(112, 74, 20, 255);
+constexpr u32 BoxPlate = C2D_Color32(250, 252, 248, 250);
+constexpr u32 BoxPlateBorder = C2D_Color32(20, 110, 70, 255);
+constexpr u32 BoxArrowInk = C2D_Color32(20, 110, 70, 255);
 constexpr u32 CursorRed = C2D_Color32(216, 40, 32, 255);
 constexpr u32 CursorGreen = C2D_Color32(40, 176, 88, 255);
 constexpr u32 SidebarInk = C2D_Color32(50, 96, 40, 255);
@@ -98,6 +102,16 @@ void parseText(C2D_Text& text, C2D_Font font, C2D_TextBuf buffer, const std::str
         C2D_TextParse(&text, buffer, value.c_str());
     }
     C2D_TextOptimize(&text);
+}
+
+float textHeight(C2D_Font font, C2D_TextBuf buffer, std::string_view value, float size) {
+    C2D_Text text;
+    const std::string owned(value);
+    parseText(text, font, buffer, owned);
+    float width = 0.0F;
+    float height = 0.0F;
+    C2D_TextGetDimensions(&text, size, size, &width, &height);
+    return height;
 }
 
 float textWidth(C2D_Font font, C2D_TextBuf buffer, std::string_view value, float size) {
@@ -179,6 +193,11 @@ App::App(std::string executablePath, bool homebrew)
       textBuffer_(nullptr),
             textFont_(nullptr),
     pokemonSprites_(nullptr),
+      boxBackground_(nullptr),
+      overlayIcons_(nullptr),
+      iconItemSheet_(nullptr),
+      iconShinySheet_(nullptr),
+      boxNameBarSheet_(nullptr),
       introStartedAt_(svcGetSystemTick()),
         executablePath_(std::move(executablePath)),
         homebrew_(homebrew),
@@ -194,6 +213,7 @@ App::App(std::string executablePath, bool homebrew)
     loadingStartedAt_(0),
     loadingCatalogIndex_(0),
     loadingCloudBox_(0),
+    pickupSlot_(0),
             gameIndex_(0),
             gameSelectionChangedAt_(0),
             gameSelectionDirection_(0),
@@ -202,6 +222,8 @@ App::App(std::string executablePath, bool homebrew)
             focusedSlot_(0),
             selectionTool_(SelectionTool::Single),
             storagePane_(StoragePane::Local),
+            renameThread_(nullptr),
+            renameState_(RenameState::Idle),
             transferArmed_(false),
             uploadThread_(nullptr),
             uploadState_(UploadState::Idle),
@@ -218,6 +240,7 @@ App::App(std::string executablePath, bool homebrew)
       autoLogin_(false),
     authFocus_(AuthFocus::Username),
       authAnimationStartedAt_(svcGetSystemTick()) {
+        FsGuard::init();
         Logger::instance().initialize();
         Logger::instance().info("Client boot");
         Logger::instance().info("Server " + ServerConfig::baseUrl());
@@ -239,7 +262,26 @@ App::App(std::string executablePath, bool homebrew)
     pokemonSprites_ = C2D_SpriteSheetLoad("romfs:/assets/pkm_spritesheet.t3x");
     if (!pokemonSprites_) {
         Logger::instance().error("Pokemon sprite sheet could not be loaded");
+    } else {
+        const C2D_Image sheetImage = C2D_SpriteSheetGetImage(pokemonSprites_, 0);
+        if (sheetImage.tex) {
+            C3D_TexSetFilter(sheetImage.tex, GPU_NEAREST, GPU_NEAREST);
+        }
     }
+    boxBackground_ = C2D_SpriteSheetLoad("romfs:/assets/box_bg.t3x");
+    if (!boxBackground_) {
+        Logger::instance().error("Box background sheet could not be loaded");
+    }
+    overlayIcons_ = C2D_SpriteSheetLoad("romfs:/assets/overlay_icons.t3x");
+    if (!overlayIcons_) {
+        Logger::instance().error("Overlay icon sheet could not be loaded");
+    }
+    iconItemSheet_ = C2D_SpriteSheetLoad("romfs:/assets/icon_item.t3x");
+    Logger::instance().info(iconItemSheet_ ? "Item icon sheet loaded" : "Item icon sheet load failed");
+    iconShinySheet_ = C2D_SpriteSheetLoad("romfs:/assets/icon_shiny.t3x");
+    Logger::instance().info(iconShinySheet_ ? "Shiny icon sheet loaded" : "Shiny icon sheet load failed");
+    boxNameBarSheet_ = C2D_SpriteSheetLoad("romfs:/assets/bar_boxname_with_arrows.t3x");
+    Logger::instance().info(boxNameBarSheet_ ? "Box name bar sheet loaded" : "Box name bar sheet load failed");
     credentials_.init();
     beginUpdate();
 }
@@ -261,6 +303,10 @@ App::~App() {
         threadJoin(downloadThread_, U64_MAX);
         threadFree(downloadThread_);
     }
+    if (renameThread_) {
+        threadJoin(renameThread_, U64_MAX);
+        threadFree(renameThread_);
+    }
     if (uploadThread_) {
         threadJoin(uploadThread_, U64_MAX);
         threadFree(uploadThread_);
@@ -272,6 +318,21 @@ App::~App() {
     Logger::instance().info("Client shutdown");
     if (pokemonSprites_) {
         C2D_SpriteSheetFree(pokemonSprites_);
+    }
+    if (boxBackground_) {
+        C2D_SpriteSheetFree(boxBackground_);
+    }
+    if (overlayIcons_) {
+        C2D_SpriteSheetFree(overlayIcons_);
+    }
+    if (iconItemSheet_) {
+        C2D_SpriteSheetFree(iconItemSheet_);
+    }
+    if (iconShinySheet_) {
+        C2D_SpriteSheetFree(iconShinySheet_);
+    }
+    if (boxNameBarSheet_) {
+        C2D_SpriteSheetFree(boxNameBarSheet_);
     }
     for (auto& profile : availableGames_) {
         if (profile.iconLoaded) {
@@ -303,6 +364,7 @@ int App::run() {
 }
 
 void App::update(u32 keysDown, u32 keysHeld, circlePosition circle, touchPosition touch) {
+    Logger::instance().flush();
     if (keysDown & KEY_START) {
         running_ = false;
         return;
@@ -314,6 +376,7 @@ void App::update(u32 keysDown, u32 keysHeld, circlePosition circle, touchPositio
     pollUpload();
     pollDownload();
     pollCommit();
+    pollRenameBox();
 
     if (errorDialogVisible_) {
         const bool dismissTouch = (keysDown & KEY_TOUCH)
@@ -570,6 +633,26 @@ void App::updateStorage(
         }
     }
 
+    if (cloudNameFocused_) {
+        storageDirection(keysDown, keysHeld, circle);
+        if (keysDown & (KEY_DOWN | KEY_B)) {
+            cloudNameFocused_ = false;
+        } else if (keysDown & KEY_A
+                   && renameState_.load(std::memory_order_acquire) != RenameState::Running) {
+            const auto position = static_cast<std::uint16_t>(cloudBox_ + 1);
+            const auto cached = cloudBoxNames_.find(position);
+            const std::string current = cached != cloudBoxNames_.end()
+                ? cached->second
+                : ("Bank " + std::to_string(position));
+            std::string edited = current;
+            requestText(edited, "Box name", false);
+            if (!edited.empty() && edited != current) {
+                beginRenameBox(position, edited);
+            }
+        }
+        return;
+    }
+
     if (keysDown & KEY_A) {
         if (hand_.active) {
             storageDrop();
@@ -616,11 +699,20 @@ void App::updateStorage(
         const std::size_t column = focusedSlot_ % 6;
         storagePane_ = StoragePane::Local;
         focusedSlot_ = column;
+    } else if ((keysDown & KEY_UP)
+        && priorPane == StoragePane::Cloud
+        && storagePane_ == StoragePane::Cloud
+        && priorSlot < 6
+        && focusedSlot_ == priorSlot
+        && !hand_.active) {
+        cloudNameFocused_ = true;
     }
 
     if (keysDown & KEY_SELECT) {
         if (hand_.active) {
             status_ = "Drop the Pokemon first.";
+        } else if (loadState_.load(std::memory_order_acquire) == LoadState::Running) {
+            status_ = "Please wait for the current fetch to finish.";
         } else if (!hasPendingChanges()) {
             status_ = "Nothing to commit.";
         } else {
@@ -999,6 +1091,7 @@ void App::beginLoad(LoadOperation operation) {
     loadOperation_ = operation;
     loadingStartedAt_ = svcGetSystemTick();
     loadProgress_.store(0, std::memory_order_release);
+    displayedLoadProgress_ = 0.0F;
     switch (operation) {
         case LoadOperation::DiscoverGames:
             discoveredGames_.clear();
@@ -1011,6 +1104,10 @@ void App::beginLoad(LoadOperation operation) {
         case LoadOperation::CloudBox:
             cloudLoadResult_ = {};
             loadingPhase_.store(LoadingPhase::LoadingBank, std::memory_order_release);
+            break;
+        case LoadOperation::PickupCloud:
+        case LoadOperation::SwapCloud:
+            pickupResult_ = {};
             break;
         default:
             return;
@@ -1048,6 +1145,8 @@ void App::loadWorker(void* argument) {
             }
             app->loadingPhase_.store(LoadingPhase::ReadingIcons, std::memory_order_release);
             const std::size_t iconCount = app->discoveredGames_.size();
+            Logger::instance().info(
+                "Icon scan starting for " + std::to_string(iconCount) + " games");
             std::size_t iconIndex = 0;
             for (DiscoveredGame& game : app->discoveredGames_) {
                 game.iconPixels.reset(
@@ -1062,6 +1161,7 @@ void App::loadWorker(void* argument) {
                     iconCount == 0 ? 100 : static_cast<int>(50 + iconIndex * 50 / iconCount),
                     std::memory_order_release);
             }
+            Logger::instance().info("Icon scan finished");
         } else if (app->loadOperation_ == LoadOperation::OpenGame) {
             const auto games = supportedGames();
             if (app->loadingCatalogIndex_ >= games.size()) {
@@ -1087,6 +1187,7 @@ void App::loadWorker(void* argument) {
                 if (!app->session_.accessToken.empty()) {
                     app->openGameResult_.cloudBox =
                         app->api_.listCloudBox(1, app->session_.accessToken);
+                    app->pendingBoxNames_ = app->api_.listBoxNames(app->session_.accessToken).boxes;
                 }
                 app->loadProgress_.store(100, std::memory_order_release);
                 app->openGameResult_.success = true;
@@ -1096,6 +1197,12 @@ void App::loadWorker(void* argument) {
                 static_cast<std::uint16_t>(app->loadingCloudBox_ + 1),
                 app->session_.accessToken);
             app->loadProgress_.store(100, std::memory_order_release);
+        } else if (app->loadOperation_ == LoadOperation::PickupCloud
+                   || app->loadOperation_ == LoadOperation::SwapCloud) {
+            app->pickupResult_ = app->api_.downloadPokemon(
+                app->pickupCloudBox_,
+                static_cast<std::uint8_t>(app->pickupSlot_ + 1),
+                app->session_.accessToken);
         }
     } catch (...) {
         if (app->loadOperation_ == LoadOperation::OpenGame) {
@@ -1104,6 +1211,10 @@ void App::loadWorker(void* argument) {
         } else if (app->loadOperation_ == LoadOperation::CloudBox) {
             app->cloudLoadResult_.success = false;
             app->cloudLoadResult_.message = "Bank loading failed unexpectedly.";
+        } else if (app->loadOperation_ == LoadOperation::PickupCloud
+                   || app->loadOperation_ == LoadOperation::SwapCloud) {
+            app->pickupResult_.success = false;
+            app->pickupResult_.message = "Fetch failed unexpectedly.";
         }
         Logger::instance().error("Unhandled loading worker exception");
     }
@@ -1131,6 +1242,7 @@ void App::pollLoad() {
         std::stable_partition(discoveredGames_.begin(), discoveredGames_.end(),
             [](const DiscoveredGame& game) { return game.cartridge; });
         availableGames_.reserve(discoveredGames_.size());
+        std::size_t textureIndex = 0;
         for (DiscoveredGame& game : discoveredGames_) {
             GameProfile profile;
             profile.catalogIndex = game.catalogIndex;
@@ -1140,12 +1252,14 @@ void App::pollLoad() {
             GameProfile& stored = availableGames_.back();
             if (!game.iconPixels
                 || !C3D_TexInit(&stored.iconTexture, 64, 64, GPU_RGB565)) {
+                ++textureIndex;
                 continue;
             }
             const std::unique_ptr<std::array<std::uint16_t, 64 * 64>> tiled(
                 new (std::nothrow) std::array<std::uint16_t, 64 * 64>());
             if (!tiled) {
                 C3D_TexDelete(&stored.iconTexture);
+                ++textureIndex;
                 continue;
             }
             for (std::size_t y = 0; y < 48; ++y) {
@@ -1161,7 +1275,9 @@ void App::pollLoad() {
             C3D_TexSetFilter(&stored.iconTexture, GPU_LINEAR, GPU_LINEAR);
             stored.iconSubTexture = {48, 48, 0.0F, 1.0F, 0.75F, 0.25F};
             stored.iconLoaded = true;
+            ++textureIndex;
         }
+        Logger::instance().info("All game icon textures built");
         discoveredGames_.clear();
         gameIndex_ = 0;
         gameSelectionChangedAt_ = svcGetSystemTick();
@@ -1197,6 +1313,11 @@ void App::pollLoad() {
                     break;
                 }
             }
+            cloudBoxNames_.clear();
+            for (const auto& entry : pendingBoxNames_) {
+                cloudBoxNames_[entry.position] = entry.name;
+            }
+            pendingBoxNames_.clear();
             CloudBoxDraft cloud;
             if (openGameResult_.cloudBox.success) {
                 cloud.baseline = openGameResult_.cloudBox.pokemon;
@@ -1234,6 +1355,69 @@ void App::pollLoad() {
             status_ = cloudLoadResult_.message;
             Logger::instance().warning("Cloud box refresh failed: " + status_);
         }
+    } else if (completed == LoadOperation::PickupCloud) {
+        const bool stillHeld = hand_.active
+            && hand_.source == HandSource::Cloud
+            && hand_.sourceIndex == pickupSlot_
+            && !hand_.payloadKnown;
+        if (pickupResult_.success) {
+            PokemonPayload payload;
+            payload.format = pickupResult_.pokemon.format;
+            payload.data = std::move(pickupResult_.pokemon.payload);
+            cachedCloudPayloads_[pickupSlot_] = payload;
+            if (stillHeld) {
+                hand_.payload = std::move(payload);
+                hand_.payloadKnown = !hand_.payload.data.empty();
+            }
+        } else {
+            if (stillHeld) {
+                cloudPreview_[pickupSlot_] = hand_.summary;
+                hand_ = Hand{};
+            }
+            status_ = "Cannot pick up: " + pickupResult_.message;
+            errorDialogTitle_ = "PICKUP FAILED";
+            errorDialogPokemon_ = pickupSummary_.nickname.empty()
+                ? "Unknown Pokemon"
+                : pickupSummary_.nickname;
+            errorDialogLocation_.clear();
+            errorDialogMessage_ = pickupResult_.message.empty()
+                ? "The Pokemon payload could not be read."
+                : pickupResult_.message;
+            errorDialogVisible_ = true;
+            Logger::instance().warning("Cloud pickup failed: " + pickupResult_.message);
+        }
+    } else if (completed == LoadOperation::SwapCloud) {
+        if (pickupResult_.success && pickupCloudBox_ != static_cast<std::uint16_t>(cloudBox_ + 1)) {
+            cachedCloudPayloads_[pickupSlot_].format = pickupResult_.pokemon.format;
+            cachedCloudPayloads_[pickupSlot_].data = std::move(pickupResult_.pokemon.payload);
+            status_ = "Box changed, swap cancelled.";
+        } else if (pickupResult_.success) {
+            PokemonPayload occupantPayload;
+            occupantPayload.format = pickupResult_.pokemon.format;
+            occupantPayload.data = std::move(pickupResult_.pokemon.payload);
+            const PokemonSummary occupantSummary = cloudPreview_[pickupSlot_];
+            cloudPreview_[pickupSlot_] = hand_.summary;
+            pendingUploadPayloads_[pickupSlot_] = hand_.payload;
+            hand_.summary = occupantSummary;
+            hand_.payload = std::move(occupantPayload);
+            hand_.source = HandSource::Cloud;
+            hand_.sourceIndex = pickupSlot_;
+            hand_.sourceCloudBox = static_cast<std::uint16_t>(cloudBox_ + 1);
+            hand_.payloadKnown = !hand_.payload.data.empty();
+            status_ = hand_.summary.nickname + " swapped.";
+        } else {
+            status_ = "Cannot swap: " + pickupResult_.message;
+            errorDialogTitle_ = "SWAP FAILED";
+            errorDialogPokemon_ = pickupSummary_.nickname.empty()
+                ? "Unknown Pokemon"
+                : pickupSummary_.nickname;
+            errorDialogLocation_.clear();
+            errorDialogMessage_ = pickupResult_.message.empty()
+                ? "The Pokemon payload could not be read."
+                : pickupResult_.message;
+            errorDialogVisible_ = true;
+            Logger::instance().warning("Cloud swap failed: " + pickupResult_.message);
+        }
     }
     loadOperation_ = LoadOperation::None;
 }
@@ -1242,7 +1426,9 @@ bool App::isLoading() const {
     return updateState_.load(std::memory_order_acquire) == UpdateState::Running
         || authState_.load(std::memory_order_acquire) == AuthState::Running
         || (loadState_.load(std::memory_order_acquire) == LoadState::Running
-            && loadOperation_ != LoadOperation::CloudBox);
+            && loadOperation_ != LoadOperation::CloudBox
+            && loadOperation_ != LoadOperation::PickupCloud
+            && loadOperation_ != LoadOperation::SwapCloud);
 }
 
 void App::beginUpload() {
@@ -1270,6 +1456,49 @@ void App::pollDownload() {
 }
 
 void App::downloadWorker(void* /*argument*/) {
+}
+
+void App::beginRenameBox(std::uint16_t position, std::string name) {
+    if (renameState_.load(std::memory_order_acquire) == RenameState::Running) {
+        return;
+    }
+    if (session_.accessToken.empty()) {
+        status_ = "Please sign in again.";
+        return;
+    }
+    if (renameThread_) {
+        threadJoin(renameThread_, U64_MAX);
+        threadFree(renameThread_);
+        renameThread_ = nullptr;
+    }
+    renamingBoxPosition_ = position;
+    renamingBoxName_ = std::move(name);
+    renameResult_ = {};
+    renameState_.store(RenameState::Running, std::memory_order_release);
+    renameThread_ = threadCreate(renameBoxWorker, this, 64 * 1024, 0x30, -2, false);
+    if (!renameThread_) {
+        renameState_.store(RenameState::Idle, std::memory_order_release);
+    }
+}
+
+void App::renameBoxWorker(void* argument) {
+    auto* app = static_cast<App*>(argument);
+    app->renameResult_ = app->api_.renameBox(
+        app->renamingBoxPosition_, app->renamingBoxName_, app->session_.accessToken);
+    app->renameState_.store(RenameState::Completed, std::memory_order_release);
+}
+
+void App::pollRenameBox() {
+    if (renameState_.load(std::memory_order_acquire) != RenameState::Completed) {
+        return;
+    }
+    threadJoin(renameThread_, U64_MAX);
+    threadFree(renameThread_);
+    renameThread_ = nullptr;
+    renameState_.store(RenameState::Idle, std::memory_order_release);
+    if (renameResult_.success) {
+        cloudBoxNames_[renamingBoxPosition_] = renameResult_.name;
+    }
 }
 
 bool App::hasPendingChanges() const {
@@ -1357,19 +1586,22 @@ void App::storagePickUp() {
     } else if (!cachedCloudPayloads_[focusedSlot_].data.empty()) {
         payload = cachedCloudPayloads_[focusedSlot_];
     } else {
-        status_ = "Fetching " + mon.nickname + "...";
-        DownloadResult result = api_.downloadPokemon(
-            static_cast<std::uint16_t>(cloudBox_ + 1),
-            static_cast<std::uint8_t>(focusedSlot_ + 1),
-            session_.accessToken
-        );
-        if (!result.success) {
-            status_ = "Cannot pick up: " + result.message;
-            return;
+        hand_.active = true;
+        hand_.source = HandSource::Cloud;
+        hand_.sourceIndex = focusedSlot_;
+        hand_.sourceCloudBox = static_cast<std::uint16_t>(cloudBox_ + 1);
+        hand_.summary = mon;
+        hand_.payload = {};
+        hand_.payloadKnown = false;
+        cloudPreview_[focusedSlot_] = {};
+        status_ = mon.nickname + " picked up.";
+        if (loadState_.load(std::memory_order_acquire) != LoadState::Running) {
+            pickupSlot_ = focusedSlot_;
+            pickupCloudBox_ = static_cast<std::uint16_t>(cloudBox_ + 1);
+            pickupSummary_ = mon;
+            beginLoad(LoadOperation::PickupCloud);
         }
-        payload.format = result.pokemon.format;
-        payload.data = std::move(result.pokemon.payload);
-        cachedCloudPayloads_[focusedSlot_] = payload;
+        return;
     }
     hand_.active = true;
     hand_.source = HandSource::Cloud;
@@ -1384,6 +1616,10 @@ void App::storagePickUp() {
 
 void App::storageDrop() {
     if (!hand_.active) {
+        return;
+    }
+    if (!hand_.payloadKnown) {
+        status_ = "Still fetching " + hand_.summary.nickname + "...";
         return;
     }
     if (storagePane_ == StoragePane::Local) {
@@ -1414,10 +1650,6 @@ void App::storageDrop() {
         return;
     }
 
-    if (!hand_.payloadKnown) {
-        status_ = "Payload missing.";
-        return;
-    }
     const bool occupied = cloudPreview_[focusedSlot_].species != 0;
     if (occupied) {
         PokemonPayload occupantPayload;
@@ -1427,18 +1659,15 @@ void App::storageDrop() {
         } else if (!cachedCloudPayloads_[focusedSlot_].data.empty()) {
             occupantPayload = cachedCloudPayloads_[focusedSlot_];
         } else if (!session_.accessToken.empty()) {
-            status_ = "Fetching occupant...";
-            DownloadResult dr = api_.downloadPokemon(
-                static_cast<std::uint16_t>(cloudBox_ + 1),
-                static_cast<std::uint8_t>(focusedSlot_ + 1),
-                session_.accessToken
-            );
-            if (!dr.success) {
-                status_ = "Swap failed: " + dr.message;
+            if (loadState_.load(std::memory_order_acquire) == LoadState::Running) {
                 return;
             }
-            occupantPayload.format = dr.pokemon.format;
-            occupantPayload.data = std::move(dr.pokemon.payload);
+            pickupSlot_ = focusedSlot_;
+            pickupCloudBox_ = static_cast<std::uint16_t>(cloudBox_ + 1);
+            pickupSummary_ = cloudPreview_[focusedSlot_];
+            status_ = "Fetching occupant...";
+            beginLoad(LoadOperation::SwapCloud);
+            return;
         } else {
             status_ = "Please sign in again.";
             return;
@@ -1536,7 +1765,9 @@ void App::commitWorker(void* argument) {
                     draft.summaries[slot].nickname,
                     draft.summaries[slot].trainerName,
                     draft.summaries[slot].level,
-                    draft.summaries[slot].gameCode
+                    draft.summaries[slot].gameCode,
+                    draft.summaries[slot].shiny,
+                    draft.summaries[slot].heldItem
                 });
             }
             if (initHas && !nowHas) {
@@ -1742,12 +1973,13 @@ void App::pollCommit() {
         localDrafts_.clear();
         cloudBoxes_.clear();
         loadLocalBox();
-        refreshCloudBox();
+        refreshCloudBox(true);
     } else {
         Logger::instance().warning("Commit failed: " + commitResult_.message);
         const std::string failure = commitResult_.message;
         discardPendingChanges();
         status_ = failure + " Changes reloaded.";
+        errorDialogTitle_ = "TRANSFER BLOCKED";
         errorDialogPokemon_ = commitResult_.problemPokemon.empty()
             ? "Transfer failed"
             : commitResult_.problemPokemon;
@@ -1824,11 +2056,20 @@ void App::renderLoadingBottom() {
         && loadingPhase_.load(std::memory_order_acquire) != LoadingPhase::Idle;
 
     if (determinate) {
-        const int percent = std::clamp(loadProgress_.load(std::memory_order_acquire), 0, 100);
+        const float target = static_cast<float>(std::clamp(loadProgress_.load(std::memory_order_acquire), 0, 100));
+        if (target < displayedLoadProgress_) {
+            displayedLoadProgress_ = target;
+        } else {
+            displayedLoadProgress_ += (target - displayedLoadProgress_) * 0.15F;
+            if (target - displayedLoadProgress_ < 0.5F) {
+                displayedLoadProgress_ = target;
+            }
+        }
+        const int percent = static_cast<int>(displayedLoadProgress_ + 0.5F);
         drawCentered("Progress: " + std::to_string(percent) + "%",
                      160.0F, 110.0F, 0.62F, Ink);
         C2D_DrawRectSolid(36.0F, 138.0F, 0.2F, 248.0F, 10.0F, C2D_Color32(205, 220, 211, 255));
-        C2D_DrawRectSolid(36.0F, 138.0F, 0.3F, 248.0F * static_cast<float>(percent) / 100.0F,
+        C2D_DrawRectSolid(36.0F, 138.0F, 0.3F, 248.0F * displayedLoadProgress_ / 100.0F,
                           10.0F, Brand);
         return;
     }
@@ -2098,11 +2339,56 @@ void drawPill(float x, float y, float w, float h, float z, u32 color) {
     C2D_DrawRectSolid(x + r, y, z, w - 2.0F * r, h, color);
 }
 
-void drawGrass(float w, float h) {
-    for (float y = 0.0F; y < h; y += 4.0F) {
-        const u32 c = (static_cast<int>(y / 4.0F) & 1) ? GrassMid : GrassLight;
-        C2D_DrawRectSolid(0.0F, y, 0.0F, w, 4.0F, c);
+Tex3DS_SubTexture selectSubRegion(const C2D_Image& image, int x, int y, int endX, int endY) {
+    Tex3DS_SubTexture tex = *image.subtex;
+    if (x != endX) {
+        const int deltaX = endX - x;
+        const float texRL = tex.left - tex.right;
+        tex.left = tex.left - texRL / static_cast<float>(tex.width) * static_cast<float>(x);
+        tex.right = tex.left - texRL / static_cast<float>(tex.width) * static_cast<float>(deltaX);
+        tex.width = static_cast<u16>(deltaX);
     }
+    if (y != endY) {
+        const int deltaY = endY - y;
+        const float texTB = tex.top - tex.bottom;
+        tex.top = tex.top - texTB / static_cast<float>(tex.height) * static_cast<float>(y);
+        tex.bottom = tex.top - texTB / static_cast<float>(tex.height) * static_cast<float>(deltaY);
+        tex.height = static_cast<u16>(deltaY);
+    }
+    return tex;
+}
+
+void drawBoxBackground(C2D_SpriteSheet sheet, bool top) {
+    if (!sheet) {
+        return;
+    }
+    const C2D_Image gradient = C2D_SpriteSheetGetImage(
+        sheet, top ? BoxBgTopGradientIdx : BoxBgBottomGradientIdx);
+    C2D_ImageTint tint{};
+    if (top) {
+        C2D_SetImageTint(&tint, C2D_TopLeft, C2D_Color32(142, 221, 138, 255), 1.0F);
+        C2D_SetImageTint(&tint, C2D_TopRight, C2D_Color32(101, 193, 93, 255), 1.0F);
+        C2D_SetImageTint(&tint, C2D_BotLeft, C2D_Color32(161, 233, 158, 255), 1.0F);
+        C2D_SetImageTint(&tint, C2D_BotRight, C2D_Color32(119, 205, 113, 255), 1.0F);
+    } else {
+        C2D_SetImageTint(&tint, C2D_TopLeft, C2D_Color32(125, 209, 119, 255), 1.0F);
+        C2D_SetImageTint(&tint, C2D_TopRight, C2D_Color32(161, 233, 158, 255), 1.0F);
+        C2D_SetImageTint(&tint, C2D_BotLeft, C2D_Color32(101, 193, 93, 255), 1.0F);
+        C2D_SetImageTint(&tint, C2D_BotRight, C2D_Color32(136, 217, 131, 255), 1.0F);
+    }
+    C2D_DrawImageAt(gradient, 0.0F, 0.0F, 0.02F, &tint);
+
+    constexpr float pixelsPerSecond = 14.0F;
+    const double seconds = static_cast<double>(svcGetSystemTick()) / SYSCLOCK_ARM11;
+    const float offset = std::fmod(static_cast<float>(seconds) * pixelsPerSecond, 400.0F);
+    const float scrollA = -offset;
+    const float scrollB = 400.0F - offset;
+
+    const C2D_Image squares = C2D_SpriteSheetGetImage(sheet, BoxBgAnimSquaresIdx);
+    const Tex3DS_SubTexture leftHalf = selectSubRegion(squares, 0, 0, 400, 240);
+    const Tex3DS_SubTexture rightHalf = selectSubRegion(squares, 400, 0, 800, 240);
+    C2D_DrawImageAt({squares.tex, &leftHalf}, scrollA, 0.0F, 0.03F);
+    C2D_DrawImageAt({squares.tex, &rightHalf}, scrollB, 0.0F, 0.03F);
 }
 
 void drawPlusMark(float cx, float cy, u32 color) {
@@ -2117,10 +2403,31 @@ void drawDownArrow(float cx, float topY, float size, u32 color) {
                           w, size / 6.0F + 1.0F, color);
     }
 }
+
+void drawPokemonBadges(C2D_SpriteSheet overlaySheet, const PokemonSummary& pokemon,
+                        float cx, float cy, float halfW, float halfH, float z) {
+    if (!overlaySheet) {
+        return;
+    }
+    if (pokemon.shiny) {
+        const C2D_Image star = C2D_SpriteSheetGetImage(overlaySheet, OverlayShinyIdx);
+        C2D_DrawImageAt(star,
+                        std::round(cx + halfW - static_cast<float>(star.subtex->width)),
+                        std::round(cy - halfH),
+                        z);
+    }
+    if (pokemon.heldItem != 0) {
+        const C2D_Image item = C2D_SpriteSheetGetImage(overlaySheet, OverlayItemIdx);
+        C2D_DrawImageAt(item,
+                        std::round(cx - halfW),
+                        std::round(cy + halfH - static_cast<float>(item.subtex->height)),
+                        z);
+    }
+}
 }
 
 void App::renderStorageTop(float eyeOffset) {
-    drawGrass(400.0F, 240.0F);
+    drawBoxBackground(boxBackground_, true);
 
     drawPill(8.0F, 6.0F, 320.0F, 28.0F, 0.1F, HeaderPill);
     C2D_DrawRectSolid(330.0F, 6.0F, 0.1F, 62.0F, 28.0F, CountBlock);
@@ -2133,18 +2440,34 @@ void App::renderStorageTop(float eyeOffset) {
                  C2D_Color32(255, 255, 255, 255));
 
     const std::size_t boxLimit = session_.boxLimit == 0 ? 50 : session_.boxLimit;
-    drawPill(60.0F, 44.0F, 280.0F, 30.0F, 0.14F, BankYellowDark);
-    drawPill(62.0F, 45.0F, 276.0F, 27.0F, 0.15F, BankYellow);
-    drawCentered("Bank " + std::to_string(cloudBox_ + 1), 200.0F, 51.0F, 0.58F, HeaderInk);
+    if (boxNameBarSheet_) {
+        C2D_DrawImageAt(C2D_SpriteSheetGetImage(boxNameBarSheet_, 0), 100.0F, 44.0F, 0.14F);
+    } else {
+        drawPill(60.0F, 44.0F, 280.0F, 30.0F, 0.14F, BoxPlateBorder);
+        drawPill(62.0F, 45.0F, 276.0F, 27.0F, 0.15F, BoxPlate);
+    }
+    if (cloudNameFocused_) {
+        C2D_DrawRectSolid(100.0F, 43.0F, 0.145F, 200.0F, 2.0F, CursorGreen);
+        C2D_DrawRectSolid(100.0F, 69.0F, 0.145F, 200.0F, 2.0F, CursorGreen);
+        const double t = static_cast<double>(svcGetSystemTick()) / SYSCLOCK_ARM11;
+        const float bounce = std::sin(static_cast<float>(t) * 6.0F) * 3.5F;
+        drawDownArrow(200.0F, 30.0F + bounce, 12.0F, CursorRed);
+    }
+    const auto cachedCloudName = cloudBoxNames_.find(static_cast<std::uint16_t>(cloudBox_ + 1));
+    const std::string cloudBoxLabel = cachedCloudName != cloudBoxNames_.end()
+        ? cachedCloudName->second
+        : "Bank " + std::to_string(cloudBox_ + 1);
+    const float cloudNameY = 57.0F - textHeight(textFont_, textBuffer_, cloudBoxLabel, 0.55F) * 0.5F;
+    drawCentered(cloudBoxLabel, 200.0F, cloudNameY, 0.55F, HeaderInk);
     if (loadState_.load(std::memory_order_acquire) == LoadState::Running
-        && loadOperation_ == LoadOperation::CloudBox) {
+        && (loadOperation_ == LoadOperation::CloudBox
+            || loadOperation_ == LoadOperation::PickupCloud
+            || loadOperation_ == LoadOperation::SwapCloud)) {
         const double seconds = static_cast<double>(svcGetSystemTick()) / SYSCLOCK_ARM11;
         const float pulse = 0.45F + 0.55F * std::sin(static_cast<float>(seconds) * 6.0F);
-        C2D_DrawCircleSolid(274.0F, 59.0F, 0.4F, 3.0F + pulse * 2.0F, HeaderInk);
-        drawText("Loading", 284.0F, 53.0F, 0.34F, HeaderInk);
+        C2D_DrawCircleSolid(312.0F, 59.0F, 0.4F, 3.0F + pulse * 2.0F, HeaderInk);
+        drawText("Loading", 320.0F, 53.0F, 0.34F, HeaderInk);
     }
-    drawText("<", 74.0F, 50.0F, 0.7F, ArrowInk);
-    drawText(">", 318.0F, 50.0F, 0.7F, ArrowInk);
     (void)boxLimit;
 
     constexpr float pitchX = 55.0F;
@@ -2159,23 +2482,14 @@ void App::renderStorageTop(float eyeOffset) {
     for (std::size_t slot = 0; slot < 30; ++slot) {
         const float cx = gridLeft + (static_cast<float>(slot % 6) + 0.5F) * pitchX;
         const float cy = gridTop + (static_cast<float>(slot / 6) + 0.5F) * pitchY;
-        const float slotX = cx - pitchX * 0.5F + 2.0F;
-        const float slotY = cy - pitchY * 0.5F + 2.0F;
-        const float slotW = pitchX - 4.0F;
-        const float slotH = pitchY - 4.0F;
-        C2D_DrawRectSolid(slotX, slotY, 0.18F, slotW, slotH, C2D_Color32(255, 255, 255, 60));
-        C2D_DrawRectSolid(slotX, slotY, 0.19F, slotW, 1.0F, C2D_Color32(30, 30, 30, 120));
-        C2D_DrawRectSolid(slotX, slotY + slotH - 1.0F, 0.19F, slotW, 1.0F, C2D_Color32(30, 30, 30, 120));
-        C2D_DrawRectSolid(slotX, slotY, 0.19F, 1.0F, slotH, C2D_Color32(30, 30, 30, 120));
-        C2D_DrawRectSolid(slotX + slotW - 1.0F, slotY, 0.19F, 1.0F, slotH, C2D_Color32(30, 30, 30, 120));
         const PokemonSummary& pokemon = cloudPreview_[slot];
         if (pokemonSprites_ && pokemon.species != 0) {
             const C2D_Image image = C2D_SpriteSheetGetImage(pokemonSprites_, pokemon.species);
-            const float scale = std::min(42.0F / image.subtex->width, 28.0F / image.subtex->height);
+            constexpr float scale = 1.0F;
             const float w = image.subtex->width * scale;
             const float h = image.subtex->height * scale;
-            const float spriteX = cx - w * 0.5F + eyeOffset * 0.2F;
-            const float spriteY = cy - h * 0.5F;
+            const float spriteX = std::round(cx - w * 0.5F + eyeOffset * 0.2F);
+            const float spriteY = std::round(cy - h * 0.5F);
             const std::uint8_t saveGen = saveAdapter_.gameGeneration();
             const std::uint8_t monFormat = pokemon.format != 0
                 ? pokemon.format
@@ -2188,8 +2502,9 @@ void App::renderStorageTop(float eyeOffset) {
             C2D_PlainImageTint(&tint, C2D_Color32(72, 72, 72, 255), 0.82F);
             C2D_DrawImageAt(image, spriteX, spriteY, 0.3F,
                             incompatible ? &tint : nullptr, scale, scale);
+            drawPokemonBadges(overlayIcons_, pokemon, cx, cy, w * 0.5F, h * 0.5F, 0.31F);
         }
-        if (storagePane_ == StoragePane::Cloud && slot == focusedSlot_) {
+        if (storagePane_ == StoragePane::Cloud && slot == focusedSlot_ && !cloudNameFocused_) {
             const double t = static_cast<double>(svcGetSystemTick()) / SYSCLOCK_ARM11;
             const float bounce = std::sin(static_cast<float>(t) * 6.0F) * 3.5F;
             const u32 arrowColor = hand_.active ? CursorGreen : CursorRed;
@@ -2197,13 +2512,12 @@ void App::renderStorageTop(float eyeOffset) {
 
             if (hand_.active && hand_.summary.species != 0 && pokemonSprites_) {
                 const C2D_Image image = C2D_SpriteSheetGetImage(pokemonSprites_, hand_.summary.species);
-                const float scale = std::min(42.0F / image.subtex->width,
-                                             28.0F / image.subtex->height);
+                constexpr float scale = 1.0F;
                 const float w = image.subtex->width * scale;
                 const float h = image.subtex->height * scale;
                 C2D_DrawImageAt(image,
-                                cx - w * 0.5F,
-                                cy - h * 0.5F,
+                                std::round(cx - w * 0.5F),
+                                std::round(cy - h * 0.5F),
                                 0.6F, nullptr, scale, scale);
             }
         }
@@ -2239,33 +2553,39 @@ void App::renderStorageTop(float eyeOffset) {
 }
 
 void App::renderStorageBottom() {
-    drawGrass(320.0F, 240.0F);
+    drawBoxBackground(boxBackground_, false);
 
     C2D_DrawRectSolid(0.0F, 0.0F, 0.05F, 320.0F, 20.0F, C2D_Color32(215, 232, 224, 235));
     C2D_DrawCircleSolid(14.0F, 10.0F, 0.1F, 7.0F, C2D_Color32(210, 40, 40, 255));
     C2D_DrawRectSolid(7.0F, 9.0F, 0.15F, 14.0F, 2.0F, C2D_Color32(30, 30, 30, 255));
     C2D_DrawCircleSolid(14.0F, 10.0F, 0.2F, 2.5F, C2D_Color32(240, 240, 240, 255));
-    drawText(hand_.active ? "HOLDING" : "READY",
-             30.0F, 6.0F, 0.34F, hand_.active ? CursorGreen : HeaderInk);
+    const bool fetching = loadState_.load(std::memory_order_acquire) == LoadState::Running
+        && (loadOperation_ == LoadOperation::PickupCloud
+            || loadOperation_ == LoadOperation::SwapCloud);
+    drawText(fetching ? "FETCHING" : (hand_.active ? "HOLDING" : "READY"),
+             30.0F, 6.0F, 0.34F, fetching ? CursorGreen : (hand_.active ? CursorGreen : HeaderInk));
     if (hasPendingChanges()) {
-        drawText("PENDING", 90.0F, 6.0F, 0.34F, CursorGreen);
+        drawText("PENDING", 100.0F, 6.0F, 0.34F, CursorGreen);
     }
     C2D_DrawRectSolid(252.0F, 2.0F, 0.1F, 60.0F, 16.0F, C2D_Color32(58, 58, 58, 255));
     drawCentered("START", 282.0F, 5.0F, 0.4F, C2D_Color32(240, 240, 240, 255));
 
-    drawPill(6.0F, 26.0F, 200.0F, 26.0F, 0.14F, BankYellowDark);
-    drawPill(8.0F, 27.0F, 196.0F, 23.0F, 0.15F, BankYellow);
+    if (boxNameBarSheet_) {
+        C2D_DrawImageAt(C2D_SpriteSheetGetImage(boxNameBarSheet_, 0), 6.0F, 26.0F, 0.14F);
+    } else {
+        drawPill(6.0F, 26.0F, 200.0F, 26.0F, 0.14F, BoxPlateBorder);
+        drawPill(8.0F, 27.0F, 196.0F, 23.0F, 0.15F, BoxPlate);
+    }
     const std::string boxLabel = localBoxName_.empty()
         ? "BOX " + std::to_string(localBox_ + 1)
         : localBoxName_;
-    drawCentered(boxLabel, 106.0F, 32.0F, 0.55F, HeaderInk);
-    drawText("<", 20.0F, 32.0F, 0.6F, ArrowInk);
-    drawText(">", 186.0F, 32.0F, 0.6F, ArrowInk);
+    const float localNameY = 39.0F - textHeight(textFont_, textBuffer_, boxLabel, 0.55F) * 0.5F;
+    drawCentered(boxLabel, 106.0F, localNameY, 0.55F, HeaderInk);
 
-    constexpr float pitchX = 32.0F;
-    constexpr float pitchY = 25.0F;
+    constexpr float pitchX = 34.0F;
+    constexpr float pitchY = 30.0F;
     constexpr float gridLeft = 8.0F;
-    constexpr float gridTop = 60.0F;
+    constexpr float gridTop = 58.0F;
     drawPlusMark(gridLeft - 3.0F, gridTop - 3.0F, HeaderInk);
     drawPlusMark(gridLeft + pitchX * 6.0F + 3.0F, gridTop - 3.0F, HeaderInk);
     drawPlusMark(gridLeft - 3.0F, gridTop + pitchY * 5.0F + 3.0F, HeaderInk);
@@ -2278,17 +2598,17 @@ void App::renderStorageBottom() {
         const bool isSelected = storage_.selected(slot);
         if (pokemonSprites_ && pokemon.species != 0) {
             const C2D_Image image = C2D_SpriteSheetGetImage(pokemonSprites_, pokemon.species);
-            const float scale = std::min(28.0F / image.subtex->width,
-                                         22.0F / image.subtex->height);
+            constexpr float scale = 1.0F;
             const float w = image.subtex->width * scale;
             const float h = image.subtex->height * scale;
-            C2D_DrawImageAt(image, cx - w * 0.5F, cy - h * 0.5F,
+            C2D_DrawImageAt(image, std::round(cx - w * 0.5F), std::round(cy - h * 0.5F),
                             0.3F, nullptr, scale, scale);
             if (isSelected) {
-                const float half = 13.0F;
+                const float half = 15.0F;
                 C2D_DrawRectSolid(cx - half, cy - half, 0.35F, half * 2.0F, half * 2.0F,
                                   C2D_Color32(255, 255, 255, 160));
             }
+            drawPokemonBadges(overlayIcons_, pokemon, cx, cy, w * 0.5F, h * 0.5F, 0.36F);
         }
         if (storagePane_ == StoragePane::Local && slot == focusedSlot_) {
             const double t = static_cast<double>(svcGetSystemTick()) / SYSCLOCK_ARM11;
@@ -2298,19 +2618,18 @@ void App::renderStorageBottom() {
 
             if (hand_.active && hand_.summary.species != 0 && pokemonSprites_) {
                 const C2D_Image image = C2D_SpriteSheetGetImage(pokemonSprites_, hand_.summary.species);
-                const float scale = std::min(22.0F / image.subtex->width,
-                                             18.0F / image.subtex->height);
+                constexpr float scale = 1.0F;
                 const float w = image.subtex->width * scale;
                 const float h = image.subtex->height * scale;
                 C2D_DrawImageAt(image,
-                                cx - w * 0.5F,
-                                cy - h * 0.5F,
+                                std::round(cx - w * 0.5F),
+                                std::round(cy - h * 0.5F),
                                 0.6F, nullptr, scale, scale);
             }
         }
     }
 
-    constexpr float sidebarX = 202.0F;
+    constexpr float sidebarX = 220.0F;
     const PokemonSummary& focused = storagePane_ == StoragePane::Cloud
         ? cloudPreview_[focusedSlot_]
         : storage_.pokemon(focusedSlot_);
@@ -2321,8 +2640,8 @@ void App::renderStorageBottom() {
             C2D_DrawCircleSolid(sidebarX + 8.0F + i * 14.0F, 74.0F, 0.2F, 2.5F, SidebarInk);
         }
         drawText(focused.nickname, sidebarX + 4.0F, 86.0F, 0.44F, SidebarInk);
-        drawPill(sidebarX + 4.0F, 106.0F, 108.0F, 18.0F, 0.22F, TypeElectric);
-        drawCentered("TYPE", sidebarX + 58.0F, 110.0F, 0.42F, C2D_Color32(255, 255, 255, 255));
+        drawPill(sidebarX + 4.0F, 106.0F, 84.0F, 18.0F, 0.22F, TypeElectric);
+        drawCentered("TYPE", sidebarX + 46.0F, 110.0F, 0.42F, C2D_Color32(255, 255, 255, 255));
         drawText("DEX NO.", sidebarX + 4.0F, 132.0F, 0.44F, SidebarInk);
         drawText(std::to_string(focused.species), sidebarX + 32.0F, 152.0F, 0.62F, SidebarInk);
         drawText(focused.trainerName, sidebarX + 4.0F, 180.0F, 0.44F, SidebarInk);
@@ -2381,13 +2700,6 @@ void App::renderStorageBottom() {
         drawCentered("SEL", 190.0F, 216.0F, 0.36F, C2D_Color32(255, 255, 255, 255));
         drawText(pending ? "COMMIT" : (cloudPane ? "LOCAL" : "CLOUD"),
                  205.0F, 214.0F, 0.5F, pending ? CursorGreen : HeaderInk);
-        if (!status_.empty()) {
-            constexpr std::size_t lineLength = 48;
-            drawText(status_.substr(0, lineLength), 6.0F, 188.0F, 0.29F, HeaderInk);
-            if (status_.size() > lineLength) {
-                drawText(status_.substr(lineLength, lineLength), 6.0F, 198.0F, 0.29F, HeaderInk);
-            }
-        }
     }
 }
 
@@ -2397,7 +2709,7 @@ void App::renderErrorDialog() {
     C2D_DrawRectSolid(18.0F, 20.0F, 0.45F, 7.0F, 208.0F, Error);
     C2D_DrawRectSolid(25.0F, 20.0F, 0.45F, 277.0F, 36.0F, C2D_Color32(255, 225, 214, 255));
 
-    drawText("TRANSFER BLOCKED", 36.0F, 30.0F, 0.52F, Error);
+    drawText(errorDialogTitle_, 36.0F, 30.0F, 0.52F, Error);
     drawText(errorDialogPokemon_.empty() ? "Unknown Pokemon" : errorDialogPokemon_,
              36.0F, 68.0F, 0.62F, HeaderInk);
     if (!errorDialogLocation_.empty()) {
@@ -2503,7 +2815,7 @@ void App::persistLocalDraft() {
     }
 }
 
-void App::refreshCloudBox() {
+void App::refreshCloudBox(bool keepPreviousPreview) {
     const auto boxKey = static_cast<std::uint16_t>(cloudBox_);
     if (session_.accessToken.empty()) {
         cloudPreview_.fill({});
@@ -2513,8 +2825,10 @@ void App::refreshCloudBox() {
 
     auto it = cloudBoxes_.find(boxKey);
     if (it == cloudBoxes_.end()) {
-        cloudPreview_.fill({});
-        pendingUploadPayloads_ = {};
+        if (!keepPreviousPreview) {
+            cloudPreview_.fill({});
+            pendingUploadPayloads_ = {};
+        }
         cachedCloudPayloads_ = {};
         status_.clear();
         loadingCloudBox_ = boxKey;
@@ -2577,8 +2891,10 @@ void App::drawText(std::string_view value, float x, float y, float size, u32 col
     C2D_Text text;
     const PreparedText prepared = prepareText(value);
     parseText(text, textFont_, textBuffer_, prepared.value);
-    C2D_DrawText(&text, C2D_WithColor, x, y, 0.5F, size, size, color);
-    drawMusicGlyphs(prepared, textFont_, textBuffer_, x, y, size, color);
+    const float snappedX = std::round(x);
+    const float snappedY = std::round(y);
+    C2D_DrawText(&text, C2D_WithColor, snappedX, snappedY, 0.5F, size, size, color);
+    drawMusicGlyphs(prepared, textFont_, textBuffer_, snappedX, snappedY, size, color);
 }
 
 void App::drawCentered(std::string_view value, float centerX, float y, float size, u32 color) {
@@ -2588,9 +2904,10 @@ void App::drawCentered(std::string_view value, float centerX, float y, float siz
     float width = 0.0F;
     float height = 0.0F;
     C2D_TextGetDimensions(&text, size, size, &width, &height);
-    const float x = centerX - width * 0.5F;
-    C2D_DrawText(&text, C2D_WithColor, x, y, 0.5F, size, size, color);
-    drawMusicGlyphs(prepared, textFont_, textBuffer_, x, y, size, color);
+    const float snappedX = std::round(centerX - width * 0.5F);
+    const float snappedY = std::round(y);
+    C2D_DrawText(&text, C2D_WithColor, snappedX, snappedY, 0.5F, size, size, color);
+    drawMusicGlyphs(prepared, textFont_, textBuffer_, snappedX, snappedY, size, color);
 }
 
 void App::drawButton(const UiRect& rect, std::string_view label, bool primary) {

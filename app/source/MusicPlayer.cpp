@@ -1,4 +1,5 @@
 #include "MusicPlayer.hpp"
+#include "FsGuard.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -116,6 +117,7 @@ bool MusicPlayer::fill(std::size_t index) {
     int bitstream = 0;
     int restartCount = 0;
     while (written < BufferSize) {
+        const FsGuard guard;
         const long result = ov_read(&vorbis_, destination + written, BufferSize - written, &bitstream);
         if (result > 0) {
             written += static_cast<std::size_t>(result);

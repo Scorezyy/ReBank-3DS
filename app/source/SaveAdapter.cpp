@@ -1,4 +1,5 @@
 #include "SaveAdapter.hpp"
+#include "FsGuard.hpp"
 #include "Logger.hpp"
 #include "spi.hpp"
 
@@ -600,6 +601,7 @@ std::string SaveAdapter::insertedDsGameCode() {
 
 bool SaveAdapter::readGameIcon(const GameDescriptor& game, bool cartridge,
                                std::array<std::uint16_t, 48 * 48>& pixels) {
+    const FsGuard guard;
     pixels.fill(0);
     if (game.platform == GamePlatform::NintendoDs && cartridge) {
         const std::unique_ptr<std::uint8_t[]> banner(
@@ -708,6 +710,7 @@ std::array<PokemonSummary, 30> SaveAdapter::readBox(std::size_t box) const {
                 parsed->alternativeForm(),
                 parsed->level(),
                 parsed->shiny(),
+                parsed->heldItem(),
                 parsed->nickname(),
                 parsed->otName(),
                 gameCode_,

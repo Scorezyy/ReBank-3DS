@@ -70,7 +70,9 @@ private:
         None,
         DiscoverGames,
         OpenGame,
-        CloudBox
+        CloudBox,
+        PickupCloud,
+        SwapCloud
     };
 
     enum class LoadState {
@@ -115,6 +117,12 @@ private:
     };
 
     enum class DownloadState {
+        Idle,
+        Running,
+        Completed
+    };
+
+    enum class RenameState {
         Idle,
         Running,
         Completed
@@ -209,6 +217,9 @@ private:
     void beginDownload(std::uint16_t cloudBox, std::uint8_t cloudSlot, std::size_t localBox, std::size_t localSlot);
     void pollDownload();
     static void downloadWorker(void* argument);
+    void beginRenameBox(std::uint16_t position, std::string name);
+    void pollRenameBox();
+    static void renameBoxWorker(void* argument);
     int storageDirection(u32 keysDown, u32 keysHeld, circlePosition circle);
     void selectFocusedPokemon();
     void render();
@@ -223,7 +234,7 @@ private:
     void renderErrorDialog();
     void renderLogs();
     void loadLocalBox();
-    void refreshCloudBox();
+    void refreshCloudBox(bool keepPreviousPreview = false);
     void snapshotBox();
     void persistLocalDraft();
     void persistCloudDraft();
@@ -256,6 +267,11 @@ private:
     C2D_TextBuf textBuffer_;
     C2D_Font textFont_;
     C2D_SpriteSheet pokemonSprites_;
+    C2D_SpriteSheet boxBackground_;
+    C2D_SpriteSheet overlayIcons_;
+    C2D_SpriteSheet iconItemSheet_;
+    C2D_SpriteSheet iconShinySheet_;
+    C2D_SpriteSheet boxNameBarSheet_;
     u64 introStartedAt_;
     std::string username_;
     std::string email_;
@@ -281,12 +297,17 @@ private:
     LoadOperation loadOperation_;
     std::atomic<LoadingPhase> loadingPhase_;
     std::atomic<int> loadProgress_{0};
+    float displayedLoadProgress_ = 0.0F;
     u64 loadingStartedAt_;
     std::size_t loadingCatalogIndex_;
     std::uint16_t loadingCloudBox_;
     std::vector<DiscoveredGame> discoveredGames_;
     OpenGameResult openGameResult_;
     BoxListResult cloudLoadResult_;
+    std::size_t pickupSlot_;
+    std::uint16_t pickupCloudBox_ = 0;
+    PokemonSummary pickupSummary_;
+    DownloadResult pickupResult_;
     MusicPlayer music_;
     SaveAdapter saveAdapter_;
     SaveSummary saveSummary_;
@@ -321,6 +342,14 @@ private:
     Hand hand_;
     SelectionTool selectionTool_;
     StoragePane storagePane_;
+    bool cloudNameFocused_ = false;
+    std::unordered_map<std::uint16_t, std::string> cloudBoxNames_;
+    std::vector<BoxNameEntry> pendingBoxNames_;
+    Thread renameThread_;
+    std::atomic<RenameState> renameState_;
+    RenameBoxResult renameResult_;
+    std::uint16_t renamingBoxPosition_ = 0;
+    std::string renamingBoxName_;
     bool transferArmed_;
     Thread uploadThread_;
     std::atomic<UploadState> uploadState_;
@@ -342,6 +371,7 @@ private:
     int heldDirection_;
     u64 directionRepeatAt_;
     bool errorDialogVisible_ = false;
+    std::string errorDialogTitle_ = "TRANSFER BLOCKED";
     std::string errorDialogPokemon_;
     std::string errorDialogLocation_;
     std::string errorDialogMessage_;

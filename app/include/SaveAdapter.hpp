@@ -18,6 +18,7 @@ struct PokemonSummary {
     std::uint16_t form = 0;
     std::uint8_t level = 0;
     bool shiny = false;
+    std::uint16_t heldItem = 0;
     std::string nickname;
     std::string trainerName;
     std::string gameCode;

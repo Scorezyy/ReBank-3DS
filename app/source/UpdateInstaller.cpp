@@ -79,18 +79,28 @@ std::string hashFile(const std::string& path, std::uint32_t expectedSize) {
     return result;
 }
 
+std::string hex(Result result) {
+    char buffer[16];
+    std::snprintf(buffer, sizeof(buffer), "0x%08lX", static_cast<unsigned long>(result));
+    return buffer;
+}
+
 UpdateInstallResult installCia(const std::string& path) {
     Result result = amInit();
     if (R_FAILED(result)) {
+        Logger::instance().error("amInit failed: " + hex(result));
         return {false, false, "CIA update service is unavailable."};
     }
     Handle handle = 0;
     result = AM_StartCiaInstall(MEDIATYPE_SD, &handle);
-    FILE* file = R_SUCCEEDED(result) ? std::fopen(path.c_str(), "rb") : nullptr;
+    if (R_FAILED(result)) {
+        Logger::instance().error("AM_StartCiaInstall failed: " + hex(result));
+        amExit();
+        return {false, false, "CIA update installation could not start."};
+    }
+    FILE* file = std::fopen(path.c_str(), "rb");
     if (!file) {
-        if (handle) {
-            AM_CancelCIAInstall(handle);
-        }
+        AM_CancelCIAInstall(handle);
         amExit();
         return {false, false, "CIA update installation could not start."};
     }
@@ -100,6 +110,7 @@ UpdateInstallResult installCia(const std::string& path) {
         u32 written = 0;
         result = FSFILE_Write(handle, &written, offset, buffer.data(), read, FS_WRITE_FLUSH);
         if (R_FAILED(result) || written != read) {
+            Logger::instance().error("CIA write failed: " + hex(result));
             break;
         }
         offset += written;
@@ -110,6 +121,9 @@ UpdateInstallResult installCia(const std::string& path) {
     std::fclose(file);
     if (R_SUCCEEDED(result)) {
         result = AM_FinishCiaInstall(handle);
+        if (R_FAILED(result)) {
+            Logger::instance().error("AM_FinishCiaInstall failed: " + hex(result));
+        }
     } else {
         AM_CancelCIAInstall(handle);
     }
