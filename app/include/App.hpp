@@ -280,6 +280,7 @@ private:
     std::atomic<LoadState> loadState_;
     LoadOperation loadOperation_;
     std::atomic<LoadingPhase> loadingPhase_;
+    std::atomic<int> loadProgress_{0};
     u64 loadingStartedAt_;
     std::size_t loadingCatalogIndex_;
     std::uint16_t loadingCloudBox_;

@@ -406,46 +406,18 @@ std::unique_ptr<pksm::PKX> convertLegacyToG6Stable(const pksm::PKX& source, pksm
     return target;
 }
 
-std::unique_ptr<pksm::PKX> restoreG5FromG6Stable(const pksm::PKX& source, pksm::Sav& save) {
-    const auto species = static_cast<std::uint16_t>(source.species());
-    const bool mustBeGen5Origin = species > 493 && species <= 649;
-    if (source.generation() != pksm::Generation::SIX
-        || (!source.originGen5() && !mustBeGen5Origin)) {
-        return nullptr;
-    }
-    auto target = source.convertToG5(save);
-    if (!target) {
-        return nullptr;
-    }
-
-    const std::uint32_t originalPid = source.encryptionConstant();
-    const bool hiddenAbility = source.abilityNumber() == 4;
-    target->PID(originalPid);
-    auto& pk5 = static_cast<pksm::PK5&>(*target);
-    pk5.hiddenAbility(hiddenAbility);
-    pk5.nPokemon(false);
-    const std::uint8_t abilityIndex = hiddenAbility
-        ? 2
-        : static_cast<std::uint8_t>((originalPid >> 16) & 1);
-    target->ability(target->abilities(abilityIndex));
-    target->refreshChecksum();
-
-    Logger::instance().info(
-        "Gen 6 to Gen 5 restored PID=" + std::to_string(originalPid)
-        + " ability="
-        + std::to_string(static_cast<std::uint16_t>(target->ability()))
-        + " abilitySlot=" + std::to_string(target->abilityNumber())
-        + " hidden=" + std::to_string(hiddenAbility)
-        + " encounterType=" + std::to_string(pk5.encounterType()));
-    return target;
-}
-
+// Pokemon may only move to an equal or newer generation. Downward conversion is
+// intentionally unsupported: it is the source of lost data and bad eggs. A mon
+// that reached Gen 6 stays Gen 6 and can no longer be placed into a Gen 4/5 save.
 std::unique_ptr<pksm::PKX> convertForSave(
     const pksm::PKX& source,
     std::uint8_t sourceFormat,
     std::uint8_t targetGeneration,
     pksm::Sav& save
 ) {
+    if (sourceFormat >= targetGeneration) {
+        return nullptr;
+    }
     if (sourceFormat == 4 && targetGeneration == 5) {
         return convertG4ToG5Stable(source);
     }
@@ -458,19 +430,6 @@ std::unique_ptr<pksm::PKX> convertForSave(
     }
     if (sourceFormat == 6 && targetGeneration == 7) {
         return source.convertToG7(save);
-    }
-    if (sourceFormat == 6 && targetGeneration == 4 && source.originGen4()) {
-        return source.convertToG4(save);
-    }
-    if (sourceFormat == 6 && targetGeneration == 5) {
-        const auto species = static_cast<std::uint16_t>(source.species());
-        const bool mustBeGen5Origin = species > 493 && species <= 649;
-        if (!source.originGen4() && !source.originGen5() && !mustBeGen5Origin) {
-            return nullptr;
-        }
-        return (source.originGen5() || mustBeGen5Origin)
-            ? restoreG5FromG6Stable(source, save)
-            : source.convertToG5(save);
     }
     return nullptr;
 }
@@ -804,30 +763,12 @@ bool SaveAdapter::canImportPokemon(
     const std::vector<std::uint8_t>& data
 ) const {
     const std::uint8_t saveGen = gameGeneration();
-    if (!save_ || data.empty() || saveGen == 0) {
+    if (!save_ || data.empty() || saveGen == 0 || format == 0) {
         return false;
     }
-    if (format <= saveGen) {
-        return true;
-    }
-    if (format != 6 || (saveGen != 4 && saveGen != 5)) {
-        return false;
-    }
-    try {
-        auto buffer = data;
-        auto pokemon = pksm::PKX::getPKM(
-            pksm::Generation::SIX, buffer.data(), buffer.size(), false);
-        if (!pokemon) {
-            return false;
-        }
-        const auto species = static_cast<std::uint16_t>(pokemon->species());
-        return saveGen == 4
-            ? pokemon->originGen4() && species > 0 && species <= 493
-            : (pokemon->originGen4() || pokemon->originGen5())
-                && species > 0 && species <= 649;
-    } catch (...) {
-        return false;
-    }
+    // Only equal or upward transfers are allowed. A Pokemon can never move to an
+    // older generation, so anything newer than the save is rejected outright.
+    return format <= saveGen;
 }
 
 bool SaveAdapter::clearSlot(std::size_t box, std::size_t slot) {
