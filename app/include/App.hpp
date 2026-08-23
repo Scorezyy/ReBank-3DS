@@ -8,6 +8,7 @@
 #include "MusicPlayer.hpp"
 #include "SessionStore.hpp"
 #include "StorageModel.hpp"
+#include "UpdateInstaller.hpp"
 
 #include <citro2d.h>
 
@@ -30,7 +31,7 @@ struct UiRect {
 
 class App {
 public:
-    App();
+    App(std::string executablePath, bool homebrew);
     ~App();
     int run();
 
@@ -54,6 +55,12 @@ private:
     };
 
     enum class AuthState {
+        Idle,
+        Running,
+        Completed
+    };
+
+    enum class UpdateState {
         Idle,
         Running,
         Completed
@@ -189,6 +196,9 @@ private:
     void beginAuth(AuthOperation operation);
     void pollAuth();
     static void authWorker(void* argument);
+    void beginUpdate();
+    void pollUpdate();
+    static void updateWorker(void* argument);
     void beginLoad(LoadOperation operation);
     void pollLoad();
     static void loadWorker(void* argument);
@@ -252,6 +262,11 @@ private:
     std::string password_;
     std::string status_;
     ApiClient api_;
+    std::string executablePath_;
+    bool homebrew_;
+    Thread updateThread_;
+    std::atomic<UpdateState> updateState_;
+    UpdateInstallResult updateResult_;
     SessionStore sessionStore_;
     AccountSession session_;
     Thread authThread_;

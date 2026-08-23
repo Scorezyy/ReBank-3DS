@@ -30,6 +30,7 @@ AccessControlInfo:
   ServiceAccessControl:
     - APT:U
     - ac:u
+    - am:u
     - cfg:u
     - dsp::DSP
     - fs:USER

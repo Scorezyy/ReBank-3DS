@@ -7,6 +7,7 @@
 #include <jansson.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -15,6 +16,8 @@
 namespace {
 constexpr std::size_t MaximumResponseSize = 64 * 1024;
 constexpr std::size_t MaximumCertificateSize = 16 * 1024;
+constexpr std::size_t MaximumUpdateSize = 5 * 1024 * 1024;
+constexpr std::size_t DownloadChunkSize = 32 * 1024;
 constexpr u64 RequestTimeout = 30'000'000'000ULL;
 
 std::string resultCode(Result result) {
@@ -60,6 +63,22 @@ std::string dumpJson(json_t* value) {
 std::string stringField(json_t* object, const char* key) {
     json_t* value = json_object_get(object, key);
     return json_is_string(value) ? json_string_value(value) : "";
+}
+
+bool validUpdateText(const std::string& value, bool tag) {
+    if (value.empty() || value.size() > 48 || (tag && value[0] != 'v')) {
+        return false;
+    }
+    return std::all_of(value.begin() + (tag ? 1 : 0), value.end(), [](unsigned char character) {
+        return std::isdigit(character) || character == '.' || character == '-'
+            || (character >= 'A' && character <= 'Z') || (character >= 'a' && character <= 'z');
+    });
+}
+
+bool validSha256(const std::string& value) {
+    return value.size() == 64 && std::all_of(value.begin(), value.end(), [](unsigned char character) {
+        return std::isdigit(character) || (character >= 'a' && character <= 'f');
+    });
 }
 
 std::string encodeBase64(const std::vector<std::uint8_t>& input) {
@@ -409,6 +428,123 @@ BoxListResult ApiClient::listCloudBox(
     result.success = true;
     result.message = "Box loaded.";
     return result;
+}
+
+ClientUpdate ApiClient::latestClientUpdate() {
+    const HttpResult response = request("/v1/client/update", {}, {}, "GET");
+    if (!response.success) {
+        return {false, response.message};
+    }
+    json_error_t error{};
+    json_t* root = json_loadb(response.body.data(), response.body.size(), JSON_REJECT_DUPLICATES, &error);
+    json_t* assets = root ? json_object_get(root, "assets") : nullptr;
+    if (response.status != 200 || !json_is_object(root) || !json_is_array(assets)) {
+        json_decref(root);
+        return {false, "The server returned invalid update information."};
+    }
+    ClientUpdate update{};
+    update.tag = stringField(root, "tag");
+    update.version = stringField(root, "version");
+    const std::size_t count = json_array_size(assets);
+    for (std::size_t index = 0; index < count; ++index) {
+        json_t* asset = json_array_get(assets, index);
+        const std::string name = json_is_object(asset) ? stringField(asset, "name") : "";
+        const std::string digest = json_is_object(asset) ? stringField(asset, "sha256") : "";
+        json_t* sizeValue = json_is_object(asset) ? json_object_get(asset, "size") : nullptr;
+        const json_int_t size = json_is_integer(sizeValue) ? json_integer_value(sizeValue) : 0;
+        if (!validSha256(digest) || size <= 0 || size > static_cast<json_int_t>(MaximumUpdateSize)) {
+            continue;
+        }
+        if (name == "ReBank.cia") {
+            update.ciaSha256 = digest;
+            update.ciaSize = static_cast<std::uint32_t>(size);
+        } else if (name == "ReBank.3dsx") {
+            update.threeDsxSha256 = digest;
+            update.threeDsxSize = static_cast<std::uint32_t>(size);
+        }
+    }
+    json_decref(root);
+    if (!validUpdateText(update.tag, true) || !validUpdateText(update.version, false)
+        || update.ciaSha256.empty() || update.threeDsxSha256.empty()) {
+        return {false, "The server returned incomplete update information."};
+    }
+    update.success = true;
+    update.message = "Update information loaded.";
+    return update;
+}
+
+FileDownloadResult ApiClient::downloadClientUpdate(
+    const std::string& tag,
+    const std::string& assetName,
+    const std::string& destination,
+    std::uint32_t expectedSize
+) {
+    if (!initialized_ || !validUpdateText(tag, true)
+        || (assetName != "ReBank.cia" && assetName != "ReBank.3dsx")
+        || expectedSize == 0 || expectedSize > MaximumUpdateSize) {
+        return {false, "The update download request is invalid.", 0};
+    }
+    const std::string path = "/v1/client/update/" + tag + "/" + assetName;
+    const std::string url = ServerConfig::baseUrl() + path;
+    httpcContext context{};
+    Result result = httpcOpenContext(&context, HTTPC_METHOD_GET, url.c_str(), 0);
+    const auto& rootCertificate = trustedRootCertificate();
+    if (R_SUCCEEDED(result) && rootCertificate.empty()) {
+        httpcCloseContext(&context);
+        return {false, "The trusted server certificate is unavailable.", 0};
+    }
+    if (R_SUCCEEDED(result)) {
+        result = httpcAddTrustedRootCA(
+            &context,
+            rootCertificate.data(),
+            static_cast<u32>(rootCertificate.size())
+        );
+    }
+    if (R_SUCCEEDED(result)) {
+        result = httpcAddRequestHeaderField(&context, "Accept", "application/octet-stream");
+    }
+    if (R_SUCCEEDED(result)) {
+        result = httpcBeginRequest(&context);
+    }
+    u32 status = 0;
+    if (R_SUCCEEDED(result)) {
+        result = httpcGetResponseStatusCodeTimeout(&context, &status, RequestTimeout);
+    }
+    if (R_FAILED(result) || status != 200) {
+        const std::string code = resultCode(result);
+        httpcCloseContext(&context);
+        return {false, "Update connection failed (" + code + ").", 0};
+    }
+
+    FILE* file = std::fopen(destination.c_str(), "wb");
+    if (!file) {
+        httpcCloseContext(&context);
+        return {false, "The temporary update file could not be created.", 0};
+    }
+    std::vector<u8> buffer(DownloadChunkSize);
+    u32 total = 0;
+    do {
+        u32 before = 0;
+        u32 contentSize = 0;
+        httpcGetDownloadSizeState(&context, &before, &contentSize);
+        result = httpcReceiveDataTimeout(&context, buffer.data(), buffer.size(), RequestTimeout);
+        u32 after = 0;
+        httpcGetDownloadSizeState(&context, &after, &contentSize);
+        const u32 received = after >= before ? after - before : 0;
+        if (received > buffer.size() || total + received > expectedSize
+            || (received > 0 && std::fwrite(buffer.data(), 1, received, file) != received)) {
+            result = static_cast<Result>(-1);
+            break;
+        }
+        total += received;
+    } while (static_cast<u32>(result) == HTTPC_RESULTCODE_DOWNLOADPENDING);
+    const bool closed = std::fclose(file) == 0;
+    httpcCloseContext(&context);
+    if (R_FAILED(result) || !closed || total != expectedSize) {
+        std::remove(destination.c_str());
+        return {false, "The update download was incomplete.", total};
+    }
+    return {true, "Update downloaded.", total};
 }
 
 ApiClient::HttpResult ApiClient::request(

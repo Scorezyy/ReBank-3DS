@@ -67,6 +67,23 @@ struct BoxListResult {
     std::array<PokemonSummary, 30> pokemon{};
 };
 
+struct ClientUpdate {
+    bool success = false;
+    std::string message;
+    std::string tag;
+    std::string version;
+    std::string ciaSha256;
+    std::string threeDsxSha256;
+    std::uint32_t ciaSize = 0;
+    std::uint32_t threeDsxSize = 0;
+};
+
+struct FileDownloadResult {
+    bool success = false;
+    std::string message;
+    std::uint32_t size = 0;
+};
+
 class ApiClient {
 public:
     ApiClient();
@@ -94,6 +111,13 @@ public:
     BoxListResult listCloudBox(
         std::uint16_t boxPosition,
         const std::string& accessToken
+    );
+    ClientUpdate latestClientUpdate();
+    FileDownloadResult downloadClientUpdate(
+        const std::string& tag,
+        const std::string& assetName,
+        const std::string& destination,
+        std::uint32_t expectedSize
     );
 
 private:
