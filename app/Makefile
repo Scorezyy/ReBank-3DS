@@ -9,7 +9,22 @@ include $(TOPDIR)/config/server.mk
 TARGET := rebank
 BUILD := build
 PKSM_CORE := vendor/PKSM-Core
-SOURCES := source \
+SOURCES := source/app \
+	source/core \
+	source/save \
+	source/network \
+	source/audio \
+	source/i18n \
+	source/gui \
+	source/gui/elements \
+	source/gui/welcomescreen \
+	source/gui/loginscreen \
+	source/gui/registerscreen \
+	source/gui/resetpasswordscreen \
+	source/gui/gameselectscreen \
+	source/gui/bankscreen \
+	source/gui/logsscreen \
+	source/gui/loadingscreen \
 	vendor/PKSM-SPI \
 	$(PKSM_CORE)/memecrypto \
 	$(PKSM_CORE)/source/i18n \
