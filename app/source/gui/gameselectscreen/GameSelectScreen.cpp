@@ -3,8 +3,9 @@
 #include "BuildConfig.hpp"
 #include "core/Logger.hpp"
 #include "gui/GameVisual.hpp"
-#include "gui/elements/TextMetrics.hpp"
 #include "gui/Theme.hpp"
+#include "gui/elements/Shapes.hpp"
+#include "gui/elements/TextMetrics.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -125,12 +126,24 @@ void GameSelectScreen::populateFromDiscovered(std::vector<DiscoveredGame>& disco
     Logger::instance().info("Detected " + std::to_string(games_.size()) + " save games");
 }
 
-void GameSelectScreen::drawIcon(const GameProfile& profile, float centerX, float centerY, float size, float z) {
+float GameSelectScreen::carouselEase() const {
+    const double elapsed = static_cast<double>(svcGetSystemTick() - selectionChangedAt_) / SYSCLOCK_ARM11;
+    const float progress = std::min(1.0F, static_cast<float>(elapsed) * 5.0F);
+    return 1.0F - (1.0F - progress) * (1.0F - progress);
+}
+
+void GameSelectScreen::drawHintChip(float x, float y, std::string_view key, std::string_view label) {
+    app_.drawText(std::string(key), x, y, 0.44F, Brand);
+    app_.drawText(std::string(label), x + (key.size() > 1 ? 32.0F : 20.0F), y, 0.40F, Muted);
+}
+
+void GameSelectScreen::drawIcon(const GameProfile& profile, float centerX, float centerY, float size, float z,
+                                 u32 borderColor) {
     const GameDescriptor& game = supportedGames()[profile.catalogIndex];
     const GameVisual visual = gameVisual(game.code);
     const float x = centerX - size * 0.5F;
     const float y = centerY - size * 0.5F;
-    C2D_DrawRectSolid(x - 4.0F, y - 4.0F, z, size + 8.0F, size + 8.0F, Ink);
+    C2D_DrawRectSolid(x - 4.0F, y - 4.0F, z, size + 8.0F, size + 8.0F, borderColor);
     if (profile.iconLoaded) {
         const C2D_Image image{const_cast<C3D_Tex*>(&profile.iconTexture), &profile.iconSubTexture};
         C2D_DrawImageAt(image, x, y, z + 0.01F, nullptr, size / 48.0F, size / 48.0F);
@@ -148,6 +161,8 @@ void GameSelectScreen::renderTop(float eyeOffset) {
     const float buildSize = 0.30F;
     app_.drawText(buildLabel, 394.0F - textWidth(app_.resources_.textFont, app_.resources_.textBuffer, buildLabel, buildSize),
              225.0F, buildSize, Muted);
+    const std::string accountLabel = "ID: " + app_.session_.accountId + " | \"" + app_.accountUsername_ + "\"";
+    app_.drawText(accountLabel, 6.0F, 225.0F, buildSize, Muted);
     if (games_.empty()) {
         app_.drawCentered("No compatible save game", 200.0F, 92.0F, 0.78F, Error);
         app_.drawCentered("Insert a cartridge or create a save first.", 200.0F, 130.0F, 0.48F, Muted);
@@ -156,10 +171,7 @@ void GameSelectScreen::renderTop(float eyeOffset) {
     const auto games = supportedGames();
     const GameProfile& profile = games_[index_];
     const GameDescriptor& game = games[profile.catalogIndex];
-    const double elapsed = static_cast<double>(svcGetSystemTick() - selectionChangedAt_)
-        / SYSCLOCK_ARM11;
-    const float progress = std::min(1.0F, static_cast<float>(elapsed) * 5.0F);
-    const float eased = 1.0F - (1.0F - progress) * (1.0F - progress);
+    const float eased = carouselEase();
     const float slide = static_cast<float>(selectionDirection_) * (1.0F - eased) * 90.0F;
 
     for (float x = 0.0F; x < 400.0F; x += 20.0F) {
@@ -167,7 +179,7 @@ void GameSelectScreen::renderTop(float eyeOffset) {
     }
     drawIcon(profile, 200.0F + eyeOffset + slide, 54.0F, 62.0F, 0.12F);
     if (profile.cartridge) {
-        C2D_DrawRectSolid(252.0F + slide, 22.0F, 0.2F, 88.0F, 18.0F, CursorGreen);
+        drawPill(252.0F + slide, 22.0F, 88.0F, 18.0F, 0.2F, CursorGreen);
         app_.drawCentered("CARTRIDGE", 296.0F + slide, 26.0F, 0.34F, Surface);
     }
     C2D_DrawRectSolid(0.0F, 91.0F, 0.1F, 400.0F, 33.0F, gameVisual(game.code).primary);
@@ -187,7 +199,8 @@ void GameSelectScreen::renderTop(float eyeOffset) {
 
 void GameSelectScreen::render() {
     app_.drawCentered("Choose the Pokemon title to use", 160.0F, 18.0F, 0.62F, Ink);
-    app_.drawButton(LogoutButton, "Logout", false);
+    drawPill(4.0F, 202.0F, 60.0F, 26.0F, 0.1F, Surface);
+    app_.drawCentered("Logout", 34.0F, 208.0F, 0.38F, Error);
     if (games_.empty()) {
         app_.drawCentered(app_.status_, 160.0F, 106.0F, 0.44F, Error);
         return;
@@ -207,5 +220,7 @@ void GameSelectScreen::render() {
     app_.drawCentered(selected.name, 160.0F, 157.0F, 0.54F, Ink);
     app_.drawCentered(std::to_string(index_ + 1) + " / " + std::to_string(count),
                  160.0F, 181.0F, 0.38F, Muted);
-    app_.drawCentered("A Select   L/R Browse   X Rescan", 205.0F, 211.0F, 0.31F, Muted);
+    drawHintChip(76.0F, 208.0F, "A", "Select");
+    drawHintChip(152.0F, 208.0F, "L/R", "Browse");
+    drawHintChip(230.0F, 208.0F, "X", "Rescan");
 }

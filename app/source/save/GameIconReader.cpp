@@ -1,5 +1,6 @@
 #include "save/GameIconReader.hpp"
 #include "core/FsGuard.hpp"
+#include "save/IconCache.hpp"
 #include "save/SaveMedium.hpp"
 
 #include <3ds.h>
@@ -13,6 +14,9 @@ namespace GameIconReader {
 bool read(const GameDescriptor& game, bool cartridge,
           std::array<std::uint16_t, 48 * 48>& pixels) {
     const FsGuard guard;
+    if (IconCache::load(game, cartridge, pixels)) {
+        return true;
+    }
     pixels.fill(0);
     if (game.platform == GamePlatform::NintendoDs && cartridge) {
         const std::unique_ptr<std::uint8_t[]> banner(
@@ -39,6 +43,7 @@ bool read(const GameDescriptor& game, bool cartridge,
                     (red << 11) | ((green << 1) << 5) | blue);
             }
         }
+        IconCache::store(game, cartridge, pixels);
         return true;
     }
 
@@ -89,6 +94,7 @@ bool read(const GameDescriptor& game, bool cartridge,
             }
         }
     }
+    IconCache::store(game, cartridge, pixels);
     return true;
 }
 }

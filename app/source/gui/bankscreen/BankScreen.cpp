@@ -838,20 +838,19 @@ void BankScreen::onGameOpened() {
         }
     }
     cloudBoxNames_.clear();
-    for (const auto& entry : app_.loadService_.pendingBoxNames) {
+    for (const auto& entry : app_.cloudBoxNamesCache_) {
         cloudBoxNames_[entry.position] = entry.name;
     }
-    app_.loadService_.pendingBoxNames.clear();
     CloudBoxDraft cloud;
-    if (result.cloudBox.success) {
-        cloud.baseline = result.cloudBox.pokemon;
-        cloud.summaries = result.cloudBox.pokemon;
+    if (app_.cloudBoxCache_.success) {
+        cloud.baseline = app_.cloudBoxCache_.pokemon;
+        cloud.summaries = app_.cloudBoxCache_.pokemon;
         cloudBoxes_[0] = cloud;
         cloudPreview_ = cloud.summaries;
         app_.status_.clear();
     } else {
         cloudPreview_.fill({});
-        app_.status_ = result.cloudBox.message;
+        app_.status_ = app_.cloudBoxCache_.message;
     }
     pendingUploadPayloads_ = {};
     cachedCloudPayloads_ = {};
@@ -1055,7 +1054,7 @@ void BankScreen::render() {
 }
 
 void BankScreen::renderStorageBottom() {
-    drawBoxBackground(app_.resources_.boxBackground, false);
+    drawLinePattern(app_.resources_.bottomBackground, C2D_Color32(158, 224, 152, 255), false);
 
     C2D_DrawRectSolid(0.0F, 0.0F, 0.05F, 320.0F, 20.0F, C2D_Color32(215, 232, 224, 235));
     C2D_DrawCircleSolid(14.0F, 10.0F, 0.1F, 7.0F, C2D_Color32(210, 40, 40, 255));

@@ -13,7 +13,6 @@ using namespace Gui;
 App::App(std::string executablePath, bool homebrew)
     : screen_(Screen::Intro),
     previousScreen_(Screen::Welcome),
-      introStartedAt_(svcGetSystemTick()),
         executablePath_(std::move(executablePath)),
         homebrew_(homebrew),
       running_(true) {
@@ -57,6 +56,7 @@ void App::update(u32 keysDown, u32 keysHeld, circlePosition circle, touchPositio
 
     pollUpdate();
     pollAuth();
+    pollWelcomeBack();
     pollLoad();
     bankScreen_.pollCommit();
     bankScreen_.pollRenameBox();
@@ -89,10 +89,7 @@ void App::update(u32 keysDown, u32 keysHeld, circlePosition circle, touchPositio
     }
 
     if (screen_ == Screen::Intro) {
-        updateIntro();
-        if (keysDown & KEY_A) {
-            screen_ = Screen::Welcome;
-        }
+        finishIntro();
         return;
     }
 
@@ -112,10 +109,19 @@ void App::update(u32 keysDown, u32 keysHeld, circlePosition circle, touchPositio
     }
 }
 
-void App::updateIntro() {
-    const double elapsed = static_cast<double>(svcGetSystemTick() - introStartedAt_) / SYSCLOCK_ARM11;
-    if (elapsed >= 2.8) {
-        screen_ = Screen::Welcome;
+void App::finishIntro() {
+    screen_ = Screen::Welcome;
+    std::string refreshToken;
+    if (sessionStore_.load(refreshToken, accountUsername_)) {
+        bootAutoLoginInProgress_ = true;
+        beginAuth(AuthOperation::Refresh, {}, {}, std::move(refreshToken));
+        return;
+    }
+    if (auto stored = credentials_.load()) {
+        accountUsername_ = stored->username;
+        autoLogin_ = true;
+        bootAutoLoginInProgress_ = true;
+        beginAuth(AuthOperation::Login, stored->username, {}, stored->password);
     }
 }
 
@@ -124,6 +130,11 @@ void App::logout() {
     credentials_.clear();
     session_ = {};
     autoLogin_ = false;
+    accountUsername_.clear();
+    bootAutoLoginInProgress_ = false;
+    welcomeBackPending_ = false;
+    cloudBoxCache_ = {};
+    cloudBoxNamesCache_.clear();
     loginScreen_.reset();
     registerScreen_.reset();
     resetPasswordScreen_.reset();
@@ -184,6 +195,7 @@ void App::pollAuth() {
     status_ = completed.result.message;
     if (!completed.result.success) {
         Logger::instance().warning("Authentication failed");
+        bootAutoLoginInProgress_ = false;
         if (completed.operation == AuthOperation::Refresh) {
             sessionStore_.clear();
             screen_ = Screen::Welcome;
@@ -200,7 +212,10 @@ void App::pollAuth() {
     }
 
     session_ = std::move(completed.result.session);
-    sessionStore_.save(session_.refreshToken);
+    if (!completed.username.empty()) {
+        accountUsername_ = completed.username;
+    }
+    sessionStore_.save(session_.refreshToken, accountUsername_);
     if (autoLogin_ && completed.operation != AuthOperation::Refresh
         && !completed.username.empty() && !completed.password.empty()) {
         credentials_.save({completed.username, completed.password});
@@ -210,9 +225,23 @@ void App::pollAuth() {
     } else if (completed.operation == AuthOperation::Register) {
         registerScreen_.reset();
     }
-    status_ = "Finding save games...";
-    gameSelectScreen_.refresh();
     Logger::instance().info("Authentication succeeded");
+
+    if (bootAutoLoginInProgress_) {
+        bootAutoLoginInProgress_ = false;
+        welcomeBackPending_ = true;
+        welcomeBackUntil_ = svcGetSystemTick() + static_cast<u64>(1.1 * SYSCLOCK_ARM11);
+        return;
+    }
+    loadService_.begin(LoadService::Operation::LoadBank);
+}
+
+void App::pollWelcomeBack() {
+    if (!welcomeBackPending_ || svcGetSystemTick() < welcomeBackUntil_) {
+        return;
+    }
+    welcomeBackPending_ = false;
+    loadService_.begin(LoadService::Operation::LoadBank);
 }
 
 void App::pollLoad() {
@@ -227,6 +256,13 @@ void App::pollLoad() {
             } else {
                 bankScreen_.onGameOpened();
             }
+            break;
+        case LoadService::Operation::LoadBank:
+            cloudBoxCache_ = loadService_.cloudBoxResult;
+            cloudBoxNamesCache_ = loadService_.pendingBoxNames;
+            loadService_.pendingBoxNames.clear();
+            status_ = "Finding save games...";
+            gameSelectScreen_.refresh();
             break;
         case LoadService::Operation::CloudBox:
             bankScreen_.onCloudBoxLoaded();
@@ -245,7 +281,8 @@ void App::pollLoad() {
 bool App::isLoading() const {
     return updateController_.isRunning()
         || authController_.isRunning()
-        || loadService_.blocksUi();
+        || loadService_.blocksUi()
+        || welcomeBackPending_;
 }
 
 void App::render() {
@@ -332,7 +369,7 @@ void App::renderBottom() {
 
 void App::drawText(std::string_view value, float x, float y, float size, u32 color) {
     C2D_Text text;
-    const PreparedText prepared = prepareText(value);
+    const PreparedText prepared = prepareText(value, resources_.textFont);
     parseText(text, resources_.textFont, resources_.textBuffer, prepared.value);
     const float snappedX = std::round(x);
     const float snappedY = std::round(y);
@@ -342,7 +379,7 @@ void App::drawText(std::string_view value, float x, float y, float size, u32 col
 
 void App::drawCentered(std::string_view value, float centerX, float y, float size, u32 color) {
     C2D_Text text;
-    const PreparedText prepared = prepareText(value);
+    const PreparedText prepared = prepareText(value, resources_.textFont);
     parseText(text, resources_.textFont, resources_.textBuffer, prepared.value);
     float width = 0.0F;
     float height = 0.0F;

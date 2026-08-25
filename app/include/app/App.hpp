@@ -61,9 +61,10 @@ private:
     };
 
     void update(u32 keysDown, u32 keysHeld, circlePosition circle, touchPosition touch);
-    void updateIntro();
+    void finishIntro();
     void beginAuth(AuthOperation operation, std::string authUsername, std::string authEmail, std::string authPassword);
     void pollAuth();
+    void pollWelcomeBack();
     void beginUpdate();
     void pollUpdate();
     void pollLoad();
@@ -83,7 +84,6 @@ private:
     Screen screen_;
     Screen previousScreen_;
     GfxResources resources_;
-    u64 introStartedAt_;
     std::string status_;
     ApiClient api_;
     std::string executablePath_;
@@ -97,6 +97,12 @@ private:
     bool running_;
     CredentialStore credentials_;
     bool autoLogin_ = false;
+    std::string accountUsername_;
+    bool bootAutoLoginInProgress_ = false;
+    bool welcomeBackPending_ = false;
+    u64 welcomeBackUntil_ = 0;
+    BoxListResult cloudBoxCache_;
+    std::vector<BoxNameEntry> cloudBoxNamesCache_;
     WelcomeScreen welcomeScreen_{*this};
     LoginScreen loginScreen_{*this};
     RegisterScreen registerScreen_{*this};

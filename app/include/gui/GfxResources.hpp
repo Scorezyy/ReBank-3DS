@@ -26,6 +26,7 @@ public:
     C2D_Font textFont = nullptr;
     C2D_SpriteSheet pokemonSprites = nullptr;
     C2D_SpriteSheet boxBackground = nullptr;
+    C2D_SpriteSheet bottomBackground = nullptr;
     C2D_SpriteSheet overlayIcons = nullptr;
     C2D_SpriteSheet iconItemSheet = nullptr;
     C2D_SpriteSheet iconShinySheet = nullptr;

@@ -38,5 +38,5 @@ inline constexpr UiRect EmailField{24.0F, 62.0F, 272.0F, 42.0F};
 inline constexpr UiRect PasswordField{24.0F, 114.0F, 272.0F, 42.0F};
 inline constexpr UiRect SubmitButton{24.0F, 195.0F, 272.0F, 38.0F};
 inline constexpr UiRect BackButton{8.0F, 8.0F, 70.0F, 32.0F};
-inline constexpr UiRect LogoutButton{8.0F, 199.0F, 82.0F, 33.0F};
+inline constexpr UiRect LogoutButton{2.0F, 199.0F, 66.0F, 32.0F};
 }

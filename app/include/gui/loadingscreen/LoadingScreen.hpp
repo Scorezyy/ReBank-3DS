@@ -20,6 +20,7 @@ private:
         ReadingSave,
         SearchingPokemon,
         LoadingBank,
+        WelcomeBack,
         Waiting
     };
 

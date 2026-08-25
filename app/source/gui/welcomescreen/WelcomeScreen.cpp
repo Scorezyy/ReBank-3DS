@@ -3,35 +3,11 @@
 #include "core/Logger.hpp"
 #include "gui/Theme.hpp"
 #include "i18n/Localization.hpp"
-#include "network/AuthController.hpp"
 
 using namespace Gui;
 
 void WelcomeScreen::update(u32 keysDown, touchPosition touch, bool touched) {
-    if (!app_.authController_.isRunning()) {
-        auto tryAutoLogin = [&]() -> bool {
-            std::string refreshToken;
-            if (app_.sessionStore_.load(refreshToken)) {
-                app_.beginAuth(AuthOperation::Refresh, {}, {}, std::move(refreshToken));
-                return true;
-            }
-            if (auto stored = app_.credentials_.load()) {
-                app_.autoLogin_ = true;
-                app_.beginAuth(AuthOperation::Login, stored->username, {}, stored->password);
-                return true;
-            }
-            return false;
-        };
-        if (keysDown & KEY_A) {
-            if (!tryAutoLogin()) {
-                app_.status_ = "Kein gespeicherter Login gefunden.";
-                Logger::instance().info("Auto-login: no stored credentials");
-                app_.loginScreen_.open();
-            }
-            return;
-        }
-    }
-
+    (void)keysDown;
     if (!touched) {
         return;
     }

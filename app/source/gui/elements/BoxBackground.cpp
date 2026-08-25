@@ -59,4 +59,23 @@ void drawBoxBackground(C2D_SpriteSheet sheet, bool top) {
     C2D_DrawImageAt({squares.tex, &leftHalf}, scrollA, 0.0F, 0.03F);
     C2D_DrawImageAt({squares.tex, &rightHalf}, scrollB, 0.0F, 0.03F);
 }
+
+void drawLinePattern(C2D_SpriteSheet sheet, u32 baseColor, bool animated) {
+    C2D_DrawRectSolid(0.0F, 0.0F, 0.0F, 320.0F, 240.0F, baseColor);
+    if (!sheet) {
+        return;
+    }
+    const C2D_Image pattern = C2D_SpriteSheetGetImage(sheet, 0);
+    if (!pattern.tex) {
+        return;
+    }
+    float driftX = 0.0F;
+    float driftY = 0.0F;
+    if (animated) {
+        const double seconds = static_cast<double>(svcGetSystemTick()) / SYSCLOCK_ARM11;
+        driftX = std::sin(static_cast<float>(seconds) * 0.23F) * 6.0F;
+        driftY = std::sin(static_cast<float>(seconds) * 0.17F + 1.3F) * 5.0F;
+    }
+    C2D_DrawImageAt(pattern, driftX, driftY, 0.01F);
+}
 }

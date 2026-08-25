@@ -1,3 +1,7 @@
+param(
+    [switch]$Clean
+)
+
 $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
@@ -43,7 +47,9 @@ if (-not (Test-Path $makerom)) {
     Expand-Archive -Path $archive -DestinationPath $makeromRoot
 }
 
-& "C:\devkitPro\msys2\usr\bin\bash.exe" -lc "cd '$msysApp' && make clean && make -j2"
+$jobs = [Environment]::ProcessorCount
+$makeCmd = if ($Clean) { "make clean && make -j$jobs" } else { "make -j$jobs" }
+& "C:\devkitPro\msys2\usr\bin\bash.exe" -lc "cd '$msysApp' && $makeCmd"
 if ($LASTEXITCODE -ne 0) {
     throw "Nintendo 3DS build failed."
 }

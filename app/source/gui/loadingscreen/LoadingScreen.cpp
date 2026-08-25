@@ -1,6 +1,7 @@
 #include "gui/loadingscreen/LoadingScreen.hpp"
 #include "app/App.hpp"
 #include "gui/Theme.hpp"
+#include "i18n/Localization.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -13,6 +14,9 @@ LoadingScreen::Stage LoadingScreen::currentStage() const {
     }
     if (app_.authController_.isRunning()) {
         return Stage::SigningIn;
+    }
+    if (app_.welcomeBackPending_) {
+        return Stage::WelcomeBack;
     }
     switch (app_.loadService_.phase()) {
         case LoadService::Phase::SearchingGames: return Stage::SearchingGames;
@@ -36,38 +40,56 @@ void LoadingScreen::renderTop(float eyeOffset) {
         C2D_DrawCircleSolid(x, y, 0.3F, 4.5F, C2D_Color32(31, 145, 94, alpha));
     }
 
-    std::string_view message = "Bitte warten...";
-    switch (currentStage()) {
-        case Stage::CheckingUpdates: message = "Pruefe Updates..."; break;
-        case Stage::SigningIn: message = "Anmelden..."; break;
-        case Stage::SearchingGames: message = "Suche Spielstaende..."; break;
-        case Stage::ReadingIcons: message = "Lade Spielbilder..."; break;
-        case Stage::ReadingSave: message = "Lade Spielstand..."; break;
-        case Stage::SearchingPokemon: message = "Suche Pokemon..."; break;
-        case Stage::LoadingBank: message = "Lade Bank-Daten..."; break;
+    const Localization& localization = app_.localization_;
+    const Stage stage = currentStage();
+    std::string message(localization.get(TextId::LoadingWait));
+    switch (stage) {
+        case Stage::CheckingUpdates: message = localization.get(TextId::LoadingCheckingUpdates); break;
+        case Stage::SigningIn:
+            message = app_.bootAutoLoginInProgress_
+                ? localization.get(TextId::LoadingAutoLoginDetected)
+                : localization.get(TextId::LoadingSigningIn);
+            break;
+        case Stage::SearchingGames: message = localization.get(TextId::LoadingSearchingGames); break;
+        case Stage::ReadingIcons: message = localization.get(TextId::LoadingReadingIcons); break;
+        case Stage::ReadingSave: message = localization.get(TextId::LoadingReadingSave); break;
+        case Stage::SearchingPokemon: message = localization.get(TextId::LoadingSearchingPokemon); break;
+        case Stage::LoadingBank: message = localization.get(TextId::LoadingBankData); break;
+        case Stage::WelcomeBack:
+            message = std::string(localization.get(TextId::LoadingWelcomeBackPrefix)) + app_.accountUsername_ + "!";
+            break;
         case Stage::Waiting: break;
     }
     app_.drawCentered(message, 200.0F + eyeOffset, 164.0F, 0.68F, Ink);
 }
 
 void LoadingScreen::render() {
+    const Localization& localization = app_.localization_;
     const Stage stage = currentStage();
-    std::string_view detail = "Initialisiere...";
+    std::string detail(localization.get(TextId::LoadingDetailInitializing));
     switch (stage) {
-        case Stage::CheckingUpdates: detail = "Lade und verifiziere neue Versionen sicher..."; break;
-        case Stage::SigningIn: detail = "Pruefe Server und Sitzung..."; break;
-        case Stage::SearchingGames: detail = "Pruefe Cartridge und installierte Spiele..."; break;
-        case Stage::ReadingIcons: detail = "Lese originale Spielbilder..."; break;
-        case Stage::ReadingSave: detail = "Oeffne lokalen Spielstand..."; break;
-        case Stage::SearchingPokemon: detail = "Lese Box und Pokemon..."; break;
-        case Stage::LoadingBank: detail = "Verbinde mit deiner Bank..."; break;
+        case Stage::CheckingUpdates: detail = localization.get(TextId::LoadingDetailCheckingUpdates); break;
+        case Stage::SigningIn:
+            detail = app_.bootAutoLoginInProgress_
+                ? localization.get(TextId::LoadingDetailAutoLoginDetected)
+                : localization.get(TextId::LoadingDetailSigningIn);
+            break;
+        case Stage::SearchingGames: detail = localization.get(TextId::LoadingDetailSearchingGames); break;
+        case Stage::ReadingIcons: detail = localization.get(TextId::LoadingDetailReadingIcons); break;
+        case Stage::ReadingSave: detail = localization.get(TextId::LoadingDetailReadingSave); break;
+        case Stage::SearchingPokemon: detail = localization.get(TextId::LoadingDetailSearchingPokemon); break;
+        case Stage::LoadingBank: detail = localization.get(TextId::LoadingDetailLoadingBank); break;
+        case Stage::WelcomeBack:
+            detail = std::string(localization.get(TextId::LoadingWelcomeBackPrefix)) + app_.accountUsername_ + "!";
+            break;
         case Stage::Waiting: break;
     }
     app_.drawCentered(detail, 160.0F, 76.0F, 0.50F, Ink);
 
     const bool determinate = stage != Stage::CheckingUpdates
         && stage != Stage::SigningIn
-        && stage != Stage::Waiting;
+        && stage != Stage::Waiting
+        && stage != Stage::WelcomeBack;
 
     if (determinate) {
         float& displayedProgress = app_.loadService_.displayedProgress();
@@ -81,7 +103,8 @@ void LoadingScreen::render() {
             }
         }
         const int percent = static_cast<int>(displayedProgress + 0.5F);
-        app_.drawCentered("Progress: " + std::to_string(percent) + "%",
+        app_.drawCentered(std::string(localization.get(TextId::LoadingProgressLabel)) + ": "
+                     + std::to_string(percent) + "%",
                      160.0F, 110.0F, 0.62F, Ink);
         C2D_DrawRectSolid(36.0F, 138.0F, 0.2F, 248.0F, 10.0F, C2D_Color32(205, 220, 211, 255));
         C2D_DrawRectSolid(36.0F, 138.0F, 0.3F, 248.0F * displayedProgress / 100.0F,

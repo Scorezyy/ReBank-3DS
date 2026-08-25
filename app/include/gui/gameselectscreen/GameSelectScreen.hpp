@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gui/Theme.hpp"
 #include "network/LoadService.hpp"
 #include "save/SaveAdapter.hpp"
 
@@ -7,6 +8,7 @@
 #include <3ds.h>
 
 #include <cstddef>
+#include <string_view>
 #include <vector>
 
 class App;
@@ -36,7 +38,10 @@ private:
 
     void select(std::size_t index, int direction);
     bool openSelected();
-    void drawIcon(const GameProfile& profile, float centerX, float centerY, float size, float z);
+    void drawIcon(const GameProfile& profile, float centerX, float centerY, float size, float z,
+                  u32 borderColor = Gui::Ink);
+    void drawHintChip(float x, float y, std::string_view key, std::string_view label);
+    float carouselEase() const;
 
     App& app_;
     std::size_t index_ = 0;

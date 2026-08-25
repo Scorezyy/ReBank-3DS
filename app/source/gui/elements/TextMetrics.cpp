@@ -1,31 +1,84 @@
 #include "gui/elements/TextMetrics.hpp"
 
 #include <algorithm>
+#include <cstdint>
 
 namespace Gui {
-PreparedText prepareText(std::string_view value) {
+namespace {
+constexpr std::uint32_t MusicNoteFirst = 0x2669;
+constexpr std::uint32_t MusicNoteLast = 0x266C;
+constexpr std::uint32_t MusicNotePua = 0xE09A;
+constexpr std::uint32_t MaleSign = 0x2642;
+constexpr std::uint32_t FemaleSign = 0x2640;
+
+bool isKnownSafe(std::uint32_t codepoint) {
+    return (codepoint >= 0x00A0 && codepoint <= 0x024F)
+        || (codepoint >= 0x3040 && codepoint <= 0x30FF)
+        || (codepoint >= 0x4E00 && codepoint <= 0x9FFF)
+        || (codepoint >= 0xFF00 && codepoint <= 0xFFEF);
+}
+
+std::uint32_t decodeUtf8(std::string_view value, std::size_t& index) {
+    const auto byte = static_cast<unsigned char>(value[index]);
+    std::size_t length = 1;
+    std::uint32_t codepoint = byte;
+    if ((byte & 0xE0) == 0xC0) {
+        length = 2;
+        codepoint = byte & 0x1F;
+    } else if ((byte & 0xF0) == 0xE0) {
+        length = 3;
+        codepoint = byte & 0x0F;
+    } else if ((byte & 0xF8) == 0xF0) {
+        length = 4;
+        codepoint = byte & 0x07;
+    }
+    if (index + length > value.size()) {
+        ++index;
+        return 0xFFFD;
+    }
+    for (std::size_t offset = 1; offset < length; ++offset) {
+        const auto continuation = static_cast<unsigned char>(value[index + offset]);
+        if ((continuation & 0xC0) != 0x80) {
+            ++index;
+            return 0xFFFD;
+        }
+        codepoint = (codepoint << 6) | (continuation & 0x3F);
+    }
+    index += length;
+    return codepoint;
+}
+}
+
+PreparedText prepareText(std::string_view value, C2D_Font font) {
     PreparedText prepared;
     prepared.value.reserve(value.size());
-    for (std::size_t index = 0; index < value.size();) {
-        const bool unicodeMusicNote = index + 2 < value.size()
-            && static_cast<unsigned char>(value[index]) == 0xE2
-            && static_cast<unsigned char>(value[index + 1]) == 0x99
-            && static_cast<unsigned char>(value[index + 2]) >= 0xA9
-            && static_cast<unsigned char>(value[index + 2]) <= 0xAC;
-        const bool pokemonMusicNote = index + 2 < value.size()
-            && static_cast<unsigned char>(value[index]) == 0xEE
-            && static_cast<unsigned char>(value[index + 1]) == 0x82
-            && static_cast<unsigned char>(value[index + 2]) == 0x9A;
-        const bool musicNote = unicodeMusicNote || pokemonMusicNote;
-        if (!musicNote) {
-            prepared.value.push_back(value[index++]);
+    const int alterIndex = font ? C2D_FontGetInfo(font)->alterCharIndex : -1;
+    std::size_t index = 0;
+    while (index < value.size()) {
+        const std::size_t start = index;
+        const std::uint32_t codepoint = decodeUtf8(value, index);
+        const bool musicNote = (codepoint >= MusicNoteFirst && codepoint <= MusicNoteLast)
+            || codepoint == MusicNotePua;
+        if (musicNote) {
+            const bool doubleNote = codepoint == 0x266B || codepoint == 0x266C;
+            prepared.musicGlyphs.push_back({prepared.value.size(), doubleNote});
+            prepared.value.append("  ");
             continue;
         }
-        const bool doubleNote = unicodeMusicNote
-            && static_cast<unsigned char>(value[index + 2]) >= 0xAB;
-        prepared.musicGlyphs.push_back({prepared.value.size(), doubleNote});
-        prepared.value.append("  ");
-        index += 3;
+        const bool renderable = codepoint < 0x80
+            || (isKnownSafe(codepoint)
+                && C2D_FontGlyphIndexFromCodePoint(font, codepoint) != alterIndex);
+        if (renderable) {
+            prepared.value.append(value.substr(start, index - start));
+            continue;
+        }
+        if (codepoint == MaleSign) {
+            prepared.value.push_back('M');
+        } else if (codepoint == FemaleSign) {
+            prepared.value.push_back('F');
+        } else {
+            prepared.value.push_back('?');
+        }
     }
     return prepared;
 }
@@ -41,7 +94,7 @@ void parseText(C2D_Text& text, C2D_Font font, C2D_TextBuf buffer, const std::str
 
 float textHeight(C2D_Font font, C2D_TextBuf buffer, std::string_view value, float size) {
     C2D_Text text;
-    const std::string owned(value);
+    const std::string owned(prepareText(value, font).value);
     parseText(text, font, buffer, owned);
     float width = 0.0F;
     float height = 0.0F;
@@ -51,7 +104,7 @@ float textHeight(C2D_Font font, C2D_TextBuf buffer, std::string_view value, floa
 
 float textWidth(C2D_Font font, C2D_TextBuf buffer, std::string_view value, float size) {
     C2D_Text text;
-    const std::string owned(value);
+    const std::string owned(prepareText(value, font).value);
     parseText(text, font, buffer, owned);
     float width = 0.0F;
     float height = 0.0F;

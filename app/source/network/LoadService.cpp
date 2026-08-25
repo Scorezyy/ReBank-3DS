@@ -8,10 +8,11 @@
 #include <new>
 
 void LoadService::begin(Operation operation) {
-    if (job_.running()) {
+    if (operation_ != Operation::None) {
         return;
     }
     operation_ = operation;
+    jobFinished_ = false;
     progress_.store(0, std::memory_order_release);
     displayedProgress_ = 0.0F;
     switch (operation) {
@@ -22,6 +23,11 @@ void LoadService::begin(Operation operation) {
         case Operation::OpenGame:
             openGameResult = {};
             phase_.store(Phase::ReadingSave, std::memory_order_release);
+            break;
+        case Operation::LoadBank:
+            cloudBoxResult = {};
+            pendingBoxNames.clear();
+            phase_.store(Phase::LoadingBank, std::memory_order_release);
             break;
         case Operation::CloudBox:
             cloudBoxResult = {};
@@ -42,17 +48,30 @@ void LoadService::begin(Operation operation) {
 }
 
 LoadService::Operation LoadService::poll() {
-    if (!job_.poll()) {
+    if (!jobFinished_) {
+        if (!job_.poll()) {
+            return Operation::None;
+        }
+        jobFinished_ = true;
+        progress_.store(100, std::memory_order_release);
+    }
+
+    const bool showsProgressBar = operation_ == Operation::DiscoverGames
+        || operation_ == Operation::OpenGame
+        || operation_ == Operation::LoadBank;
+    if (showsProgressBar && displayedProgress_ < 99.5F) {
         return Operation::None;
     }
+
     const Operation completed = operation_;
     phase_.store(Phase::Idle, std::memory_order_release);
     operation_ = Operation::None;
+    jobFinished_ = false;
     return completed;
 }
 
 bool LoadService::blocksUi() const {
-    return job_.running()
+    return operation_ != Operation::None
         && operation_ != Operation::CloudBox
         && operation_ != Operation::PickupCloud
         && operation_ != Operation::SwapCloud;
@@ -120,15 +139,13 @@ void LoadService::worker(void* argument) {
                         10 + static_cast<int>((slot + 1) * 80 / 30),
                         std::memory_order_release);
                 }
-                self->phase_.store(Phase::LoadingBank, std::memory_order_release);
-                if (!app.session_.accessToken.empty()) {
-                    self->openGameResult.cloudBox =
-                        app.api_.listCloudBox(1, app.session_.accessToken);
-                    self->pendingBoxNames = app.api_.listBoxNames(app.session_.accessToken).boxes;
-                }
                 self->progress_.store(100, std::memory_order_release);
                 self->openGameResult.success = true;
             }
+        } else if (self->operation_ == Operation::LoadBank) {
+            self->cloudBoxResult = app.api_.listCloudBox(1, app.session_.accessToken);
+            self->pendingBoxNames = app.api_.listBoxNames(app.session_.accessToken).boxes;
+            self->progress_.store(100, std::memory_order_release);
         } else if (self->operation_ == Operation::CloudBox) {
             self->cloudBoxResult = app.api_.listCloudBox(
                 static_cast<std::uint16_t>(self->cloudBoxKey + 1),
@@ -145,7 +162,8 @@ void LoadService::worker(void* argument) {
         if (self->operation_ == Operation::OpenGame) {
             self->openGameResult.success = false;
             self->openGameResult.message = "Loading failed unexpectedly.";
-        } else if (self->operation_ == Operation::CloudBox) {
+        } else if (self->operation_ == Operation::LoadBank
+                   || self->operation_ == Operation::CloudBox) {
             self->cloudBoxResult.success = false;
             self->cloudBoxResult.message = "Bank loading failed unexpectedly.";
         } else if (self->operation_ == Operation::PickupCloud

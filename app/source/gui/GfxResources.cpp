@@ -28,6 +28,10 @@ void GfxResources::load() {
     if (!boxBackground) {
         Logger::instance().error("Box background sheet could not be loaded");
     }
+    bottomBackground = C2D_SpriteSheetLoad("romfs:/assets/bottom_bg.t3x");
+    if (!bottomBackground) {
+        Logger::instance().error("Bottom background sheet could not be loaded");
+    }
     overlayIcons = C2D_SpriteSheetLoad("romfs:/assets/overlay_icons.t3x");
     if (!overlayIcons) {
         Logger::instance().error("Overlay icon sheet could not be loaded");
@@ -46,6 +50,9 @@ GfxResources::~GfxResources() {
     }
     if (boxBackground) {
         C2D_SpriteSheetFree(boxBackground);
+    }
+    if (bottomBackground) {
+        C2D_SpriteSheetFree(bottomBackground);
     }
     if (overlayIcons) {
         C2D_SpriteSheetFree(overlayIcons);
