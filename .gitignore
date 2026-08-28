@@ -1,6 +1,7 @@
-Server/node_modules/
-Server/dist/
-Server/.runtime/
+Server/
+middleend/
+deploy/
+compose.yaml
 app/build/
 app/rebank.3dsx
 app/rebank.elf
