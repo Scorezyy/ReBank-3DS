@@ -67,9 +67,9 @@ void LoginScreen::update(u32 keysDown, u32 keysHeld, circlePosition circle, touc
                 break;
             case Focus::Submit:
                 if (!usernameValid()) {
-                    app_.status_ = "Username must be 3-32 letters, numbers, _ or -.";
+                    app_.showError("INVALID USERNAME", "Username must be 3-32 letters, numbers, _ or -.");
                 } else if (password_.size() < 10) {
-                    app_.status_ = "Password must contain at least 10 characters.";
+                    app_.showError("INVALID PASSWORD", "Password must contain at least 10 characters.");
                 } else {
                     app_.beginAuth(AuthOperation::Login, username_, {}, password_);
                 }
@@ -177,8 +177,6 @@ void LoginScreen::render() {
             const float py = 226.0F - std::abs(std::sin(phase)) * 6.0F;
             C2D_DrawCircleSolid(px, py, 0.4F, 4.0F, C2D_Color32(70, 132, 200, 255));
         }
-    } else if (!app_.status_.empty()) {
-        app_.drawCentered(app_.status_, 160.0F, 222.0F, 0.42F, Error);
     }
 }
 

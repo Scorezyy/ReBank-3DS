@@ -84,7 +84,9 @@ private:
     float textWidth(std::string_view value, float size);
     void drawButton(const UiRect& rect, std::string_view label, bool primary);
     void drawField(const UiRect& rect, std::string_view label, const std::string& value, bool password);
-    void requestText(std::string& destination, std::string_view hint, bool password);
+    void requestText(std::string& destination, std::string_view hint, bool password, std::size_t maxLength = 256);
+    void showError(std::string title, std::string message);
+    void renderErrorDialog();
 
     Localization localization_;
     Screen screen_;
@@ -96,6 +98,9 @@ private:
     // ever share glyph memory within one frame.
     C2D_TextBuf activeTextBuffer_ = nullptr;
     std::string status_;
+    bool errorDialogVisible_ = false;
+    std::string errorDialogTitle_;
+    std::string errorDialogMessage_;
     ApiClient api_;
     std::string executablePath_;
     bool homebrew_;

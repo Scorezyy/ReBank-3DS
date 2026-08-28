@@ -6,6 +6,15 @@ TOPDIR ?= $(CURDIR)
 include $(DEVKITARM)/3ds_rules
 include $(TOPDIR)/config/server.mk
 
+ifeq ($(wildcard $(TOPDIR)/config/client-secret.mk),)
+$(error config/client-secret.mk is missing. Copy config/client-secret.mk.example to config/client-secret.mk and fill in a real secret shared with your server's CLIENT_HMAC_SECRET)
+endif
+include $(TOPDIR)/config/client-secret.mk
+
+ifeq ($(wildcard $(TOPDIR)/source/core/RequestSigning.cpp),)
+$(error source/core/RequestSigning.cpp is missing. Copy source/core/RequestSigning.cpp.example to source/core/RequestSigning.cpp, or supply your own, matching whatever your server verifies)
+endif
+
 TARGET := rebank
 BUILD := build
 PKSM_CORE := vendor/PKSM-Core
@@ -47,7 +56,8 @@ CFLAGS := -g -Wall -Wextra -O2 -mword-relocations -ffunction-sections $(ARCH)
 CFLAGS += $(INCLUDE) -D__3DS__ \
 		  -DREBANK_SERVER_SCHEME=\"$(REBANK_SERVER_SCHEME)\" \
 		  -DREBANK_SERVER_HOST=\"$(REBANK_SERVER_HOST)\" \
-		  -DREBANK_SERVER_PORT=$(REBANK_SERVER_PORT)
+		  -DREBANK_SERVER_PORT=$(REBANK_SERVER_PORT) \
+		  -DREBANK_CLIENT_SECRET=\"$(REBANK_CLIENT_SECRET)\"
 CXXFLAGS := $(CFLAGS) -fno-rtti -std=gnu++20
 ASFLAGS := -g $(ARCH)
 LDFLAGS := -specs=3dsx.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)

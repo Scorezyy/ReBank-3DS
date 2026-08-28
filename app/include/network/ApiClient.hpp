@@ -18,6 +18,8 @@ struct AuthResult {
     bool success = false;
     std::string message;
     AccountSession session;
+    bool networkError = false;
+    int httpStatus = 0;
 };
 
 struct UploadPokemon {

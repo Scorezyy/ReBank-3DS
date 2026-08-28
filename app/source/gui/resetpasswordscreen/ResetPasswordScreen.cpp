@@ -49,7 +49,7 @@ void ResetPasswordScreen::update(u32 keysDown, u32 keysHeld, circlePosition circ
                 break;
             case Focus::Submit:
                 if (email_.find('@') == std::string::npos) {
-                    app_.status_ = "Please enter a valid email address.";
+                    app_.showError("INVALID EMAIL", "Please enter a valid email address.");
                 } else {
                     app_.beginAuth(AuthOperation::ResetPassword, {}, email_, {});
                 }
@@ -122,8 +122,6 @@ void ResetPasswordScreen::render() {
             const float py = 226.0F - std::abs(std::sin(phase)) * 6.0F;
             C2D_DrawCircleSolid(px, py, 0.4F, 4.0F, C2D_Color32(70, 132, 200, 255));
         }
-    } else if (!app_.status_.empty()) {
-        app_.drawCentered(app_.status_, 160.0F, 222.0F, 0.42F, Error);
     }
 }
 

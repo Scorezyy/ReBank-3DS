@@ -1,6 +1,8 @@
 #include "network/ApiClient.hpp"
 
+#include "BuildConfig.hpp"
 #include "core/Logger.hpp"
+#include "core/RequestSigning.hpp"
 #include "core/ServerConfig.hpp"
 #include "save/PokemonTransfer.hpp"
 
@@ -10,6 +12,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -135,11 +138,12 @@ std::vector<std::uint8_t> decodeBase64(const std::string& input) {
 }
 
 AuthResult parseResponse(u32 status, const std::string& response) {
+    const int httpStatus = static_cast<int>(status);
     json_error_t error{};
     json_t* root = json_loadb(response.data(), response.size(), JSON_REJECT_DUPLICATES, &error);
     if (!root || !json_is_object(root)) {
         json_decref(root);
-        return {false, "The server returned an invalid response.", {}};
+        return {false, "The server returned an invalid response.", {}, false, httpStatus};
     }
 
     if (status < 200 || status >= 300) {
@@ -148,12 +152,12 @@ AuthResult parseResponse(u32 status, const std::string& response) {
         if (message.empty()) {
             message = "The server rejected the request.";
         }
-        return {false, std::move(message), {}};
+        return {false, std::move(message), {}, false, httpStatus};
     }
 
     if (status == 202) {
         json_decref(root);
-        return {true, "Password reset request accepted.", {}};
+        return {true, "Password reset request accepted.", {}, false, httpStatus};
     }
 
     json_t* account = json_object_get(root, "account");
@@ -166,9 +170,9 @@ AuthResult parseResponse(u32 status, const std::string& response) {
     };
     json_decref(root);
     if (session.accountId.empty() || session.accessToken.empty() || session.refreshToken.empty()) {
-        return {false, "The server returned an incomplete session.", {}};
+        return {false, "The server returned an incomplete session.", {}, false, httpStatus};
     }
-    return {true, "Authentication succeeded.", std::move(session)};
+    return {true, "Authentication succeeded.", std::move(session), false, httpStatus};
 }
 }
 
@@ -237,7 +241,7 @@ AuthResult ApiClient::credentialsRequest(
 AuthResult ApiClient::post(const char* path, const std::string& body) {
     const HttpResult response = request(path, body);
     if (!response.success) {
-        return {false, response.message, {}};
+        return {false, response.message, {}, true};
     }
     return parseResponse(response.status, response.body);
 }
@@ -681,6 +685,15 @@ ApiClient::HttpResult ApiClient::request(
             httpMethod = HTTPC_METHOD_PUT;
         }
     }
+    const char* methodName = method ? method : "POST";
+
+    constexpr std::uint64_t NtpToUnixEpochOffsetSeconds = 2208988800ULL;
+    const std::uint64_t timestamp = osGetTime() / 1000ULL - NtpToUnixEpochOffsetSeconds;
+    const std::string timestampText = std::to_string(timestamp);
+    const std::string signature = RequestSigning::sign(
+        methodName, path, BuildConfig::Version, timestampText,
+        hasBody ? body : std::string{}, ServerConfig::clientSecret()
+    );
 
     const std::string url = ServerConfig::baseUrl() + path;
     Logger::instance().info(std::string(
@@ -724,6 +737,15 @@ ApiClient::HttpResult ApiClient::request(
     }
     if (R_SUCCEEDED(result)) {
         result = httpcAddRequestHeaderField(&context, "Accept", "application/json");
+    }
+    if (R_SUCCEEDED(result)) {
+        result = httpcAddRequestHeaderField(&context, "X-Client-Version", std::string(BuildConfig::Version).c_str());
+    }
+    if (R_SUCCEEDED(result)) {
+        result = httpcAddRequestHeaderField(&context, "X-Client-Timestamp", timestampText.c_str());
+    }
+    if (R_SUCCEEDED(result)) {
+        result = httpcAddRequestHeaderField(&context, "X-Client-Signature", signature.c_str());
     }
     if (R_SUCCEEDED(result) && !authorization.empty()) {
         result = httpcAddRequestHeaderField(&context, "Authorization", authorization.c_str());
