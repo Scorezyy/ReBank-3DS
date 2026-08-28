@@ -2,9 +2,11 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
+#include "network/DeviceIdentity.hpp"
 #include "save/SaveAdapter.hpp"
 
 struct AccountSession {
@@ -160,7 +162,8 @@ private:
         const char* path,
         const std::string& username,
         const std::string& password,
-        const std::string& email = {}
+        const std::string& email = {},
+        const std::string& deviceFingerprint = {}
     );
     AuthResult post(const char* path, const std::string& body);
     HttpResult request(
@@ -169,5 +172,9 @@ private:
         const std::string& authorization = {},
         const char* method = nullptr
     );
+    void syncClock();
+    std::uint64_t signedTimestampSeconds();
     bool initialized_ = false;
+    DeviceIdentity deviceIdentity_;
+    std::optional<std::int64_t> clockDeltaMs_;
 };

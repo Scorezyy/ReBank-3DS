@@ -4,12 +4,22 @@ endif
 
 TOPDIR ?= $(CURDIR)
 include $(DEVKITARM)/3ds_rules
-include $(TOPDIR)/config/server.mk
 
-ifeq ($(wildcard $(TOPDIR)/config/client-secret.mk),)
-$(error config/client-secret.mk is missing. Copy config/client-secret.mk.example to config/client-secret.mk and fill in a real secret shared with your server's CLIENT_HMAC_SECRET)
+BUILD_ENV ?= public
+ifeq ($(BUILD_ENV),dev)
+CONFIG_SUFFIX := .dev
+else ifeq ($(BUILD_ENV),public)
+CONFIG_SUFFIX :=
+else
+$(error BUILD_ENV must be "dev" or "public", got "$(BUILD_ENV)")
 endif
-include $(TOPDIR)/config/client-secret.mk
+
+include $(TOPDIR)/config/server$(CONFIG_SUFFIX).mk
+
+ifeq ($(wildcard $(TOPDIR)/config/client-secret$(CONFIG_SUFFIX).mk),)
+$(error config/client-secret$(CONFIG_SUFFIX).mk is missing. Copy config/client-secret$(CONFIG_SUFFIX).mk.example to config/client-secret$(CONFIG_SUFFIX).mk and fill in a real secret shared with your $(BUILD_ENV) server's CLIENT_HMAC_SECRET)
+endif
+include $(TOPDIR)/config/client-secret$(CONFIG_SUFFIX).mk
 
 ifeq ($(wildcard $(TOPDIR)/source/core/RequestSigning.cpp),)
 $(error source/core/RequestSigning.cpp is missing. Copy source/core/RequestSigning.cpp.example to source/core/RequestSigning.cpp, or supply your own, matching whatever your server verifies)

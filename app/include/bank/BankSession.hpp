@@ -46,6 +46,10 @@ public:
     PartyDraft partyBaseline;
     PartyDraft partyWorking;
     Hand hand;
+    // Bumped every time the hand's identity changes (pick up, drop, swap,
+    // return). Lets an in-flight async cloud fetch that was started for a
+    // specific hand state detect it's now stale before applying its result.
+    std::uint32_t handGeneration = 0;
     StoragePane storagePane = StoragePane::Local;
     bool cloudNameFocused = false;
     std::unordered_map<std::uint16_t, std::string> cloudBoxNames;

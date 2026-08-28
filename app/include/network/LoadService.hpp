@@ -72,6 +72,12 @@ public:
     std::size_t pickupSlot = 0;
     std::uint16_t pickupCloudBox = 0;
     PokemonSummary pickupSummary;
+    // BankSession::handGeneration captured when a PickupCloud/SwapCloud fetch
+    // starts. If the hand has moved on (returned, or something else picked
+    // up) by the time the fetch resolves, the generation no longer matches
+    // and the stale result must not be applied to whatever the hand holds
+    // now - otherwise it can silently overwrite an unrelated cloud slot.
+    std::uint32_t pickupHandGeneration = 0;
 
     std::vector<DiscoveredGame> discoveredGames;
     OpenGameResult openGameResult;

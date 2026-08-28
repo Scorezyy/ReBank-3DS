@@ -31,8 +31,6 @@ struct SaveAdapter::Source {
 };
 
 namespace {
-// The "egg=.. metLocation=.. metDate=.." suffix shared by every box-slot
-// diagnostic log line below.
 std::string eggMetInfo(const pksm::PKX& pkm) {
     return "egg=" + std::string(pkm.egg() ? "1" : "0")
         + " metLocation=" + std::to_string(pkm.metLocation())
@@ -337,12 +335,6 @@ std::array<PokemonSummary, 6> SaveAdapter::readParty() const {
 }
 
 PokemonPayload SaveAdapter::readPartyPokemon(std::size_t slot) const {
-    // validPartySlot() only checks slot < 6, not the save's actual party
-    // size - save_->pkm() on a slot beyond the real party count reads
-    // uninitialized/out-of-bounds data in the underlying save library and
-    // crashes hard (not a C++ exception, so the try/catch below can't help).
-    // readParty() already bounds by partyCount() for the preview; this needs
-    // the same bound for the raw payload read.
     if (!validPartySlot(slot) || slot >= partyCount()) {
         return {};
     }

@@ -24,6 +24,7 @@ AccessControlInfo:
     - TwlCardBackup
     - DirectSdmc
     - DirectSdmcWrite
+    - CtrNandRo
   IoAccessControl:
     - FsMountCardSpi
     - UseCardSpi

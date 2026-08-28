@@ -202,7 +202,11 @@ AuthResult ApiClient::registerAccount(
     const std::string& email,
     const std::string& password
 ) {
-    return credentialsRequest("/v1/auth/register", username, password, email);
+    const std::string deviceFingerprint = deviceIdentity_.fingerprint();
+    if (deviceFingerprint.empty()) {
+        return {false, "This console's identity could not be verified. Registration requires a genuine, unmodified 3DS.", {}, false, 0};
+    }
+    return credentialsRequest("/v1/auth/register", username, password, email, deviceFingerprint);
 }
 
 AuthResult ApiClient::refresh(const std::string& refreshToken) {
@@ -225,7 +229,8 @@ AuthResult ApiClient::credentialsRequest(
     const char* path,
     const std::string& username,
     const std::string& password,
-    const std::string& email
+    const std::string& email,
+    const std::string& deviceFingerprint
 ) {
     json_t* root = json_object();
     json_object_set_new(root, "username", json_string(username.c_str()));
@@ -233,6 +238,9 @@ AuthResult ApiClient::credentialsRequest(
         json_object_set_new(root, "email", json_string(email.c_str()));
     }
     json_object_set_new(root, "password", json_string(password.c_str()));
+    if (!deviceFingerprint.empty()) {
+        json_object_set_new(root, "deviceFingerprint", json_string(deviceFingerprint.c_str()));
+    }
     const std::string body = dumpJson(root);
     json_decref(root);
     return post(path, body);
@@ -661,6 +669,46 @@ FileDownloadResult ApiClient::downloadClientUpdate(
     return {true, "Update downloaded.", total};
 }
 
+void ApiClient::syncClock() {
+    if (clockDeltaMs_.has_value()) {
+        return;
+    }
+    const std::int64_t localMsBeforeSync = static_cast<std::int64_t>(osGetTime());
+    const HttpResult response = request("/v1/time", {}, {}, "GET");
+    if (!response.success || response.status != 200) {
+        return;
+    }
+    json_error_t error{};
+    json_t* root = json_loadb(response.body.data(), response.body.size(), JSON_REJECT_DUPLICATES, &error);
+    json_t* unixSecondsField = root ? json_object_get(root, "unixSeconds") : nullptr;
+    if (!json_is_integer(unixSecondsField)) {
+        json_decref(root);
+        return;
+    }
+    const std::int64_t serverUnixSeconds = static_cast<std::int64_t>(json_integer_value(unixSecondsField));
+    json_decref(root);
+    clockDeltaMs_ = serverUnixSeconds * 1000 - localMsBeforeSync;
+    Logger::instance().info("Clock synced with server, delta=" + std::to_string(*clockDeltaMs_) + "ms");
+}
+
+std::uint64_t ApiClient::signedTimestampSeconds() {
+    const std::int64_t localMs = static_cast<std::int64_t>(osGetTime());
+    if (clockDeltaMs_.has_value()) {
+        // Calibrated against the server's own clock, so whatever the console's
+        // date/time is set to (players legitimately wind it for other games'
+        // time-based events, and it can also be double-offset by a stale manual
+        // RTC correction) no longer matters.
+        return static_cast<std::uint64_t>((localMs + *clockDeltaMs_) / 1000);
+    }
+    // No successful calibration yet (e.g. offline) - fall back to the console's
+    // own clock, best-effort corrected for its stored manual time-offset.
+    constexpr std::uint64_t NtpToUnixEpochOffsetSeconds = 2208988800ULL;
+    std::int64_t timeOffsetMs = 0;
+    CFGU_GetConfigInfoBlk2(sizeof(timeOffsetMs), 0x00030001, &timeOffsetMs);
+    const std::int64_t correctedMs = localMs - timeOffsetMs;
+    return static_cast<std::uint64_t>(correctedMs) / 1000ULL - NtpToUnixEpochOffsetSeconds;
+}
+
 ApiClient::HttpResult ApiClient::request(
     const char* path,
     const std::string& body,
@@ -687,9 +735,10 @@ ApiClient::HttpResult ApiClient::request(
     }
     const char* methodName = method ? method : "POST";
 
-    constexpr std::uint64_t NtpToUnixEpochOffsetSeconds = 2208988800ULL;
-    const std::uint64_t timestamp = osGetTime() / 1000ULL - NtpToUnixEpochOffsetSeconds;
-    const std::string timestampText = std::to_string(timestamp);
+    if (std::strcmp(path, "/v1/time") != 0) {
+        syncClock();
+    }
+    const std::string timestampText = std::to_string(signedTimestampSeconds());
     const std::string signature = RequestSigning::sign(
         methodName, path, BuildConfig::Version, timestampText,
         hasBody ? body : std::string{}, ServerConfig::clientSecret()
