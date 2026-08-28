@@ -13,6 +13,7 @@ SOURCES := source/app \
 	source/core \
 	source/save \
 	source/network \
+	source/bank \
 	source/audio \
 	source/i18n \
 	source/gui \

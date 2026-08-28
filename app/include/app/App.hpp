@@ -46,6 +46,10 @@ private:
     friend class GameSelectScreen;
     friend class LogsScreen;
     friend class BankScreen;
+    friend class StorageController;
+    friend class CommitService;
+    friend class CloudSyncController;
+    friend class BankInputController;
     friend class LoadService;
     friend class LoadingScreen;
 
