@@ -1,114 +1,101 @@
-# ReBank
+<div align="center">
+  <img src=".github/logo.png" alt="ReBank" width="180" />
 
-ReBank is a Nintendo 3DS homebrew prototype with a versioned backend API intended to be reusable by a future Nintendo Switch client.
+  # ReBank
 
-## Implemented
+  **Your Pokémon collection, safe in the cloud — right from your 3DS.**
 
-- Native Citro2D interface with stereoscopic animated intro and Pokemon preview
-- 3DS system-language detection for English, German, French, Spanish, Italian, and Portuguese
-- Username/password login, username/email/password registration, email password reset, and native software keyboard
-- Argon2id password hashing, rate limits, short-lived JWT access tokens, and hashed rotating refresh tokens
-- Native background login, registration, password reset, and automatic login from private CIA savedata
-- Build-embedded client server address that cannot be changed from the installed app
-- Client log console on `SELECT` plus a per-session `sdmc:/3ds/ReBank/rebank.log`
-- Readable structured Windows server logs with passwords, tokens, and authorization headers redacted
-- Generated OpenAPI 3.0 contract in `middleend/openapi.json`
-- PKSM-Core-backed parsing for the 17 generation 4-7 main-series DS and 3DS games
-- Direct reading of installed 3DS titles, CTR cartridges, and DS cartridge SPI saves
-- Validated SD-export fallback under `sdmc:/3ds/ReBank/saves/`
-- Real trainer name, trainer ID, play time, Pokedex count, box names, and Pokemon metadata
-- D-pad and Circle Pad box cursor with single/multi selection tools and green transfer state
-- Local and online 6x5 box views on the top screen with compact Pokemon details on the touchscreen
-- Asynchronous transfer animation, PKHeX check status, and upload progress bar
-- 50 cloud boxes for standard accounts and a 100-box database limit for special accounts
-- Authenticated atomic batch uploads with fail-closed PKHeX legality checks through local-gpss
-- AES-256-GCM Pokemon payload encryption at rest after every Pokemon in the batch passes legality
-- Optional looping background music from `app/romfs/assets/music.ogg`
-- Reproducible `.3dsx`, `.cia`, and `.3ds` packaging
+  [![Latest Release](https://img.shields.io/github/v/release/Scorezyy/ReBank-3DS?include_prereleases&label=latest%20release&color=1F915E)](../../releases)
+  [![License](https://img.shields.io/badge/license-GPLv3-1F915E)](LICENSE)
+  [![Platform](https://img.shields.io/badge/platform-Nintendo%203DS-1F915E)](../../releases)
 
-## Not Yet Implemented
+</div>
 
-- Save write-back; game saves are currently opened read-only
-- Alternate-form sprite indexing and rigged 3D Pokemon models
-- Signed GitHub release checks and user-confirmed updates
-- Password-reset email delivery
+<br />
 
-Automatic CIA installation is intentionally excluded from the prototype. It requires custom firmware privileges and must only happen after signature and SHA-256 verification with explicit user confirmation.
+## Why ReBank exists
 
-## Windows Setup
+For years, Pokémon Bank was the only official way to store your Pokémon in the cloud and move them freely between games. It was the safety net that let trainers hold onto Pokémon they'd caught, bred, or traded for years — long after the games themselves were retired.
 
-Requirements: Node.js 22+, Docker Desktop, and devkitPro installed at `C:\devkitPro`.
+Now Pokémon Bank is being shut down. Without it, a huge part of many trainers' collections would be left stranded on old cartridges, with no safe way to bring them forward.
 
-```powershell
-.\tools\setup-windows.ps1
-```
+**ReBank exists to fill that gap.** It's a free, independent cloud storage service for your Pokémon, built entirely for the Nintendo 3DS — no official service required, no subscription, and no collection left behind.
 
-## Client Server Address
+<br />
 
-Edit `app/config/server.mk` before every release build:
+## What you can do right now
 
-```makefile
-REBANK_SERVER_SCHEME := https
-REBANK_SERVER_HOST := 88.99.242.28
-REBANK_SERVER_PORT := 6969
-```
+| | |
+|---|---|
+| ☁️ **Cloud storage** | Move Pokémon from your game cartridge into your personal online bank, and pull them back down whenever you want. Your collection stays yours, independent of any single cartridge. |
+| 🗂️ **Custom box names** | Give your cloud boxes their own names, right from the box screen, so a collection of hundreds of Pokémon stays easy to navigate. |
+| 🔁 **Cross-generation transfers** | ReBank understands Pokémon from Generation 4 all the way through Generation 7, so your collection isn't locked to a single game or console generation. |
+| ✨ **Shiny & held item indicators** | Shiny Pokémon get a star badge and held items get their own icon, right on the box screen — no need to open every Pokémon to check. |
+| 🔐 **A safe account of your own** | Sign up with just a username and password. Your session is remembered securely on your device, so you're not stuck logging in every time. |
+| 🌍 **Multi-language support** | English, German, French, Spanish, Italian, and Portuguese, selectable right in the app. |
 
-These values are compiled into the executable. Users cannot change the server or port after installation. Use the Windows PC's LAN IPv4 address, not `127.0.0.1`, because the 3DS is a separate device.
+<br />
 
-The production client trusts the private ReBank CA embedded at `app/romfs/assets/rebank-ca.der`.
-It does not fall back to unencrypted HTTP when the certificate is missing or invalid.
+## Supported games
 
-## Build
+ReBank works with save files from:
 
-Install devkitPro with the `3ds-dev` group and `3ds-libvorbisidec`, then run:
+- **Generation 4** — Diamond, Pearl, Platinum, HeartGold, SoulSilver
+- **Generation 5** — Black, White, Black 2, White 2
+- **Generation 6** — X, Y, Omega Ruby, Alpha Sapphire
+- **Generation 7** — Sun, Moon, Ultra Sun, Ultra Moon
 
-```powershell
-.\tools\package.ps1
-```
+Pokémon can move upward across these generations as you go — catch something in an older game, and it can still make its way into a newer one through your bank.
 
-Outputs are written to `output/`.
+<br />
 
-## Save Loading
+## Screenshots
 
-Select the matching game while its cartridge is inserted or its digital copy is installed. ReBank
-opens the save read-only and rejects a save whose detected generation does not match the selection.
+<div align="center">
+  <table>
+    <tr>
+      <td align="center" width="50%">
+        <img src="screenshots/login-screen.png" alt="Login screen" width="100%" /><br />
+        <sub>Login</sub>
+      </td>
+      <td align="center" width="50%">
+        <img src="screenshots/register-screen.png" alt="Account creation screen" width="100%" /><br />
+        <sub>Creating an account</sub>
+      </td>
+    </tr>
+    <tr>
+      <td align="center" width="50%">
+        <img src="screenshots/game-selection.png" alt="Game selection screen" width="100%" /><br />
+        <sub>Picking a game</sub>
+      </td>
+      <td align="center" width="50%">
+        <img src="screenshots/bank-screen.png" alt="Cloud bank box screen" width="100%" /><br />
+        <sub>Your cloud bank</sub>
+      </td>
+    </tr>
+  </table>
+</div>
 
-For emulator testing or when direct archive permissions are unavailable, place an exported save at
-`sdmc:/3ds/ReBank/saves/<game-code>/main` or `sdmc:/3ds/ReBank/saves/<game-code>.sav`. Game codes are
-listed in `app/source/GameCatalog.cpp`.
+<br />
 
-## Storage Controls
+## Getting started
 
-- D-pad or Circle Pad: move the box cursor
-- `A`: select with the active single/multi tool
-- `Y`: switch between single and multi selection
-- `L` / `R`: change the active local or online box
-- Up from the first local row: stage selected Pokemon in the online box
-- Down or `B`: cancel a staged transfer
-- `X`: confirm the staged upload and start the PKHeX legitimacy check
+1. Grab the latest build from the **[Releases](../../releases)** page — the `.cia` file is what most people want.
+2. Install it on your Nintendo 3DS the same way you'd install any other homebrew title.
+3. Open ReBank, create a free account, and start moving Pokémon into the cloud.
 
-Nothing is stored when one Pokemon is illegal or the legality service is unavailable.
+That's it — no setup, no configuration files, no external accounts needed.
 
-## Server
+<br />
 
-```powershell
-.\tools\start-server.ps1
-```
+## A project made with care
 
-This starts PostgreSQL and a pinned self-hosted FlagBrew local-gpss/PKHeX service, generates private local JWT/data-encryption secrets under ignored `Server/.runtime/`, builds the API, and opens the server log console. The first start builds the legality container and can take several minutes. Runtime bind address, API port, database URL, and legality URL are controlled by `Server/config/server.json`.
+ReBank is built and maintained independently, by someone who didn't want to see years of collecting disappear along with a shutting-down service. It's still actively growing, with new features, polish, and fixes landing regularly — what you see in the [Releases](../../releases) page is a living, evolving project, not a finished product left to gather dust.
 
-The PKHeX service is bound to `127.0.0.1:8080`; it is not exposed to the LAN. ReBank sends raw PK4-PK7 data to it only from the API server. Uploads fail closed if the service cannot return a valid legality result.
+If something breaks, looks off, or could be better, that feedback goes straight into the next update.
 
-Stop PostgreSQL with:
+<br />
 
-```powershell
-.\tools\stop-server.ps1
-```
+---
 
-Swagger UI is available at `http://127.0.0.1:3000/documentation`. Client and server ports must match, but changing only `Server/config/server.json` does not alter an already built 3DS client.
-
-## Production Deployment
-
-The public API is available over pinned HTTPS at `https://88.99.242.28:6969`. nginx terminates TLS and proxies only to the API loopback listener. PostgreSQL listens only on `10.77.68.1:6968` inside a dedicated WireGuard tunnel whose only peer is the authentication VM. It is not reachable through the database server's public address.
-
-Non-secret production templates are under `deploy/`. Environment files, WireGuard private keys, JWT secrets, database credentials, and TLS private keys must remain outside the repository.
+<sub>Licensed under [GPLv3](LICENSE). Built on some open-source components — see [NOTICE](NOTICE.md) for details. Pokémon and all related names, images, and data are property of Nintendo, Game Freak, and Creatures Inc. ReBank is an independent fan project, not affiliated with or endorsed by any of them.</sub>
