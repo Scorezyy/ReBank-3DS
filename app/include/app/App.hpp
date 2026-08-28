@@ -76,6 +76,8 @@ private:
     void toggleAutoLogin();
     void drawText(std::string_view value, float x, float y, float size, u32 color);
     void drawCentered(std::string_view value, float centerX, float y, float size, u32 color);
+    void drawRight(std::string_view value, float rightX, float y, float size, u32 color);
+    float textWidth(std::string_view value, float size);
     void drawButton(const UiRect& rect, std::string_view label, bool primary);
     void drawField(const UiRect& rect, std::string_view label, const std::string& value, bool password);
     void requestText(std::string& destination, std::string_view hint, bool password);
@@ -84,6 +86,11 @@ private:
     Screen screen_;
     Screen previousScreen_;
     GfxResources resources_;
+    // Which text buffer drawText()/drawCentered() parse into for the render
+    // pass currently in progress - switched by render() before each of the
+    // three passes (top-left eye, top-right eye, bottom) so none of them
+    // ever share glyph memory within one frame.
+    C2D_TextBuf activeTextBuffer_ = nullptr;
     std::string status_;
     ApiClient api_;
     std::string executablePath_;

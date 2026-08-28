@@ -84,6 +84,7 @@ struct BoxListResult {
     bool success = false;
     std::string message;
     std::array<PokemonSummary, 30> pokemon{};
+    std::array<PokemonPayload, 30> payloads{};
 };
 
 struct ClientUpdate {

@@ -1,7 +1,16 @@
+Server/node_modules/
+Server/dist/
+Server/.runtime/
 app/build/
 app/rebank.3dsx
 app/rebank.elf
 app/rebank.map
 app/rebank.smdh
-output/
 *.log
+.env
+output/
+saves/
+.publish/
+.claude/
+.vscode/
+gui_cpp.txt

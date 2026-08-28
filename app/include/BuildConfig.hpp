@@ -9,7 +9,6 @@ inline constexpr std::string_view Channel = "BETA";
 inline constexpr std::string_view Author = "Jxstn";
 
 inline std::string label() {
-    return "V " + std::string(Version) + " " + std::string(Channel)
-        + " . by " + std::string(Author);
+    return "V " + std::string(Version) + " " + std::string(Channel) + " . by " + std::string(Author);
 }
 }

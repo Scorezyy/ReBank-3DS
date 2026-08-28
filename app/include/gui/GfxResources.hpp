@@ -22,6 +22,11 @@ public:
     C3D_RenderTarget* topLeft = nullptr;
     C3D_RenderTarget* topRight = nullptr;
     C3D_RenderTarget* bottom = nullptr;
+    // Top screen is rendered twice per frame (once per stereo eye) with
+    // otherwise-identical text. Each eye pass gets its own text buffer so
+    // the two passes never share glyph memory within a single frame.
+    C2D_TextBuf textBufferTopA = nullptr;
+    C2D_TextBuf textBufferTopB = nullptr;
     C2D_TextBuf textBuffer = nullptr;
     C2D_Font textFont = nullptr;
     C2D_SpriteSheet pokemonSprites = nullptr;
@@ -31,4 +36,12 @@ public:
     C2D_SpriteSheet iconItemSheet = nullptr;
     C2D_SpriteSheet iconShinySheet = nullptr;
     C2D_SpriteSheet boxNameBarSheet = nullptr;
+    C2D_SpriteSheet typeBanners = nullptr;
+    C2D_SpriteSheet teamBackground = nullptr;
+    C2D_SpriteSheet nameDexPlate = nullptr;
+    C2D_SpriteSheet infoStripe = nullptr;
+    C2D_SpriteSheet pointSmall = nullptr;
+    C2D_SpriteSheet genderMaleIcon = nullptr;
+    C2D_SpriteSheet genderFemaleIcon = nullptr;
+    C2D_SpriteSheet genderlessIcon = nullptr;
 };

@@ -32,8 +32,6 @@ inline constexpr u32 BoxPlateBorder = C2D_Color32(20, 110, 70, 255);
 inline constexpr u32 BoxArrowInk = C2D_Color32(20, 110, 70, 255);
 inline constexpr u32 CursorRed = C2D_Color32(216, 40, 32, 255);
 inline constexpr u32 CursorGreen = C2D_Color32(40, 176, 88, 255);
-inline constexpr u32 SidebarInk = C2D_Color32(50, 96, 40, 255);
-inline constexpr u32 TypeElectric = C2D_Color32(238, 178, 32, 255);
 inline constexpr UiRect EmailField{24.0F, 62.0F, 272.0F, 42.0F};
 inline constexpr UiRect PasswordField{24.0F, 114.0F, 272.0F, 42.0F};
 inline constexpr UiRect SubmitButton{24.0F, 195.0F, 272.0F, 38.0F};

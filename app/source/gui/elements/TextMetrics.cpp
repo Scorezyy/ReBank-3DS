@@ -18,11 +18,14 @@ bool isKnownSafe(std::uint32_t codepoint) {
         || (codepoint >= 0xFF00 && codepoint <= 0xFFEF);
 }
 
-std::uint32_t decodeUtf8(std::string_view value, std::size_t& index) {
+std::uint32_t decodeUtf8(std::string_view value, std::size_t& index, bool& valid) {
     const auto byte = static_cast<unsigned char>(value[index]);
     std::size_t length = 1;
     std::uint32_t codepoint = byte;
-    if ((byte & 0xE0) == 0xC0) {
+    valid = true;
+    if ((byte & 0x80) == 0x00) {
+        length = 1;
+    } else if ((byte & 0xE0) == 0xC0) {
         length = 2;
         codepoint = byte & 0x1F;
     } else if ((byte & 0xF0) == 0xE0) {
@@ -31,15 +34,21 @@ std::uint32_t decodeUtf8(std::string_view value, std::size_t& index) {
     } else if ((byte & 0xF8) == 0xF0) {
         length = 4;
         codepoint = byte & 0x07;
+    } else {
+        ++index;
+        valid = false;
+        return 0xFFFD;
     }
     if (index + length > value.size()) {
         ++index;
+        valid = false;
         return 0xFFFD;
     }
     for (std::size_t offset = 1; offset < length; ++offset) {
         const auto continuation = static_cast<unsigned char>(value[index + offset]);
         if ((continuation & 0xC0) != 0x80) {
             ++index;
+            valid = false;
             return 0xFFFD;
         }
         codepoint = (codepoint << 6) | (continuation & 0x3F);
@@ -52,11 +61,12 @@ std::uint32_t decodeUtf8(std::string_view value, std::size_t& index) {
 PreparedText prepareText(std::string_view value, C2D_Font font) {
     PreparedText prepared;
     prepared.value.reserve(value.size());
-    const int alterIndex = font ? C2D_FontGetInfo(font)->alterCharIndex : -1;
+    const int alterIndex = C2D_FontGetInfo(font)->alterCharIndex;
     std::size_t index = 0;
     while (index < value.size()) {
         const std::size_t start = index;
-        const std::uint32_t codepoint = decodeUtf8(value, index);
+        bool valid = true;
+        const std::uint32_t codepoint = decodeUtf8(value, index, valid);
         const bool musicNote = (codepoint >= MusicNoteFirst && codepoint <= MusicNoteLast)
             || codepoint == MusicNotePua;
         if (musicNote) {
@@ -65,9 +75,10 @@ PreparedText prepareText(std::string_view value, C2D_Font font) {
             prepared.value.append("  ");
             continue;
         }
-        const bool renderable = codepoint < 0x80
-            || (isKnownSafe(codepoint)
-                && C2D_FontGlyphIndexFromCodePoint(font, codepoint) != alterIndex);
+        const bool renderable = valid
+            && (codepoint < 0x80
+                || (isKnownSafe(codepoint)
+                    && C2D_FontGlyphIndexFromCodePoint(font, codepoint) != alterIndex));
         if (renderable) {
             prepared.value.append(value.substr(start, index - start));
             continue;
@@ -89,13 +100,22 @@ void parseText(C2D_Text& text, C2D_Font font, C2D_TextBuf buffer, const std::str
     } else {
         C2D_TextParse(&text, buffer, value.c_str());
     }
-    C2D_TextOptimize(&text);
+}
+
+namespace {
+C2D_TextBuf measureBuffer() {
+    static C2D_TextBuf buf = C2D_TextBufNew(512);
+    return buf;
+}
 }
 
 float textHeight(C2D_Font font, C2D_TextBuf buffer, std::string_view value, float size) {
+    (void)buffer;
+    C2D_TextBuf scratch = measureBuffer();
+    C2D_TextBufClear(scratch);
     C2D_Text text;
     const std::string owned(prepareText(value, font).value);
-    parseText(text, font, buffer, owned);
+    parseText(text, font, scratch, owned);
     float width = 0.0F;
     float height = 0.0F;
     C2D_TextGetDimensions(&text, size, size, &width, &height);
@@ -103,9 +123,12 @@ float textHeight(C2D_Font font, C2D_TextBuf buffer, std::string_view value, floa
 }
 
 float textWidth(C2D_Font font, C2D_TextBuf buffer, std::string_view value, float size) {
+    (void)buffer;
+    C2D_TextBuf scratch = measureBuffer();
+    C2D_TextBufClear(scratch);
     C2D_Text text;
     const std::string owned(prepareText(value, font).value);
-    parseText(text, font, buffer, owned);
+    parseText(text, font, scratch, owned);
     float width = 0.0F;
     float height = 0.0F;
     C2D_TextGetDimensions(&text, size, size, &width, &height);
@@ -120,20 +143,20 @@ void drawMusicGlyphs(const PreparedText& prepared, C2D_Font font, C2D_TextBuf bu
         const float headY = y + 19.0F * size;
         const float topY = y + 6.0F * size;
         const float radius = std::max(1.0F, 2.6F * size);
-        C2D_DrawCircleSolid(glyphX + 4.0F * size, headY, 0.51F, radius, color);
-        C2D_DrawRectSolid(glyphX + 5.5F * size, topY, 0.51F,
+        C2D_DrawCircleSolid(glyphX + 4.0F * size, headY, 0.86F, radius, color);
+        C2D_DrawRectSolid(glyphX + 5.5F * size, topY, 0.86F,
                           std::max(1.0F, 1.5F * size), 13.0F * size, color);
         if (glyph.doubleNote) {
             C2D_DrawCircleSolid(glyphX + 12.0F * size, headY - 2.0F * size,
-                                0.51F, radius, color);
-            C2D_DrawRectSolid(glyphX + 13.5F * size, topY, 0.51F,
+                                0.86F, radius, color);
+            C2D_DrawRectSolid(glyphX + 13.5F * size, topY, 0.86F,
                               std::max(1.0F, 1.5F * size), 11.0F * size, color);
-            C2D_DrawRectSolid(glyphX + 5.5F * size, topY, 0.51F,
+            C2D_DrawRectSolid(glyphX + 5.5F * size, topY, 0.86F,
                               9.5F * size, std::max(1.0F, 2.0F * size), color);
         } else {
-            C2D_DrawRectSolid(glyphX + 5.5F * size, topY, 0.51F,
+            C2D_DrawRectSolid(glyphX + 5.5F * size, topY, 0.86F,
                               5.0F * size, std::max(1.0F, 1.5F * size), color);
-            C2D_DrawRectSolid(glyphX + 9.0F * size, topY, 0.51F,
+            C2D_DrawRectSolid(glyphX + 9.0F * size, topY, 0.86F,
                               std::max(1.0F, 1.5F * size), 4.5F * size, color);
         }
     }

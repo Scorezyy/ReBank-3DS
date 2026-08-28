@@ -76,7 +76,8 @@ bool SaveAdapter::open(const GameDescriptor& game, std::string& error) {
 
     previousBuffer_.assign(data.get(), data.get() + size);
     Logger::instance().info(
-        "Loaded " + std::string(game.code) + " save (source=" + std::to_string(static_cast<int>(source_->kind)) + ")"
+        "Loaded " + std::string(game.code) + " save (source=" + std::to_string(static_cast<int>(source_->kind))
+        + ", bytes=" + std::to_string(size) + ", maxBoxes=" + std::to_string(save_->maxBoxes()) + ")"
     );
     return true;
 }
@@ -209,13 +210,64 @@ std::array<PokemonSummary, 30> SaveAdapter::readBox(std::size_t box) const {
                 parsed->nickname(),
                 parsed->otName(),
                 gameCode_,
-                PokemonTransfer::pokemonFormat(save_->generation())
+                PokemonTransfer::pokemonFormat(save_->generation()),
+                parsed->type1(),
+                parsed->type2(),
+                parsed->version(),
+                parsed->language(),
+                {parsed->move(0), parsed->move(1), parsed->move(2), parsed->move(3)},
+                parsed->ability(),
+                parsed->nature(),
+                parsed->gender()
             };
         }
     } catch (const std::exception& exception) {
         Logger::instance().error("Box parse exception: " + std::string(exception.what()));
     }
     return pokemon;
+}
+
+BoxRead SaveAdapter::readBoxFull(std::size_t box) const {
+    BoxRead result;
+    if (!validBox(box)) {
+        return result;
+    }
+    try {
+        for (std::size_t slot = 0; slot < result.summaries.size(); ++slot) {
+            auto parsed = save_->pkm(static_cast<std::uint8_t>(box), static_cast<std::uint8_t>(slot));
+            const auto species = static_cast<std::uint16_t>(parsed->species());
+            if (species == 0) {
+                continue;
+            }
+            result.summaries[slot] = PokemonSummary{
+                species,
+                parsed->alternativeForm(),
+                parsed->level(),
+                parsed->shiny(),
+                parsed->heldItem(),
+                parsed->nickname(),
+                parsed->otName(),
+                gameCode_,
+                PokemonTransfer::pokemonFormat(save_->generation()),
+                parsed->type1(),
+                parsed->type2(),
+                parsed->version(),
+                parsed->language(),
+                {parsed->move(0), parsed->move(1), parsed->move(2), parsed->move(3)},
+                parsed->ability(),
+                parsed->nature(),
+                parsed->gender()
+            };
+            const auto raw = parsed->rawData();
+            result.payloads[slot] = {
+                PokemonTransfer::pokemonFormat(save_->generation()),
+                std::vector<std::uint8_t>(raw.begin(), raw.end())
+            };
+        }
+    } catch (const std::exception& exception) {
+        Logger::instance().error("Box parse exception: " + std::string(exception.what()));
+    }
+    return result;
 }
 
 PokemonPayload SaveAdapter::readPokemon(std::size_t box, std::size_t slot) const {
@@ -245,6 +297,79 @@ PokemonPayload SaveAdapter::readPokemon(std::size_t box, std::size_t slot) const
     }
 }
 
+std::array<PokemonSummary, 6> SaveAdapter::readParty() const {
+    std::array<PokemonSummary, 6> party{};
+    if (!save_) {
+        return party;
+    }
+    try {
+        const std::size_t count = std::min<std::size_t>(save_->partyCount(), party.size());
+        for (std::size_t slot = 0; slot < count; ++slot) {
+            auto parsed = save_->pkm(static_cast<std::uint8_t>(slot));
+            const auto species = static_cast<std::uint16_t>(parsed->species());
+            if (species == 0) {
+                continue;
+            }
+            party[slot] = PokemonSummary{
+                species,
+                parsed->alternativeForm(),
+                parsed->level(),
+                parsed->shiny(),
+                parsed->heldItem(),
+                parsed->nickname(),
+                parsed->otName(),
+                gameCode_,
+                PokemonTransfer::pokemonFormat(save_->generation()),
+                parsed->type1(),
+                parsed->type2(),
+                parsed->version(),
+                parsed->language(),
+                {parsed->move(0), parsed->move(1), parsed->move(2), parsed->move(3)},
+                parsed->ability(),
+                parsed->nature(),
+                parsed->gender()
+            };
+        }
+    } catch (const std::exception& exception) {
+        Logger::instance().error("Party parse exception: " + std::string(exception.what()));
+    }
+    return party;
+}
+
+PokemonPayload SaveAdapter::readPartyPokemon(std::size_t slot) const {
+    // validPartySlot() only checks slot < 6, not the save's actual party
+    // size - save_->pkm() on a slot beyond the real party count reads
+    // uninitialized/out-of-bounds data in the underlying save library and
+    // crashes hard (not a C++ exception, so the try/catch below can't help).
+    // readParty() already bounds by partyCount() for the preview; this needs
+    // the same bound for the raw payload read.
+    if (!validPartySlot(slot) || slot >= partyCount()) {
+        return {};
+    }
+    try {
+        auto parsed = save_->pkm(static_cast<std::uint8_t>(slot));
+        if (static_cast<std::uint16_t>(parsed->species()) == 0) {
+            return {};
+        }
+        const auto raw = parsed->rawData();
+        Logger::instance().info("readPartyPokemon: slot " + std::to_string(slot + 1) + " species "
+                                + std::to_string(static_cast<std::uint16_t>(parsed->species()))
+                                + " format " + std::to_string(PokemonTransfer::pokemonFormat(save_->generation()))
+                                + " bytes " + std::to_string(raw.size()));
+        return {
+            PokemonTransfer::pokemonFormat(save_->generation()),
+            std::vector<std::uint8_t>(raw.begin(), raw.end())
+        };
+    } catch (const std::exception& exception) {
+        Logger::instance().error("Party payload exception: " + std::string(exception.what()));
+        return {};
+    }
+}
+
+std::size_t SaveAdapter::partyCount() const {
+    return save_ ? std::min<std::size_t>(save_->partyCount(), 6) : 0;
+}
+
 std::string SaveAdapter::boxName(std::size_t box) const {
     return save_ && box < boxCount() ? save_->boxName(static_cast<std::uint8_t>(box)) : std::string{};
 }
@@ -267,6 +392,10 @@ bool SaveAdapter::validBox(std::size_t box) const {
 
 bool SaveAdapter::validSlot(std::size_t box, std::size_t slot) const {
     return validBox(box) && slot < 30;
+}
+
+bool SaveAdapter::validPartySlot(std::size_t slot) const {
+    return save_ && slot < 6;
 }
 
 bool SaveAdapter::canImportPokemon(
@@ -380,6 +509,101 @@ bool SaveAdapter::writePokemon(
         return true;
     } catch (const std::exception& exception) {
         Logger::instance().error("writePokemon exception: " + std::string(exception.what()));
+        return false;
+    }
+}
+
+bool SaveAdapter::clearPartySlot(std::size_t slot) {
+    if (!validPartySlot(slot)) {
+        return false;
+    }
+    try {
+        auto empty = save_->emptyPkm();
+        if (!empty) {
+            return false;
+        }
+        save_->pkm(*empty, static_cast<std::uint8_t>(slot));
+        auto written = save_->pkm(static_cast<std::uint8_t>(slot));
+        Logger::instance().info("clearPartySlot: slot " + std::to_string(slot + 1)
+                                + " readback species "
+                                + std::to_string(written ? static_cast<std::uint16_t>(written->species()) : 0)
+                                + " egg=" + (written && written->egg() ? "1" : "0"));
+        dirty_ = true;
+        return true;
+    } catch (const std::exception& exception) {
+        Logger::instance().error("clearPartySlot exception: " + std::string(exception.what()));
+        return false;
+    }
+}
+
+bool SaveAdapter::writePartyPokemon(
+    std::size_t slot,
+    std::uint8_t format,
+    const std::vector<std::uint8_t>& data
+) {
+    if (!validPartySlot(slot) || data.empty()) {
+        return false;
+    }
+    const std::uint8_t saveGen = gameGeneration();
+    try {
+        auto buffer = std::vector<std::uint8_t>(data);
+        const pksm::Generation gen = PokemonTransfer::generationFromFormat(format);
+        if (gen == pksm::Generation::UNUSED) {
+            return false;
+        }
+        auto pkx = pksm::PKX::getPKM(gen, buffer.data(), buffer.size(), false);
+        if (!pkx || static_cast<std::uint16_t>(pkx->species()) == 0) {
+            Logger::instance().warning("writePartyPokemon: getPKM returned null/empty species");
+            return false;
+        }
+        Logger::instance().info("writePartyPokemon: slot " + std::to_string(slot + 1)
+                                + " parsed gen " + std::to_string(format)
+                                + " species " + std::to_string(static_cast<std::uint16_t>(pkx->species()))
+                                + " " + eggMetInfo(*pkx)
+                                + " bytes=" + std::to_string(data.size()));
+        std::unique_ptr<pksm::PKX> converted;
+        if (format != saveGen) {
+            Logger::instance().info("writePartyPokemon: converting Gen " + std::to_string(format)
+                                    + " to Gen " + std::to_string(saveGen));
+            converted = PokemonTransfer::convertForSave(*pkx, format, saveGen, *save_);
+            if (!converted) {
+                Logger::instance().warning("Unsupported or failed party conversion from Gen "
+                                           + std::to_string(format) + " to Gen "
+                                           + std::to_string(saveGen));
+                return false;
+            }
+        }
+        pksm::PKX& pkmRef = converted ? *converted : *pkx;
+        const auto expectedGeneration = pkmRef.generation();
+        const auto expectedSpecies = pkmRef.species();
+        const std::uint16_t storedChecksum = pkmRef.checksum();
+        pkmRef.refreshChecksum();
+        const std::uint16_t recomputedChecksum = pkmRef.checksum();
+        if (storedChecksum != recomputedChecksum) {
+            Logger::instance().warning("writePartyPokemon: checksum mismatch before write (stored 0x"
+                                       + std::to_string(storedChecksum) + " recomputed 0x"
+                                       + std::to_string(recomputedChecksum) + ")");
+            pkmRef.checksum(storedChecksum);
+        }
+        save_->pkm(pkmRef, static_cast<std::uint8_t>(slot));
+        auto written = save_->pkm(static_cast<std::uint8_t>(slot));
+        if (!written || written->generation() != expectedGeneration
+            || written->species() != expectedSpecies) {
+            Logger::instance().error("writePartyPokemon readback failed for slot " + std::to_string(slot + 1));
+            return false;
+        }
+        if (written->egg() && !pkx->egg()) {
+            Logger::instance().error("writePartyPokemon: write turned a non-egg into an egg for slot "
+                                     + std::to_string(slot + 1) + "; refusing to persist this write");
+            return false;
+        }
+        Logger::instance().info("writePartyPokemon readback verified species "
+                                + std::to_string(static_cast<std::uint16_t>(written->species()))
+                                + " " + eggMetInfo(*written));
+        dirty_ = true;
+        return true;
+    } catch (const std::exception& exception) {
+        Logger::instance().error("writePartyPokemon exception: " + std::string(exception.what()));
         return false;
     }
 }

@@ -48,6 +48,8 @@ public:
         std::string localBoxName;
         std::array<PokemonSummary, 30> localPokemon{};
         std::array<PokemonPayload, 30> localPayloads{};
+        std::array<PokemonSummary, 6> localParty{};
+        std::array<PokemonPayload, 6> localPartyPayloads{};
     };
 
     explicit LoadService(App& app) : app_(app) {}
@@ -66,6 +68,7 @@ public:
 
     std::size_t catalogIndex = 0;
     std::uint16_t cloudBoxKey = 0;
+    std::uint16_t resolvedCloudBoxKey = 0;
     std::size_t pickupSlot = 0;
     std::uint16_t pickupCloudBox = 0;
     PokemonSummary pickupSummary;

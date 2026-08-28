@@ -2,9 +2,11 @@
 
 #include "core/Logger.hpp"
 #include "core/ServerConfig.hpp"
+#include "save/PokemonTransfer.hpp"
 
 #include <3ds.h>
 #include <jansson.h>
+#include <pkx/PKX.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -428,6 +430,26 @@ BoxListResult ApiClient::listCloudBox(
             json_t* heldItemValue = json_object_get(entry, "heldItem");
             summary.heldItem = static_cast<std::uint16_t>(
                 json_is_integer(heldItemValue) ? json_integer_value(heldItemValue) : 0);
+
+            const std::vector<std::uint8_t> payload = decodeBase64(stringField(entry, "payloadBase64"));
+            const pksm::Generation gen = PokemonTransfer::generationFromFormat(summary.format);
+            if (!payload.empty() && gen != pksm::Generation::UNUSED) {
+                std::vector<std::uint8_t> buffer(payload);
+                auto pkx = pksm::PKX::getPKM(gen, buffer.data(), buffer.size(), false);
+                if (pkx && static_cast<std::uint16_t>(pkx->species()) != 0) {
+                    summary.type1 = pkx->type1();
+                    summary.type2 = pkx->type2();
+                    summary.originGame = pkx->version();
+                    summary.language = pkx->language();
+                    summary.moves = {pkx->move(0), pkx->move(1), pkx->move(2), pkx->move(3)};
+                    summary.ability = pkx->ability();
+                    summary.nature = pkx->nature();
+                    summary.gender = pkx->gender();
+                }
+            }
+            if (!payload.empty()) {
+                result.payloads[static_cast<std::size_t>(slot - 1)] = {summary.format, payload};
+            }
             result.pokemon[static_cast<std::size_t>(slot - 1)] = std::move(summary);
         }
     }

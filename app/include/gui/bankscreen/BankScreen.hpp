@@ -16,9 +16,6 @@
 
 class App;
 
-// The local/cloud box browser: the screen where Pokemon are actually moved.
-// Owns every piece of state a box transfer touches - drafts, the held
-// Pokemon, the cloud cache and the commit job that writes it all back.
 class BankScreen {
 public:
     explicit BankScreen(App& app) : app_(app) {}
@@ -40,14 +37,13 @@ public:
     bool errorDialogVisible() const { return errorDialogVisible_; }
     void dismissErrorDialog() { errorDialogVisible_ = false; }
 
-    // Exposed so the shared background load worker can open/read the save
-    // file directly; the worker runs on a thread App owns.
     SaveAdapter& saveAdapter() { return saveAdapter_; }
 
 private:
     enum class HandSource {
         Local,
-        Cloud
+        Cloud,
+        Party
     };
 
     struct Hand {
@@ -62,7 +58,8 @@ private:
 
     enum class StoragePane {
         Local,
-        Cloud
+        Cloud,
+        Party
     };
 
     struct LocalBoxDraft {
@@ -70,10 +67,16 @@ private:
         std::array<PokemonPayload, 30> payloads{};
     };
 
+    struct PartyDraft {
+        std::array<PokemonSummary, 6> summaries{};
+        std::array<PokemonPayload, 6> payloads{};
+    };
+
     struct CloudBoxDraft {
         std::array<PokemonSummary, 30> summaries{};
         std::array<PokemonPayload, 30> pending{};
         std::array<PokemonSummary, 30> baseline{};
+        std::array<PokemonPayload, 30> payloads{};
     };
 
     struct CommitResult {
@@ -91,7 +94,13 @@ private:
     void storagePickUp();
     void storageDrop();
     void storageReturnHand();
-    bool hasPendingChanges() const;
+    bool hasPendingChanges(bool verbose = false) const;
+    int partyMemberCount() const;
+    void pumpHandPayloadFetch();
+    bool nextCloudPrefetchKey(std::uint16_t& outKey) const;
+    void pumpCloudPrefetch();
+    void pumpCloudPayloadPrefetch();
+    void pumpCommitRequest();
     void loadLocalBox();
     void persistLocalDraft();
     void refreshCloudBox(bool keepPreviousPreview = false);
@@ -115,9 +124,13 @@ private:
     std::array<PokemonPayload, 30> localPayloads_{};
     std::array<PokemonPayload, 30> pendingUploadPayloads_{};
     std::array<PokemonPayload, 30> cachedCloudPayloads_{};
+    std::array<bool, 30> payloadPrefetchFailed_{};
     std::unordered_map<std::size_t, LocalBoxDraft> localBaselines_;
     std::unordered_map<std::size_t, LocalBoxDraft> localDrafts_;
     std::unordered_map<std::uint16_t, CloudBoxDraft> cloudBoxes_;
+    std::unordered_map<std::uint16_t, u64> cloudPrefetchCooldownUntil_;
+    PartyDraft partyBaseline_;
+    PartyDraft partyWorking_;
     Hand hand_;
     StoragePane storagePane_ = StoragePane::Local;
     bool cloudNameFocused_ = false;
@@ -125,6 +138,7 @@ private:
     RenameController renameController_;
     AsyncJob commitJob_;
     CommitResult commitResult_;
+    bool commitRequested_ = false;
     std::atomic<int> commitPhase_{0};
     std::atomic<int> commitProgress_{0};
     int heldDirection_ = 0;

@@ -9,6 +9,10 @@
 
 void LoadService::begin(Operation operation) {
     if (operation_ != Operation::None) {
+        Logger::instance().warning("LoadService::begin: rejected op="
+                                   + std::to_string(static_cast<int>(operation))
+                                   + ", loader busy with op="
+                                   + std::to_string(static_cast<int>(operation_)));
         return;
     }
     operation_ = operation;
@@ -31,6 +35,7 @@ void LoadService::begin(Operation operation) {
             break;
         case Operation::CloudBox:
             cloudBoxResult = {};
+            resolvedCloudBoxKey = cloudBoxKey;
             phase_.store(Phase::LoadingBank, std::memory_order_release);
             break;
         case Operation::PickupCloud:
@@ -136,7 +141,15 @@ void LoadService::worker(void* argument) {
                     self->openGameResult.localPayloads[slot] =
                         saveAdapter.readPokemon(self->openGameResult.localBox, slot);
                     self->progress_.store(
-                        10 + static_cast<int>((slot + 1) * 80 / 30),
+                        10 + static_cast<int>((slot + 1) * 75 / 30),
+                        std::memory_order_release);
+                }
+                self->openGameResult.localParty = saveAdapter.readParty();
+                for (std::size_t slot = 0; slot < 6; ++slot) {
+                    self->openGameResult.localPartyPayloads[slot] =
+                        saveAdapter.readPartyPokemon(slot);
+                    self->progress_.store(
+                        85 + static_cast<int>((slot + 1) * 15 / 6),
                         std::memory_order_release);
                 }
                 self->progress_.store(100, std::memory_order_release);
@@ -148,7 +161,7 @@ void LoadService::worker(void* argument) {
             self->progress_.store(100, std::memory_order_release);
         } else if (self->operation_ == Operation::CloudBox) {
             self->cloudBoxResult = app.api_.listCloudBox(
-                static_cast<std::uint16_t>(self->cloudBoxKey + 1),
+                static_cast<std::uint16_t>(self->resolvedCloudBoxKey + 1),
                 app.session_.accessToken);
             self->progress_.store(100, std::memory_order_release);
         } else if (self->operation_ == Operation::PickupCloud

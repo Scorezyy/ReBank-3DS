@@ -3,6 +3,13 @@
 #include "save/GameCatalog.hpp"
 
 #include <3ds.h>
+#include <enums/Ability.hpp>
+#include <enums/GameVersion.hpp>
+#include <enums/Gender.hpp>
+#include <enums/Language.hpp>
+#include <enums/Move.hpp>
+#include <enums/Nature.hpp>
+#include <enums/Type.hpp>
 
 #include <array>
 #include <cstddef>
@@ -25,6 +32,14 @@ struct PokemonSummary {
     std::string trainerName;
     std::string gameCode;
     std::uint8_t format = 0;
+    pksm::Type type1 = pksm::Type::Normal;
+    pksm::Type type2 = pksm::Type::Normal;
+    pksm::GameVersion originGame;
+    pksm::Language language = pksm::Language::None;
+    std::array<pksm::Move, 4> moves{};
+    pksm::Ability ability;
+    pksm::Nature nature;
+    pksm::Gender gender = pksm::Gender::Genderless;
 };
 
 struct SaveSummary {
@@ -37,6 +52,11 @@ struct SaveSummary {
 struct PokemonPayload {
     std::uint8_t format = 0;
     std::vector<std::uint8_t> data;
+};
+
+struct BoxRead {
+    std::array<PokemonSummary, 30> summaries{};
+    std::array<PokemonPayload, 30> payloads{};
 };
 
 class SaveAdapter {
@@ -55,6 +75,7 @@ public:
     SaveSummary summary() const;
     std::array<PokemonSummary, 30> readBox(std::size_t box) const;
     PokemonPayload readPokemon(std::size_t box, std::size_t slot) const;
+    BoxRead readBoxFull(std::size_t box) const;
     std::string boxName(std::size_t box) const;
     std::size_t boxCount() const;
     std::size_t currentBox() const;
@@ -70,6 +91,15 @@ public:
         std::uint8_t format,
         const std::vector<std::uint8_t>& data
     );
+    std::array<PokemonSummary, 6> readParty() const;
+    PokemonPayload readPartyPokemon(std::size_t slot) const;
+    std::size_t partyCount() const;
+    bool clearPartySlot(std::size_t slot);
+    bool writePartyPokemon(
+        std::size_t slot,
+        std::uint8_t format,
+        const std::vector<std::uint8_t>& data
+    );
     bool writeSave(std::string& error);
 
 private:
@@ -80,6 +110,7 @@ private:
                     std::size_t size, std::string& error);
     bool validBox(std::size_t box) const;
     bool validSlot(std::size_t box, std::size_t slot) const;
+    bool validPartySlot(std::size_t slot) const;
 
     std::unique_ptr<pksm::Sav> save_;
     std::unique_ptr<Source> source_;

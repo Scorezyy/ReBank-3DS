@@ -232,11 +232,6 @@ std::unique_ptr<pksm::PKX> convertLegacyToG6Stable(const pksm::PKX& source, pksm
     pk6.country(save.country());
     pk6.consoleRegion(save.consoleRegion());
     target->refreshChecksum();
-    Logger::instance().info(
-        "Legacy to Gen 6: ready abilitySlot=" + std::to_string(target->abilityNumber())
-        + " metLevel=" + std::to_string(target->metLevel())
-        + " metLocation=" + std::to_string(target->metLocation())
-        + " encounterType=" + std::to_string(pk6.encounterType()));
     return target;
 }
 

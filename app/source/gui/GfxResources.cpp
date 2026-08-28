@@ -5,15 +5,20 @@ void GfxResources::load() {
     gfxInitDefault();
     gfxSet3D(true);
     C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
-    C2D_Init(C2D_DEFAULT_MAX_OBJECTS);
+    C2D_Init(C2D_DEFAULT_MAX_OBJECTS * 4);
     C2D_Prepare();
     topLeft = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
     topRight = C2D_CreateScreenTarget(GFX_TOP, GFX_RIGHT);
     bottom = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);
-    textBuffer = C2D_TextBufNew(4096);
+    textBuffer = C2D_TextBufNew(16384);
+    textBufferTopA = C2D_TextBufNew(4096);
+    textBufferTopB = C2D_TextBufNew(4096);
     textFont = C2D_FontLoadSystem(CFG_REGION_JPN);
-    if (!textFont) {
-        Logger::instance().warning("Japanese system font could not be loaded");
+    Logger::instance().info(textFont
+        ? "Standard font loaded from the system font archive"
+        : "Using the console's own system font");
+    if (textFont) {
+        C2D_FontSetFilter(textFont, GPU_NEAREST, GPU_LINEAR);
     }
     pokemonSprites = C2D_SpriteSheetLoad("romfs:/assets/pkm_spritesheet.t3x");
     if (!pokemonSprites) {
@@ -42,6 +47,33 @@ void GfxResources::load() {
     Logger::instance().info(iconShinySheet ? "Shiny icon sheet loaded" : "Shiny icon sheet load failed");
     boxNameBarSheet = C2D_SpriteSheetLoad("romfs:/assets/bar_boxname_with_arrows.t3x");
     Logger::instance().info(boxNameBarSheet ? "Box name bar sheet loaded" : "Box name bar sheet load failed");
+    typeBanners = C2D_SpriteSheetLoad("romfs:/assets/types.t3x");
+    Logger::instance().info(typeBanners ? "Type banner sheet loaded" : "Type banner sheet load failed");
+    if (typeBanners) {
+        const C2D_Image typeBannerImage = C2D_SpriteSheetGetImage(typeBanners, 0);
+        if (typeBannerImage.tex) {
+            C3D_TexSetFilter(typeBannerImage.tex, GPU_LINEAR, GPU_LINEAR);
+        }
+    }
+    teamBackground = C2D_SpriteSheetLoad("romfs:/assets/team_bg.t3x");
+    Logger::instance().info(teamBackground ? "Team background sheet loaded" : "Team background sheet load failed");
+    if (teamBackground) {
+        const C2D_Image teamBgImage = C2D_SpriteSheetGetImage(teamBackground, 0);
+        if (teamBgImage.tex) {
+            C3D_TexSetFilter(teamBgImage.tex, GPU_NEAREST, GPU_NEAREST);
+        }
+    }
+    nameDexPlate = C2D_SpriteSheetLoad("romfs:/assets/name_dex_plate.t3x");
+    Logger::instance().info(nameDexPlate ? "Name/dex plate sheet loaded" : "Name/dex plate sheet load failed");
+    infoStripe = C2D_SpriteSheetLoad("romfs:/assets/info_stripe.t3x");
+    Logger::instance().info(infoStripe ? "Info stripe sheet loaded" : "Info stripe sheet load failed");
+    pointSmall = C2D_SpriteSheetLoad("romfs:/assets/point_small.t3x");
+    Logger::instance().info(pointSmall ? "Point small sheet loaded" : "Point small sheet load failed");
+    genderMaleIcon = C2D_SpriteSheetLoad("romfs:/assets/icon_male.t3x");
+    genderFemaleIcon = C2D_SpriteSheetLoad("romfs:/assets/icon_female.t3x");
+    genderlessIcon = C2D_SpriteSheetLoad("romfs:/assets/icon_genderless.t3x");
+    Logger::instance().info(genderMaleIcon && genderFemaleIcon && genderlessIcon
+        ? "Gender icon sheets loaded" : "Gender icon sheet load failed");
 }
 
 GfxResources::~GfxResources() {
@@ -66,10 +98,36 @@ GfxResources::~GfxResources() {
     if (boxNameBarSheet) {
         C2D_SpriteSheetFree(boxNameBarSheet);
     }
+    if (typeBanners) {
+        C2D_SpriteSheetFree(typeBanners);
+    }
+    if (teamBackground) {
+        C2D_SpriteSheetFree(teamBackground);
+    }
+    if (nameDexPlate) {
+        C2D_SpriteSheetFree(nameDexPlate);
+    }
+    if (infoStripe) {
+        C2D_SpriteSheetFree(infoStripe);
+    }
+    if (pointSmall) {
+        C2D_SpriteSheetFree(pointSmall);
+    }
+    if (genderMaleIcon) {
+        C2D_SpriteSheetFree(genderMaleIcon);
+    }
+    if (genderFemaleIcon) {
+        C2D_SpriteSheetFree(genderFemaleIcon);
+    }
+    if (genderlessIcon) {
+        C2D_SpriteSheetFree(genderlessIcon);
+    }
     if (textFont) {
         C2D_FontFree(textFont);
     }
     C2D_TextBufDelete(textBuffer);
+    C2D_TextBufDelete(textBufferTopA);
+    C2D_TextBufDelete(textBufferTopB);
     C2D_Fini();
     C3D_Fini();
     gfxExit();

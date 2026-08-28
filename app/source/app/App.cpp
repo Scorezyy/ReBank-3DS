@@ -4,6 +4,8 @@
 #include "gui/elements/TextMetrics.hpp"
 #include "gui/Theme.hpp"
 
+#include <utils/i18n.hpp>
+
 #include <array>
 #include <cmath>
 #include <cstring>
@@ -21,6 +23,7 @@ App::App(std::string executablePath, bool homebrew)
         Logger::instance().info("Client boot");
         Logger::instance().info("Server " + ServerConfig::baseUrl());
         romfsInit();
+        i18n::init(pksm::Language::ENG);
         music_.play("romfs:/assets/music.ogg");
     resources_.load();
     credentials_.init();
@@ -31,6 +34,7 @@ App::~App() {
     Logger::instance().info("Client shutdown");
     gameSelectScreen_.reset();
     music_.stop();
+    i18n::exit();
     romfsExit();
 }
 
@@ -49,7 +53,13 @@ int App::run() {
 
 void App::update(u32 keysDown, u32 keysHeld, circlePosition circle, touchPosition touch) {
     Logger::instance().flush();
-    if (keysDown & KEY_START) {
+    const bool canExitOnStart = !isLoading()
+        && (screen_ == Screen::Welcome
+            || screen_ == Screen::Login
+            || screen_ == Screen::Register
+            || screen_ == Screen::ResetPassword
+            || screen_ == Screen::GameSelect);
+    if ((keysDown & KEY_START) && canExitOnStart) {
         running_ = false;
         return;
     }
@@ -286,12 +296,21 @@ bool App::isLoading() const {
 }
 
 void App::render() {
-    C2D_TextBufClear(resources_.textBuffer);
     C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
     const float slider = osGet3DSliderState();
+
+    activeTextBuffer_ = resources_.textBufferTopA;
+    C2D_TextBufClear(activeTextBuffer_);
     renderTop(resources_.topLeft, -slider * 2.5F);
+
+    activeTextBuffer_ = resources_.textBufferTopB;
+    C2D_TextBufClear(activeTextBuffer_);
     renderTop(resources_.topRight, slider * 2.5F);
+
+    activeTextBuffer_ = resources_.textBuffer;
+    C2D_TextBufClear(activeTextBuffer_);
     renderBottom();
+
     C3D_FrameEnd(0);
 }
 
@@ -367,27 +386,61 @@ void App::renderBottom() {
     }
 }
 
+namespace {
+    
+void primeTextMode() {
+    C2D_DrawRectSolid(0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0);
+}
+}
+
 void App::drawText(std::string_view value, float x, float y, float size, u32 color) {
+    primeTextMode();
     C2D_Text text;
     const PreparedText prepared = prepareText(value, resources_.textFont);
-    parseText(text, resources_.textFont, resources_.textBuffer, prepared.value);
+    parseText(text, resources_.textFont, activeTextBuffer_, prepared.value);
     const float snappedX = std::round(x);
     const float snappedY = std::round(y);
-    C2D_DrawText(&text, C2D_WithColor, snappedX, snappedY, 0.5F, size, size, color);
-    drawMusicGlyphs(prepared, resources_.textFont, resources_.textBuffer, snappedX, snappedY, size, color);
+    C2D_DrawText(&text, C2D_WithColor, snappedX, snappedY, 0.85F, size, size, color);
+    drawMusicGlyphs(prepared, resources_.textFont, activeTextBuffer_, snappedX, snappedY, size, color);
 }
 
 void App::drawCentered(std::string_view value, float centerX, float y, float size, u32 color) {
+    primeTextMode();
     C2D_Text text;
     const PreparedText prepared = prepareText(value, resources_.textFont);
-    parseText(text, resources_.textFont, resources_.textBuffer, prepared.value);
+    parseText(text, resources_.textFont, activeTextBuffer_, prepared.value);
     float width = 0.0F;
     float height = 0.0F;
     C2D_TextGetDimensions(&text, size, size, &width, &height);
     const float snappedX = std::round(centerX - width * 0.5F);
     const float snappedY = std::round(y);
-    C2D_DrawText(&text, C2D_WithColor, snappedX, snappedY, 0.5F, size, size, color);
-    drawMusicGlyphs(prepared, resources_.textFont, resources_.textBuffer, snappedX, snappedY, size, color);
+    C2D_DrawText(&text, C2D_WithColor, snappedX, snappedY, 0.85F, size, size, color);
+    drawMusicGlyphs(prepared, resources_.textFont, activeTextBuffer_, snappedX, snappedY, size, color);
+}
+
+float App::textWidth(std::string_view value, float size) {
+    primeTextMode();
+    C2D_Text text;
+    const PreparedText prepared = prepareText(value, resources_.textFont);
+    parseText(text, resources_.textFont, activeTextBuffer_, prepared.value);
+    float width = 0.0F;
+    float height = 0.0F;
+    C2D_TextGetDimensions(&text, size, size, &width, &height);
+    return width;
+}
+
+void App::drawRight(std::string_view value, float rightX, float y, float size, u32 color) {
+    primeTextMode();
+    C2D_Text text;
+    const PreparedText prepared = prepareText(value, resources_.textFont);
+    parseText(text, resources_.textFont, activeTextBuffer_, prepared.value);
+    float width = 0.0F;
+    float height = 0.0F;
+    C2D_TextGetDimensions(&text, size, size, &width, &height);
+    const float snappedX = std::round(rightX - width);
+    const float snappedY = std::round(y);
+    C2D_DrawText(&text, C2D_WithColor, snappedX, snappedY, 0.85F, size, size, color);
+    drawMusicGlyphs(prepared, resources_.textFont, activeTextBuffer_, snappedX, snappedY, size, color);
 }
 
 void App::drawButton(const UiRect& rect, std::string_view label, bool primary) {
