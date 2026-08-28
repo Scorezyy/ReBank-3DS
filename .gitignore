@@ -14,3 +14,5 @@ saves/
 .claude/
 .vscode/
 gui_cpp.txt
+assets/3dmodel.cgfx
+assets/3dmodel.glb
