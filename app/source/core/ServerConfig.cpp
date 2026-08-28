@@ -12,6 +12,10 @@
 #error REBANK_SERVER_PORT must be defined by config/server.mk
 #endif
 
+#ifndef REBANK_CLIENT_SECRET
+#error REBANK_CLIENT_SECRET must be defined by config/client-secret.mk (copy config/client-secret.mk.example and fill in a real secret)
+#endif
+
 std::string_view ServerConfig::scheme() {
     return REBANK_SERVER_SCHEME;
 }
@@ -26,4 +30,8 @@ std::uint16_t ServerConfig::port() {
 
 std::string ServerConfig::baseUrl() {
     return std::string(scheme()) + "://" + std::string(host()) + ":" + std::to_string(port());
+}
+
+std::string_view ServerConfig::clientSecret() {
+    return REBANK_CLIENT_SECRET;
 }

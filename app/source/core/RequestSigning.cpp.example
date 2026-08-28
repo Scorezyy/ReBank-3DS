@@ -1,0 +1,19 @@
+#include "core/RequestSigning.hpp"
+#include "core/Hmac.hpp"
+
+namespace RequestSigning {
+
+std::string sign(
+    std::string_view method,
+    std::string_view path,
+    std::string_view version,
+    std::string_view timestamp,
+    const std::string& body,
+    std::string_view secret
+) {
+    const std::string message = std::string(path) + "|" + std::string(method) + "|"
+        + std::string(timestamp) + "|" + std::string(version) + "|" + Hmac::sha256Hex(body);
+    return Hmac::sha256HmacHex(std::string(secret), message);
+}
+
+}

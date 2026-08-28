@@ -136,7 +136,7 @@ void BankInputController::handleCloudNameFocus(u32 keysDown, u32 keysHeld, circl
         ? cached->second
         : ("Bank " + std::to_string(position));
     std::string edited = current;
-    app_.requestText(edited, "Box name", false);
+    app_.requestText(edited, "Box name", false, 16);
     if (!edited.empty() && edited != current) {
         cloudSync_.beginRenameBox(position, edited);
     }
