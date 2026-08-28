@@ -31,11 +31,13 @@ void StorageController::pickUpLocal() {
     session_.hand.active = true;
     session_.hand.source = HandSource::Local;
     session_.hand.sourceIndex = session_.focusedSlot;
+    session_.hand.sourceLocalBox = session_.localBox;
     session_.hand.summary = mon;
     session_.hand.payload = std::move(session_.localPayloads[session_.focusedSlot]);
     session_.hand.payloadKnown = !session_.hand.payload.data.empty();
     session_.localPayloads[session_.focusedSlot] = {};
     session_.storage.set(session_.focusedSlot, PokemonSummary{});
+    ++session_.handGeneration;
     app_.status_ = mon.nickname + " picked up.";
 }
 
@@ -57,6 +59,7 @@ void StorageController::pickUpParty() {
     session_.hand.payloadKnown = !session_.hand.payload.data.empty();
     session_.partyWorking.payloads[session_.focusedSlot] = {};
     session_.partyWorking.summaries[session_.focusedSlot] = PokemonSummary{};
+    ++session_.handGeneration;
     app_.status_ = mon.nickname + " picked up.";
 }
 
@@ -86,11 +89,13 @@ void StorageController::pickUpCloud() {
         session_.hand.payload = {};
         session_.hand.payloadKnown = false;
         session_.cloudPreview[session_.focusedSlot] = {};
+        ++session_.handGeneration;
         app_.status_ = mon.nickname + " picked up.";
         if (!app_.loadService_.running()) {
             app_.loadService_.pickupSlot = session_.focusedSlot;
             app_.loadService_.pickupCloudBox = static_cast<std::uint16_t>(session_.cloudBox + 1);
             app_.loadService_.pickupSummary = mon;
+            app_.loadService_.pickupHandGeneration = session_.handGeneration;
             app_.loadService_.begin(LoadService::Operation::PickupCloud);
         }
         return;
@@ -104,6 +109,7 @@ void StorageController::pickUpCloud() {
     session_.hand.payload = std::move(payload);
     session_.hand.payloadKnown = !session_.hand.payload.data.empty();
     session_.cloudPreview[session_.focusedSlot] = {};
+    ++session_.handGeneration;
     app_.status_ = mon.nickname + " picked up.";
 }
 
@@ -145,7 +151,9 @@ void StorageController::dropLocal() {
         session_.hand.payload = std::move(occupantPayload);
         session_.hand.source = HandSource::Local;
         session_.hand.sourceIndex = session_.focusedSlot;
+        session_.hand.sourceLocalBox = session_.localBox;
         session_.hand.payloadKnown = !session_.hand.payload.data.empty();
+        ++session_.handGeneration;
         app_.status_ = session_.hand.summary.nickname + " swapped.";
         return;
     }
@@ -153,6 +161,7 @@ void StorageController::dropLocal() {
     session_.localPayloads[session_.focusedSlot] = session_.hand.payload;
     app_.status_ = session_.hand.summary.nickname + " placed.";
     session_.hand = Hand{};
+    ++session_.handGeneration;
 }
 
 void StorageController::dropParty() {
@@ -173,6 +182,7 @@ void StorageController::dropParty() {
         session_.hand.source = HandSource::Party;
         session_.hand.sourceIndex = session_.focusedSlot;
         session_.hand.payloadKnown = !session_.hand.payload.data.empty();
+        ++session_.handGeneration;
         app_.status_ = session_.hand.summary.nickname + " swapped.";
         return;
     }
@@ -180,6 +190,7 @@ void StorageController::dropParty() {
     session_.partyWorking.payloads[session_.focusedSlot] = session_.hand.payload;
     app_.status_ = session_.hand.summary.nickname + " placed.";
     session_.hand = Hand{};
+    ++session_.handGeneration;
 }
 
 void StorageController::dropCloud() {
@@ -198,6 +209,7 @@ void StorageController::dropCloud() {
             app_.loadService_.pickupSlot = session_.focusedSlot;
             app_.loadService_.pickupCloudBox = static_cast<std::uint16_t>(session_.cloudBox + 1);
             app_.loadService_.pickupSummary = session_.cloudPreview[session_.focusedSlot];
+            app_.loadService_.pickupHandGeneration = session_.handGeneration;
             app_.status_ = "Fetching occupant...";
             app_.loadService_.begin(LoadService::Operation::SwapCloud);
             return;
@@ -214,14 +226,26 @@ void StorageController::dropCloud() {
         session_.hand.sourceIndex = session_.focusedSlot;
         session_.hand.sourceCloudBox = static_cast<std::uint16_t>(session_.cloudBox + 1);
         session_.hand.payloadKnown = !session_.hand.payload.data.empty();
+        ++session_.handGeneration;
         app_.status_ = session_.hand.summary.nickname + " swapped.";
         return;
     }
     session_.cloudPreview[session_.focusedSlot] = session_.hand.summary;
     PokemonPayload payload = session_.hand.payload;
     session_.pendingUploadPayloads[session_.focusedSlot] = std::move(payload);
+    ++session_.handGeneration;
     app_.status_ = session_.hand.summary.nickname + " placed.";
     session_.hand = Hand{};
+}
+
+LocalBoxDraft& StorageController::localDraftForWrite(std::size_t box) {
+    auto draftIt = session_.localDrafts.find(box);
+    if (draftIt != session_.localDrafts.end()) {
+        return draftIt->second;
+    }
+    const auto baselineIt = session_.localBaselines.find(box);
+    LocalBoxDraft draft = baselineIt != session_.localBaselines.end() ? baselineIt->second : LocalBoxDraft{};
+    return session_.localDrafts.emplace(box, std::move(draft)).first->second;
 }
 
 void StorageController::returnHand() {
@@ -229,19 +253,37 @@ void StorageController::returnHand() {
         return;
     }
     if (session_.hand.source == HandSource::Local) {
-        session_.storage.set(session_.hand.sourceIndex, session_.hand.summary);
-        session_.localPayloads[session_.hand.sourceIndex] = session_.hand.payload;
+        if (session_.hand.sourceLocalBox == session_.localBox) {
+            session_.storage.set(session_.hand.sourceIndex, session_.hand.summary);
+            session_.localPayloads[session_.hand.sourceIndex] = session_.hand.payload;
+        } else {
+            LocalBoxDraft& draft = localDraftForWrite(session_.hand.sourceLocalBox);
+            draft.summaries[session_.hand.sourceIndex] = session_.hand.summary;
+            draft.payloads[session_.hand.sourceIndex] = session_.hand.payload;
+        }
     } else if (session_.hand.source == HandSource::Party) {
         session_.partyWorking.summaries[session_.hand.sourceIndex] = session_.hand.summary;
         session_.partyWorking.payloads[session_.hand.sourceIndex] = session_.hand.payload;
     } else {
-        session_.cloudPreview[session_.hand.sourceIndex] = session_.hand.summary;
-        if (!session_.hand.payload.data.empty()) {
-            session_.cachedCloudPayloads[session_.hand.sourceIndex] = session_.hand.payload;
+        const auto boxKey = static_cast<std::uint16_t>(session_.hand.sourceCloudBox - 1);
+        if (boxKey == static_cast<std::uint16_t>(session_.cloudBox)) {
+            session_.cloudPreview[session_.hand.sourceIndex] = session_.hand.summary;
+            if (!session_.hand.payload.data.empty()) {
+                session_.cachedCloudPayloads[session_.hand.sourceIndex] = session_.hand.payload;
+            }
+        } else {
+            auto boxIt = session_.cloudBoxes.find(boxKey);
+            if (boxIt != session_.cloudBoxes.end()) {
+                boxIt->second.summaries[session_.hand.sourceIndex] = session_.hand.summary;
+                if (!session_.hand.payload.data.empty()) {
+                    boxIt->second.payloads[session_.hand.sourceIndex] = session_.hand.payload;
+                }
+            }
         }
     }
     app_.status_ = "Returned to slot " + std::to_string(session_.hand.sourceIndex + 1) + ".";
     session_.hand = Hand{};
+    ++session_.handGeneration;
 }
 
 bool StorageController::localBoxDiffers(const LocalBoxDraft& a, const LocalBoxDraft& b, std::size_t slot) const {

@@ -96,10 +96,6 @@ void BankInputController::handleBoxShoulder(u32 keysDown) {
     if (!((keysDown & KEY_L) || (keysDown & KEY_R))) {
         return;
     }
-    if (session_.hand.active) {
-        app_.status_ = "Drop the Pokemon first.";
-        return;
-    }
     if (session_.storagePane == StoragePane::Party) {
         return;
     }

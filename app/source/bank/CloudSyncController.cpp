@@ -17,6 +17,7 @@ void CloudSyncController::pumpHandPayloadFetch() {
     app_.loadService_.pickupSlot = session_.hand.sourceIndex;
     app_.loadService_.pickupCloudBox = session_.hand.sourceCloudBox;
     app_.loadService_.pickupSummary = session_.hand.summary;
+    app_.loadService_.pickupHandGeneration = session_.handGeneration;
     app_.loadService_.begin(LoadService::Operation::PickupCloud);
 }
 
@@ -80,7 +81,11 @@ bool CloudSyncController::nextCloudPrefetchKey(std::uint16_t& outKey) const {
 }
 
 void CloudSyncController::pumpCloudPrefetch() {
-    if (session_.hand.active || commit_.requested() || session_.storagePane != StoragePane::Cloud) {
+    // Not gated on session_.hand.active: the player can switch cloud boxes
+    // while holding a Pokemon, so a box they navigate to still needs to load
+    // even mid-drag. blockedByOtherWork() already serializes this against
+    // any in-flight hand-payload fetch.
+    if (commit_.requested() || session_.storagePane != StoragePane::Cloud) {
         return;
     }
     if (blockedByOtherWork()) {
@@ -131,7 +136,8 @@ void CloudSyncController::onCloudPickupCompleted() {
     const bool stillHeld = session_.hand.active
         && session_.hand.source == HandSource::Cloud
         && session_.hand.sourceIndex == app_.loadService_.pickupSlot
-        && !session_.hand.payloadKnown;
+        && !session_.hand.payloadKnown
+        && session_.handGeneration == app_.loadService_.pickupHandGeneration;
     DownloadResult& result = app_.loadService_.pickupResult;
     if (result.success) {
         PokemonPayload payload;
@@ -183,10 +189,17 @@ void CloudSyncController::onCloudSwapCompleted() {
         Logger::instance().warning("Cloud swap failed: " + result.message);
         return;
     }
-    if (app_.loadService_.pickupCloudBox != static_cast<std::uint16_t>(session_.cloudBox + 1)) {
+    const bool stillValid = session_.hand.active
+        && session_.handGeneration == app_.loadService_.pickupHandGeneration;
+    if (!stillValid || app_.loadService_.pickupCloudBox != static_cast<std::uint16_t>(session_.cloudBox + 1)) {
+        // The hand was returned/replaced, or the box changed, while this
+        // fetch was in flight. Applying it now would blindly overwrite this
+        // slot with whatever (or nothing) the hand holds today, and could
+        // silently duplicate/replace an unrelated Pokemon. Just cache the
+        // fetched occupant payload for later instead.
         session_.cachedCloudPayloads[app_.loadService_.pickupSlot].format = result.pokemon.format;
         session_.cachedCloudPayloads[app_.loadService_.pickupSlot].data = std::move(result.pokemon.payload);
-        app_.status_ = "Box changed, swap cancelled.";
+        app_.status_ = stillValid ? "Box changed, swap cancelled." : "Swap cancelled.";
         return;
     }
     PokemonPayload occupantPayload;
@@ -201,6 +214,7 @@ void CloudSyncController::onCloudSwapCompleted() {
     session_.hand.sourceIndex = app_.loadService_.pickupSlot;
     session_.hand.sourceCloudBox = static_cast<std::uint16_t>(session_.cloudBox + 1);
     session_.hand.payloadKnown = !session_.hand.payload.data.empty();
+    ++session_.handGeneration;
     app_.status_ = session_.hand.summary.nickname + " swapped.";
 }
 
