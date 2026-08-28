@@ -464,11 +464,12 @@ void App::requestText(std::string& destination, std::string_view hint, bool pass
     SwkbdState keyboard;
     std::array<char, 257> buffer{};
     std::strncpy(buffer.data(), destination.c_str(), buffer.size() - 1);
-    swkbdInit(&keyboard, password ? SWKBD_TYPE_QWERTY : SWKBD_TYPE_NORMAL, 2, 256);
+    swkbdInit(&keyboard, SWKBD_TYPE_NORMAL, 2, 256);
     std::string ownedHint(hint);
     swkbdSetHintText(&keyboard, ownedHint.c_str());
     swkbdSetValidation(&keyboard, SWKBD_NOTEMPTY_NOTBLANK, 0, 0);
     if (password) {
+        swkbdSetFeatures(&keyboard, SWKBD_DEFAULT_QWERTY);
         swkbdSetPasswordMode(&keyboard, SWKBD_PASSWORD_HIDE_DELAY);
     }
     if (swkbdInputText(&keyboard, buffer.data(), buffer.size()) == SWKBD_BUTTON_CONFIRM) {
