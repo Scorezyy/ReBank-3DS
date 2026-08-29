@@ -48,12 +48,6 @@ pksm::Generation generationFromFormat(std::uint8_t format) {
     }
 }
 
-// Delegates to PKSM-Core's own PKX::convertToG5/G6/G7 - the exact same
-// conversion machinery PKSM itself uses for its Bank. Each override already
-// chains through the intermediate generations correctly (e.g. a Gen 4 mon
-// going to Gen 6 is internally converted 4->5->6, matching how a real
-// Pal Park + Poke Transporter transfer works), so this only needs to pick
-// the right top-level call.
 std::unique_ptr<pksm::PKX> convertForSave(
     const pksm::PKX& source,
     std::uint8_t sourceFormat,

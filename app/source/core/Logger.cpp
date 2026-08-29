@@ -7,7 +7,7 @@
 #include <sys/stat.h>
 
 namespace {
-constexpr std::size_t MaximumEntries = 40;
+constexpr std::size_t MaximumEntries = 4000;
 
 const char* label(LogLevel level) {
     switch (level) {
