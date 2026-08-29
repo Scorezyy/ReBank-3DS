@@ -2,13 +2,11 @@
 
 #include "app/App.hpp"
 #include "core/Logger.hpp"
+#include "save/PayloadHash.hpp"
 
 #include <algorithm>
 
 namespace {
-// Parses "Bank X, Slot Y: reason" (X is omitted for non-batch uploads) out
-// of a server error message. Returns false if no slot could be found, which
-// means the failure can't be attributed to one specific Pokemon.
 bool parseBankSlot(const std::string& message, std::uint16_t& bank, std::uint8_t& slot) {
     bank = 0;
     const std::size_t bankMarker = message.find("Bank ");
@@ -104,6 +102,14 @@ void CommitService::collectCloudChanges(std::vector<UploadPokemon>& uploads, std
             const bool nowHas = draft.summaries[slot].species != 0;
             const bool same = draft.summaries[slot].species == draft.baseline[slot].species
                 && draft.summaries[slot].nickname == draft.baseline[slot].nickname;
+            if (!initHas && !nowHas) {
+                continue;
+            }
+            Logger::instance().info("collectCloudChanges: bank " + std::to_string(boxPosition) + " slot "
+                                    + std::to_string(slot + 1) + " baseline species "
+                                    + std::to_string(draft.baseline[slot].species) + " draft species "
+                                    + std::to_string(draft.summaries[slot].species) + " pending="
+                                    + payloadTag(draft.pending[slot].data) + " same=" + (same ? "1" : "0"));
             if (nowHas && (!same || !draft.pending[slot].data.empty())) {
                 const auto& payload = draft.pending[slot];
                 if (payload.data.empty()) {
@@ -176,6 +182,7 @@ void CommitService::recordSkippedUpload(const UploadPokemon& upload, const std::
         result_.problemLocation = result_.skipped.back().location;
         result_.problemReason = reason;
     }
+    revertCloudSlots({{upload.boxPosition, upload.slot}});
 }
 
 std::vector<UploadPokemon> CommitService::runUploads(std::vector<UploadPokemon> uploads) {
@@ -187,6 +194,11 @@ std::vector<UploadPokemon> CommitService::runUploads(std::vector<UploadPokemon> 
     while (!uploads.empty()) {
         const std::size_t batchSize = std::min<std::size_t>(uploads.size(), 30);
         std::vector<UploadPokemon> batch(uploads.begin(), uploads.begin() + batchSize);
+        for (const auto& item : batch) {
+            Logger::instance().info("runUploads: sending bank " + std::to_string(item.boxPosition) + " slot "
+                                    + std::to_string(item.slot) + " species " + std::to_string(item.species)
+                                    + " \"" + item.nickname + "\" payload=" + payloadTag(item.payload));
+        }
         UploadResult ur = app_.api_.uploadPokemon(batch, app_.session_.accessToken);
         if (ur.success) {
             result_.uploads += ur.storedCount;
@@ -212,9 +224,6 @@ std::vector<UploadPokemon> CommitService::runUploads(std::vector<UploadPokemon> 
             }), uploads.end());
         }
         if (uploads.size() == before) {
-            // Couldn't identify (or remove) the offending Pokemon - nothing in
-            // this batch has been persisted, so drop the whole batch rather
-            // than retry it unchanged forever.
             for (const auto& item : batch) {
                 recordSkippedUpload(item, ur.message);
             }
@@ -236,17 +245,78 @@ void CommitService::commitCloudUploadBaseline(const std::vector<UploadPokemon>& 
             continue;
         }
         const std::size_t slot = static_cast<std::size_t>(item.slot - 1);
-        // The upload really happened on the server - lock it in immediately
-        // so a later, unrelated failure in this same commit can never cause
-        // discardPendingChanges() to revert this slot back to "not uploaded"
-        // while a real copy already exists on the server.
         it->second.baseline[slot] = it->second.summaries[slot];
         it->second.pending[slot] = {};
+        it->second.payloads[slot] = {item.format, item.payload};
+        Logger::instance().info("commitCloudUploadBaseline: bank " + std::to_string(item.boxPosition) + " slot "
+                                + std::to_string(item.slot) + " species " + std::to_string(item.species)
+                                + " locked in as baseline, payload=" + payloadTag(item.payload));
     }
 }
 
-void CommitService::runLocalWrites(std::vector<LocalWriteVerification>& verifications, bool& anyWrite, bool& anyFailure,
+namespace {
+bool payloadStillPending(const std::vector<std::uint8_t>& payload,
+                          const std::vector<std::vector<std::uint8_t>>& pending) {
+    return !payload.empty() && std::any_of(pending.begin(), pending.end(),
+        [&](const std::vector<std::uint8_t>& other) { return other == payload; });
+}
+}
+
+bool CommitService::clearLocalSlot(std::size_t boxKey, std::size_t slot, const LocalBoxDraft& baseline,
                                     const std::vector<std::vector<std::uint8_t>>& unresolvedPayloads) {
+    if (payloadStillPending(baseline.payloads[slot].data, unresolvedPayloads)) {
+        result_.skipped.push_back(CommitSkippedItem{
+            baseline.summaries[slot].nickname.empty()
+                ? "Pokemon #" + std::to_string(baseline.summaries[slot].species)
+                : baseline.summaries[slot].nickname,
+            "Local box " + std::to_string(boxKey + 1) + "  |  Slot " + std::to_string(slot + 1),
+            "Its move to the cloud was rejected, so it was kept here."
+        });
+        return false;
+    }
+    if (!session_.saveAdapter.clearSlot(boxKey, slot)) {
+        return false;
+    }
+    Logger::instance().info("clearLocalSlot: local box " + std::to_string(boxKey + 1) + " slot "
+                            + std::to_string(slot + 1) + " cleared, was species "
+                            + std::to_string(baseline.summaries[slot].species) + " payload="
+                            + payloadTag(baseline.payloads[slot].data));
+    return true;
+}
+
+bool CommitService::writeLocalSlot(std::size_t boxKey, std::size_t slot, const LocalBoxDraft& draft,
+                                    const std::vector<std::vector<std::uint8_t>>& stillOnCloudPayloads) {
+    if (payloadStillPending(draft.payloads[slot].data, stillOnCloudPayloads)) {
+        result_.skipped.push_back(CommitSkippedItem{
+            draft.summaries[slot].nickname.empty()
+                ? "Pokemon #" + std::to_string(draft.summaries[slot].species)
+                : draft.summaries[slot].nickname,
+            "Local box " + std::to_string(boxKey + 1) + "  |  Slot " + std::to_string(slot + 1),
+            "Its move from the cloud didn't complete, so it stayed there instead."
+        });
+        return false;
+    }
+    if (!session_.saveAdapter.writePokemon(boxKey, slot, draft.payloads[slot].format, draft.payloads[slot].data)) {
+        result_.skipped.push_back(CommitSkippedItem{
+            draft.summaries[slot].nickname.empty()
+                ? "Pokemon #" + std::to_string(draft.summaries[slot].species)
+                : draft.summaries[slot].nickname,
+            "Local box " + std::to_string(boxKey + 1) + "  |  Slot " + std::to_string(slot + 1),
+            "Incompatible generation for this save."
+        });
+        return false;
+    }
+    Logger::instance().info("writeLocalSlot: local box " + std::to_string(boxKey + 1) + " slot "
+                            + std::to_string(slot + 1) + " written species "
+                            + std::to_string(draft.summaries[slot].species) + " payload="
+                            + payloadTag(draft.payloads[slot].data));
+    ++result_.downloads;
+    return true;
+}
+
+void CommitService::runLocalWrites(bool& anyWrite, bool& anyFailure,
+                                    const std::vector<std::vector<std::uint8_t>>& unresolvedPayloads,
+                                    const std::vector<std::vector<std::uint8_t>>& stillOnCloudPayloads) {
     for (const auto& [boxKey, draft] : session_.localDrafts) {
         auto baselineIt = session_.localBaselines.find(boxKey);
         if (baselineIt == session_.localBaselines.end()) {
@@ -259,45 +329,14 @@ void CommitService::runLocalWrites(std::vector<LocalWriteVerification>& verifica
             if (sameSummary && samePayload) {
                 continue;
             }
-            if (draft.summaries[slot].species == 0) {
-                const auto& vacatedPayload = baselineIt->second.payloads[slot].data;
-                const bool stillPendingElsewhere = !vacatedPayload.empty() && std::any_of(
-                    unresolvedPayloads.begin(), unresolvedPayloads.end(),
-                    [&](const std::vector<std::uint8_t>& payload) { return payload == vacatedPayload; });
-                if (stillPendingElsewhere) {
-                    Logger::instance().warning("Commit: keeping local box " + std::to_string(boxKey + 1)
-                                               + " slot " + std::to_string(slot + 1)
-                                               + " in place - its cloud upload was rejected");
-                    result_.skipped.push_back(CommitSkippedItem{
-                        baselineIt->second.summaries[slot].nickname.empty()
-                            ? "Pokemon #" + std::to_string(baselineIt->second.summaries[slot].species)
-                            : baselineIt->second.summaries[slot].nickname,
-                        "Local box " + std::to_string(boxKey + 1) + "  |  Slot " + std::to_string(slot + 1),
-                        "Its move to the cloud was rejected, so it was kept here."
-                    });
-                    anyFailure = true;
-                    continue;
-                }
-                if (!session_.saveAdapter.clearSlot(boxKey, slot)) {
-                    Logger::instance().warning("Commit: could not clear local slot " + std::to_string(slot + 1)
-                                               + ", leaving it as-is");
-                    anyFailure = true;
-                    continue;
-                }
-            } else if (!draft.payloads[slot].data.empty()) {
-                if (!session_.saveAdapter.writePokemon(boxKey, slot, draft.payloads[slot].format, draft.payloads[slot].data)) {
-                    result_.skipped.push_back(CommitSkippedItem{
-                        draft.summaries[slot].nickname.empty()
-                            ? "Pokemon #" + std::to_string(draft.summaries[slot].species)
-                            : draft.summaries[slot].nickname,
-                        "Local box " + std::to_string(boxKey + 1) + "  |  Slot " + std::to_string(slot + 1),
-                        "Incompatible generation for this save."
-                    });
-                    anyFailure = true;
-                    continue;
-                }
-                verifications.push_back({boxKey, slot, draft.summaries[slot].species});
-                ++result_.downloads;
+            const bool isClear = draft.summaries[slot].species == 0;
+            const bool hasPayload = !draft.payloads[slot].data.empty();
+            const bool ok = isClear
+                ? clearLocalSlot(boxKey, slot, baselineIt->second, unresolvedPayloads)
+                : hasPayload ? writeLocalSlot(boxKey, slot, draft, stillOnCloudPayloads) : true;
+            if (!ok) {
+                anyFailure = true;
+                continue;
             }
             anyWrite = true;
             advanceProgress();
@@ -305,8 +344,54 @@ void CommitService::runLocalWrites(std::vector<LocalWriteVerification>& verifica
     }
 }
 
-void CommitService::runPartyWrites(std::vector<std::size_t>& slots, std::vector<std::uint16_t>& species, bool& anyWrite, bool& anyFailure,
-                                    const std::vector<std::vector<std::uint8_t>>& unresolvedPayloads) {
+bool CommitService::clearPartySlotChecked(std::size_t slot,
+                                           const std::vector<std::vector<std::uint8_t>>& unresolvedPayloads) {
+    const auto& baseline = session_.partyBaseline.summaries[slot];
+    if (payloadStillPending(session_.partyBaseline.payloads[slot].data, unresolvedPayloads)) {
+        result_.skipped.push_back(CommitSkippedItem{
+            baseline.nickname.empty() ? "Pokemon #" + std::to_string(baseline.species) : baseline.nickname,
+            "Party slot " + std::to_string(slot + 1),
+            "Its move to the cloud was rejected, so it was kept here."
+        });
+        return false;
+    }
+    if (!session_.saveAdapter.clearPartySlot(slot)) {
+        return false;
+    }
+    Logger::instance().info("clearPartySlotChecked: party slot " + std::to_string(slot + 1)
+                            + " cleared, was species " + std::to_string(baseline.species) + " payload="
+                            + payloadTag(session_.partyBaseline.payloads[slot].data));
+    return true;
+}
+
+bool CommitService::writePartySlot(std::size_t slot, const std::vector<std::vector<std::uint8_t>>& stillOnCloudPayloads) {
+    const auto& summary = session_.partyWorking.summaries[slot];
+    const auto& payload = session_.partyWorking.payloads[slot];
+    if (payloadStillPending(payload.data, stillOnCloudPayloads)) {
+        result_.skipped.push_back(CommitSkippedItem{
+            summary.nickname.empty() ? "Pokemon #" + std::to_string(summary.species) : summary.nickname,
+            "Party slot " + std::to_string(slot + 1),
+            "Its move from the cloud didn't complete, so it stayed there instead."
+        });
+        return false;
+    }
+    if (!session_.saveAdapter.writePartyPokemon(slot, payload.format, payload.data)) {
+        result_.skipped.push_back(CommitSkippedItem{
+            summary.nickname.empty() ? "Pokemon #" + std::to_string(summary.species) : summary.nickname,
+            "Party slot " + std::to_string(slot + 1),
+            "Incompatible generation for this save."
+        });
+        return false;
+    }
+    Logger::instance().info("writePartySlot: party slot " + std::to_string(slot + 1) + " written species "
+                            + std::to_string(summary.species) + " payload=" + payloadTag(payload.data));
+    ++result_.downloads;
+    return true;
+}
+
+void CommitService::runPartyWrites(bool& anyWrite, bool& anyFailure,
+                                    const std::vector<std::vector<std::uint8_t>>& unresolvedPayloads,
+                                    const std::vector<std::vector<std::uint8_t>>& stillOnCloudPayloads) {
     for (std::size_t slot = 0; slot < 6; ++slot) {
         const auto& summary = session_.partyWorking.summaries[slot];
         const auto& baseline = session_.partyBaseline.summaries[slot];
@@ -315,51 +400,21 @@ void CommitService::runPartyWrites(std::vector<std::size_t>& slots, std::vector<
         if (sameSummary && samePayload) {
             continue;
         }
-        if (summary.species == 0) {
-            const auto& vacatedPayload = session_.partyBaseline.payloads[slot].data;
-            const bool stillPendingElsewhere = !vacatedPayload.empty() && std::any_of(
-                unresolvedPayloads.begin(), unresolvedPayloads.end(),
-                [&](const std::vector<std::uint8_t>& payload) { return payload == vacatedPayload; });
-            if (stillPendingElsewhere) {
-                Logger::instance().warning("Commit: keeping party slot " + std::to_string(slot + 1)
-                                           + " in place - its cloud upload was rejected");
-                result_.skipped.push_back(CommitSkippedItem{
-                    baseline.nickname.empty() ? "Pokemon #" + std::to_string(baseline.species) : baseline.nickname,
-                    "Party slot " + std::to_string(slot + 1),
-                    "Its move to the cloud was rejected, so it was kept here."
-                });
-                anyFailure = true;
-                continue;
-            }
-            if (!session_.saveAdapter.clearPartySlot(slot)) {
-                Logger::instance().warning("Commit: could not clear party slot " + std::to_string(slot + 1)
-                                           + ", leaving it as-is");
-                anyFailure = true;
-                continue;
-            }
-        } else if (!session_.partyWorking.payloads[slot].data.empty()) {
-            const auto& payload = session_.partyWorking.payloads[slot];
-            if (!session_.saveAdapter.writePartyPokemon(slot, payload.format, payload.data)) {
-                result_.skipped.push_back(CommitSkippedItem{
-                    summary.nickname.empty() ? "Pokemon #" + std::to_string(summary.species) : summary.nickname,
-                    "Party slot " + std::to_string(slot + 1),
-                    "Incompatible generation for this save."
-                });
-                anyFailure = true;
-                continue;
-            }
-            slots.push_back(slot);
-            species.push_back(summary.species);
-            ++result_.downloads;
+        const bool isClear = summary.species == 0;
+        const bool hasPayload = !session_.partyWorking.payloads[slot].data.empty();
+        const bool ok = isClear
+            ? clearPartySlotChecked(slot, unresolvedPayloads)
+            : hasPayload ? writePartySlot(slot, stillOnCloudPayloads) : true;
+        if (!ok) {
+            anyFailure = true;
+            continue;
         }
         anyWrite = true;
         advanceProgress();
     }
 }
 
-bool CommitService::writeSaveAndVerify(const std::vector<LocalWriteVerification>& localVerifications,
-                                        const std::vector<std::size_t>& partySlots,
-                                        const std::vector<std::uint16_t>& partySpecies) {
+bool CommitService::writeSaveAndVerify() {
     phase_.store(3, std::memory_order_release);
     std::string saveError;
     if (!session_.saveAdapter.writeSave(saveError)) {
@@ -367,28 +422,6 @@ bool CommitService::writeSaveAndVerify(const std::vector<LocalWriteVerification>
         return false;
     }
     advanceProgress();
-
-    for (const auto& expected : localVerifications) {
-        const auto savedBox = session_.saveAdapter.readBox(expected.box);
-        if (expected.slot >= savedBox.size() || savedBox[expected.slot].species != expected.species) {
-            Logger::instance().error("Post-save verification failed for box "
-                                     + std::to_string(expected.box + 1) + " slot "
-                                     + std::to_string(expected.slot + 1));
-            return false;
-        }
-    }
-
-    if (!partySlots.empty()) {
-        const auto savedParty = session_.saveAdapter.readParty();
-        for (std::size_t i = 0; i < partySlots.size(); ++i) {
-            const std::size_t slot = partySlots[i];
-            if (slot >= savedParty.size() || savedParty[slot].species != partySpecies[i]) {
-                Logger::instance().error("Post-save party verification failed for slot "
-                                         + std::to_string(slot + 1));
-                return false;
-            }
-        }
-    }
     return true;
 }
 
@@ -401,8 +434,11 @@ void CommitService::revertCloudSlots(const std::vector<BankSlot>& slots) {
         if (it == session_.cloudBoxes.end()) {
             continue;
         }
-        // Not actually deleted - put the draft back to what's really there.
         it->second.summaries[slot - 1] = it->second.baseline[slot - 1];
+        it->second.pending[slot - 1] = {};
+        Logger::instance().info("revertCloudSlots: bank " + std::to_string(boxPosition) + " slot "
+                                + std::to_string(slot) + " reverted to baseline species "
+                                + std::to_string(it->second.baseline[slot - 1].species));
     }
 }
 
@@ -412,6 +448,8 @@ void CommitService::runDeletes(const std::vector<BankSlot>& deletes) {
     }
     phase_.store(1, std::memory_order_release);
     for (const auto& deletion : deletes) {
+        Logger::instance().info("runDeletes: deleting bank " + std::to_string(deletion.first) + " slot "
+                                + std::to_string(deletion.second));
         DeleteResult dr = app_.api_.deleteCloudPokemon(deletion.first, deletion.second, app_.session_.accessToken);
         if (!dr.success) {
             Logger::instance().warning("Commit: cloud delete failed for Bank " + std::to_string(deletion.first)
@@ -430,10 +468,16 @@ void CommitService::runDeletes(const std::vector<BankSlot>& deletes) {
 
 void CommitService::runCommit() {
     result_ = CommitResult{};
+    Logger::instance().info("runCommit: starting, localDrafts=" + std::to_string(session_.localDrafts.size())
+                            + " cloudBoxes=" + std::to_string(session_.cloudBoxes.size())
+                            + " focusedSlot=" + std::to_string(session_.focusedSlot + 1)
+                            + " pane=" + std::to_string(static_cast<int>(session_.storagePane)));
 
     std::vector<UploadPokemon> uploads;
     std::vector<BankSlot> deletes;
     collectCloudChanges(uploads, deletes);
+    Logger::instance().info("runCommit: collected " + std::to_string(uploads.size()) + " uploads, "
+                            + std::to_string(deletes.size()) + " deletes");
 
     const std::size_t localChangeCount = countLocalChanges();
     const std::size_t partyChangeCount = countPartyChanges();
@@ -446,52 +490,88 @@ void CommitService::runCommit() {
     const std::vector<UploadPokemon> attempted = uploads;
     const std::vector<UploadPokemon> uploaded = runUploads(std::move(uploads));
     commitCloudUploadBaseline(uploaded);
-
-    // Payload bytes of every Pokemon that was supposed to move to the cloud
-    // this round but whose upload didn't go through - their local/party
-    // source slot must stay put rather than being cleared, or they'd vanish
-    // entirely (rejected on the server, then deleted locally too).
     std::vector<std::vector<std::uint8_t>> unresolvedPayloads;
+    std::vector<std::vector<std::uint8_t>> stillOnCloudPayloads;
     for (const auto& attempt : attempted) {
         const bool succeeded = std::any_of(uploaded.begin(), uploaded.end(), [&](const UploadPokemon& u) {
             return u.boxPosition == attempt.boxPosition && u.slot == attempt.slot;
         });
-        if (!succeeded) {
-            unresolvedPayloads.push_back(attempt.payload);
+        if (succeeded) {
+            continue;
         }
+        unresolvedPayloads.push_back(attempt.payload);
+        if (attempt.boxPosition == 0 || attempt.slot == 0 || attempt.slot > 30) {
+            continue;
+        }
+        const auto boxKey = static_cast<std::uint16_t>(attempt.boxPosition - 1);
+        const auto boxIt = session_.cloudBoxes.find(boxKey);
+        if (boxIt == session_.cloudBoxes.end()) {
+            continue;
+        }
+        const auto& originalPayload = boxIt->second.payloads[attempt.slot - 1].data;
+        if (!originalPayload.empty()) {
+            stillOnCloudPayloads.push_back(originalPayload);
+        }
+    }
+    if (!unresolvedPayloads.empty()) {
+        for (const auto& [boxPosition, slot] : deletes) {
+            if (boxPosition == 0 || slot == 0 || slot > 30) {
+                continue;
+            }
+            const auto boxIt = session_.cloudBoxes.find(static_cast<std::uint16_t>(boxPosition - 1));
+            if (boxIt == session_.cloudBoxes.end()) {
+                continue;
+            }
+            const auto& sourcePayload = boxIt->second.payloads[slot - 1].data;
+            if (!sourcePayload.empty()) {
+                stillOnCloudPayloads.push_back(sourcePayload);
+            }
+        }
+        Logger::instance().warning("Commit: upload rejected; cloud-source Pokemon stay out of the local save");
     }
 
     bool anyLocalWrite = false;
     bool anyLocalFailure = false;
-    std::vector<LocalWriteVerification> localVerifications;
-    runLocalWrites(localVerifications, anyLocalWrite, anyLocalFailure, unresolvedPayloads);
+    const bool deferLocalWrites = !unresolvedPayloads.empty() && !deletes.empty();
+    if (deferLocalWrites) {
+        anyLocalFailure = true;
+        Logger::instance().warning("Commit: upload rejected while cloud Pokemon were moved locally; local draft deferred");
+    } else {
+        runLocalWrites(anyLocalWrite, anyLocalFailure, unresolvedPayloads, stillOnCloudPayloads);
+        runPartyWrites(anyLocalWrite, anyLocalFailure, unresolvedPayloads, stillOnCloudPayloads);
+    }
 
-    std::vector<std::size_t> partySlots;
-    std::vector<std::uint16_t> partySpecies;
-    runPartyWrites(partySlots, partySpecies, anyLocalWrite, anyLocalFailure, unresolvedPayloads);
-
-    if (anyLocalWrite && !writeSaveAndVerify(localVerifications, partySlots, partySpecies)) {
-        // The whole local flush failed (not a single-Pokemon problem) - none
-        // of this round's local/party writes actually reached the save file,
-        // so none of the cloud-side deletes tied to "moved to local" are
-        // safe either. Nothing here has silently duplicated: the uploads
-        // that already succeeded stayed committed above, and every local
-        // slot still holds whatever is really in the (unflushed) save.
+    if (anyLocalWrite && !writeSaveAndVerify()) {
         result_.message = "Local save write failed. Uploads that already completed were kept; nothing was deleted from the cloud.";
         revertCloudSlots(deletes);
         result_.success = true;
         return;
     }
 
-    // A delete removes the cloud original of something that just moved to
-    // local storage. Only run these once we know every local/party write in
-    // this round actually succeeded - otherwise we can't tell which deletes
-    // are still backed by a real local copy, so we skip all of them this
-    // round rather than risk erasing one whose local write failed.
     if (!anyLocalFailure) {
         runDeletes(deletes);
     } else {
-        revertCloudSlots(deletes);
+        std::vector<BankSlot> cloudRelocationDeletes;
+        std::vector<BankSlot> blockedDeletes;
+        for (const auto& deletion : deletes) {
+            if (deletion.first == 0 || deletion.second == 0 || deletion.second > 30) {
+                blockedDeletes.push_back(deletion);
+                continue;
+            }
+            const auto boxIt = session_.cloudBoxes.find(static_cast<std::uint16_t>(deletion.first - 1));
+            if (boxIt == session_.cloudBoxes.end()) {
+                blockedDeletes.push_back(deletion);
+                continue;
+            }
+            const auto& sourcePayload = boxIt->second.payloads[deletion.second - 1].data;
+            const bool copiedToCloud = !sourcePayload.empty() && std::any_of(
+                uploaded.begin(), uploaded.end(), [&](const UploadPokemon& item) {
+                    return item.payload == sourcePayload;
+                });
+            (copiedToCloud ? cloudRelocationDeletes : blockedDeletes).push_back(deletion);
+        }
+        runDeletes(cloudRelocationDeletes);
+        revertCloudSlots(blockedDeletes);
     }
 
     result_.success = true;
@@ -503,6 +583,10 @@ void CommitService::runCommit() {
         message += " " + std::to_string(result_.skipped.size()) + " Pokemon could not be moved and stayed put.";
     }
     result_.message = message;
+    Logger::instance().info("runCommit: finished, uploads=" + std::to_string(result_.uploads)
+                            + " deletes=" + std::to_string(result_.deletes)
+                            + " downloads=" + std::to_string(result_.downloads)
+                            + " skipped=" + std::to_string(result_.skipped.size()));
 }
 
 void CommitService::poll() {

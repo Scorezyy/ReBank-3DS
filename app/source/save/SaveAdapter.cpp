@@ -344,10 +344,6 @@ PokemonPayload SaveAdapter::readPartyPokemon(std::size_t slot) const {
             return {};
         }
         const auto raw = parsed->rawData();
-        Logger::instance().info("readPartyPokemon: slot " + std::to_string(slot + 1) + " species "
-                                + std::to_string(static_cast<std::uint16_t>(parsed->species()))
-                                + " format " + std::to_string(PokemonTransfer::pokemonFormat(save_->generation()))
-                                + " bytes " + std::to_string(raw.size()));
         return {
             PokemonTransfer::pokemonFormat(save_->generation()),
             std::vector<std::uint8_t>(raw.begin(), raw.end())

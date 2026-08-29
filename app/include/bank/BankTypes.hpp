@@ -20,6 +20,16 @@ enum class StoragePane {
     Party
 };
 
+struct SwapOrigin {
+    bool active = false;
+    HandSource source = HandSource::Local;
+    std::size_t sourceIndex = 0;
+    std::size_t sourceLocalBox = 0;
+    std::uint16_t sourceCloudBox = 0;
+    PokemonSummary summary;
+    PokemonPayload payload;
+};
+
 struct Hand {
     bool active = false;
     HandSource source = HandSource::Local;
@@ -29,6 +39,7 @@ struct Hand {
     PokemonSummary summary;
     PokemonPayload payload;
     bool payloadKnown = false;
+    SwapOrigin swapOrigin;
 };
 
 struct LocalBoxDraft {
@@ -48,8 +59,6 @@ struct CloudBoxDraft {
     std::array<PokemonPayload, 30> payloads{};
 };
 
-// One Pokemon whose move was aborted this commit and left where it started -
-// never partially applied, so it can't end up duplicated or lost.
 struct CommitSkippedItem {
     std::string nickname;
     std::string location;
