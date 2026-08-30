@@ -31,7 +31,7 @@ Have [FBI](https://github.com/Steveice10/FBI) installed? Open it, choose **Remot
   <img src=".github/qr-latest-cia.png" alt="QR code linking to the newest ReBank CIA" width="200" />
 </div>
 
-That link always serves the newest build — the QR code itself never needs to change, even after future updates. No FBI? Grab the `.cia`, `.3ds`, or `.3dsx` manually from the **[Releases](../../releases)** page instead.
+That link always serves the newest build — the QR code itself never needs to change, even after future updates. It's served over plain HTTP on purpose: the 3DS's built-in certificate store is too outdated to trust most modern HTTPS certificates, which is why FBI remote-install links usually have to be plain HTTP. No FBI? Grab the `.cia`, `.3ds`, or `.3dsx` manually from the **[Releases](../../releases)** page instead.
 
 <br />
 
