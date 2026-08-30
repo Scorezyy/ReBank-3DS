@@ -9,9 +9,6 @@
 
 class App;
 
-// Keeps the cloud-box preview in sync with the server: prefetches
-// neighbouring boxes and held-Pokemon payloads in the background, and
-// reacts to the async fetch/rename results LoadService reports back.
 class CloudSyncController {
 public:
     CloudSyncController(App& app, BankSession& session, CommitService& commit)

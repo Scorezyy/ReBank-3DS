@@ -4,10 +4,13 @@
 #include "network/AuthController.hpp"
 #include "network/CredentialStore.hpp"
 #include "network/LoadService.hpp"
-#include "save/GameCatalog.hpp"
-#include "save/SaveAdapter.hpp"
+#include "save/catalog/GameCatalog.hpp"
+#include "save/adapter/SaveAdapter.hpp"
+#include "save/SaveLoadService.hpp"
 #include "gui/GfxResources.hpp"
 #include "gui/Theme.hpp"
+#include "gui/UiRenderer.hpp"
+#include "gui/elements/ErrorDialog.hpp"
 #include "gui/bankscreen/BankScreen.hpp"
 #include "gui/gameselectscreen/GameSelectScreen.hpp"
 #include "gui/loadingscreen/LoadingScreen.hpp"
@@ -38,6 +41,8 @@ public:
     ~App();
     int run();
 
+    UiRenderer& ui() { return ui_; }
+
 private:
     friend class WelcomeScreen;
     friend class LoginScreen;
@@ -51,6 +56,7 @@ private:
     friend class CloudSyncController;
     friend class BankInputController;
     friend class LoadService;
+    friend class SaveLoadService;
     friend class LoadingScreen;
 
     enum class Screen {
@@ -86,21 +92,14 @@ private:
     void drawField(const UiRect& rect, std::string_view label, const std::string& value, bool password);
     void requestText(std::string& destination, std::string_view hint, bool password, std::size_t maxLength = 256);
     void showError(std::string title, std::string message);
-    void renderErrorDialog();
 
     Localization localization_;
     Screen screen_;
     Screen previousScreen_;
     GfxResources resources_;
-    // Which text buffer drawText()/drawCentered() parse into for the render
-    // pass currently in progress - switched by render() before each of the
-    // three passes (top-left eye, top-right eye, bottom) so none of them
-    // ever share glyph memory within one frame.
-    C2D_TextBuf activeTextBuffer_ = nullptr;
+    UiRenderer ui_;
+    ErrorDialog errorDialog_;
     std::string status_;
-    bool errorDialogVisible_ = false;
-    std::string errorDialogTitle_;
-    std::string errorDialogMessage_;
     ApiClient api_;
     std::string executablePath_;
     bool homebrew_;
@@ -109,6 +108,7 @@ private:
     AccountSession session_;
     AuthController authController_;
     LoadService loadService_{*this};
+    SaveLoadService saveLoadService_{*this};
     MusicPlayer music_;
     bool running_;
     CredentialStore credentials_;

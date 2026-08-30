@@ -2,29 +2,18 @@
 
 #include "core/AsyncJob.hpp"
 #include "network/ApiClient.hpp"
-#include "save/SaveAdapter.hpp"
 
-#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <memory>
 #include <vector>
 
 class App;
-struct DiscoveredGame {
-    std::size_t catalogIndex = 0;
-    SaveSummary save;
-    bool cartridge = false;
-    std::unique_ptr<std::array<std::uint16_t, 48 * 48>> iconPixels;
-};
 
 class LoadService {
 public:
     enum class Operation {
         None,
-        DiscoverGames,
-        OpenGame,
         LoadBank,
         CloudBox,
         PickupCloud,
@@ -33,23 +22,7 @@ public:
 
     enum class Phase {
         Idle,
-        SearchingGames,
-        ReadingIcons,
-        ReadingSave,
-        SearchingPokemon,
         LoadingBank
-    };
-
-    struct OpenGameResult {
-        bool success = false;
-        std::string message;
-        SaveSummary save;
-        std::size_t localBox = 0;
-        std::string localBoxName;
-        std::array<PokemonSummary, 30> localPokemon{};
-        std::array<PokemonPayload, 30> localPayloads{};
-        std::array<PokemonSummary, 6> localParty{};
-        std::array<PokemonPayload, 6> localPartyPayloads{};
     };
 
     explicit LoadService(App& app) : app_(app) {}
@@ -66,21 +39,14 @@ public:
     int progress() const { return progress_.load(std::memory_order_acquire); }
     float& displayedProgress() { return displayedProgress_; }
 
-    std::size_t catalogIndex = 0;
     std::uint16_t cloudBoxKey = 0;
     std::uint16_t resolvedCloudBoxKey = 0;
     std::size_t pickupSlot = 0;
     std::uint16_t pickupCloudBox = 0;
     PokemonSummary pickupSummary;
-    // BankSession::handGeneration captured when a PickupCloud/SwapCloud fetch
-    // starts. If the hand has moved on (returned, or something else picked
-    // up) by the time the fetch resolves, the generation no longer matches
-    // and the stale result must not be applied to whatever the hand holds
-    // now - otherwise it can silently overwrite an unrelated cloud slot.
+    
     std::uint32_t pickupHandGeneration = 0;
 
-    std::vector<DiscoveredGame> discoveredGames;
-    OpenGameResult openGameResult;
     BoxListResult cloudBoxResult;
     DownloadResult pickupResult;
     std::vector<BoxNameEntry> pendingBoxNames;

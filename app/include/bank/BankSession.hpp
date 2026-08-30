@@ -2,8 +2,8 @@
 
 #include "bank/BankTypes.hpp"
 #include "bank/TrashCanBox.hpp"
-#include "save/SaveAdapter.hpp"
-#include "save/StorageModel.hpp"
+#include "save/adapter/SaveAdapter.hpp"
+#include "bank/StorageModel.hpp"
 
 #include <3ds.h>
 

@@ -1,10 +1,11 @@
 #include "network/ApiClient.hpp"
 
 #include "BuildConfig.hpp"
+#include "core/Base64.hpp"
 #include "core/Logger.hpp"
 #include "core/RequestSigning.hpp"
 #include "core/ServerConfig.hpp"
-#include "save/PokemonTransfer.hpp"
+#include "save/pokemon/PokemonTransfer.hpp"
 
 #include <3ds.h>
 #include <jansson.h>
@@ -70,6 +71,36 @@ std::string stringField(json_t* object, const char* key) {
     return json_is_string(value) ? json_string_value(value) : "";
 }
 
+template <typename T>
+T intField(json_t* object, const char* key, T fallback) {
+    json_t* value = json_object_get(object, key);
+    return json_is_integer(value) ? static_cast<T>(json_integer_value(value)) : fallback;
+}
+
+bool boolField(json_t* object, const char* key) {
+    return json_is_true(json_object_get(object, key));
+}
+
+Result openTrustedContext(httpcContext& context, HTTPC_RequestMethod method, const std::string& url, std::string& outMessage) {
+    Result result = httpcOpenContext(&context, method, url.c_str(), 0);
+    if (R_FAILED(result)) {
+        outMessage = "Connection setup failed (" + resultCode(result) + ").";
+        return result;
+    }
+    const auto& rootCertificate = trustedRootCertificate();
+    if (rootCertificate.empty()) {
+        httpcCloseContext(&context);
+        outMessage = "The trusted server certificate is unavailable.";
+        return static_cast<Result>(-1);
+    }
+    result = httpcAddTrustedRootCA(&context, rootCertificate.data(), static_cast<u32>(rootCertificate.size()));
+    if (R_FAILED(result)) {
+        httpcCloseContext(&context);
+        outMessage = "TLS certificate setup failed (" + resultCode(result) + ").";
+    }
+    return result;
+}
+
 bool validUpdateText(const std::string& value, bool tag) {
     if (value.empty() || value.size() > 48 || (tag && value[0] != 'v')) {
         return false;
@@ -86,55 +117,69 @@ bool validSha256(const std::string& value) {
     });
 }
 
-std::string encodeBase64(const std::vector<std::uint8_t>& input) {
-    static constexpr char Alphabet[] =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    std::string output;
-    output.reserve(((input.size() + 2) / 3) * 4);
-    for (std::size_t index = 0; index < input.size(); index += 3) {
-        const std::uint32_t first = input[index];
-        const std::uint32_t second = index + 1 < input.size() ? input[index + 1] : 0;
-        const std::uint32_t third = index + 2 < input.size() ? input[index + 2] : 0;
-        const std::uint32_t value = (first << 16) | (second << 8) | third;
-        output.push_back(Alphabet[(value >> 18) & 0x3F]);
-        output.push_back(Alphabet[(value >> 12) & 0x3F]);
-        output.push_back(index + 1 < input.size() ? Alphabet[(value >> 6) & 0x3F] : '=');
-        output.push_back(index + 2 < input.size() ? Alphabet[value & 0x3F] : '=');
+struct JsonEnvelope {
+    json_t* root = nullptr;
+    bool ok = false;
+    std::string message;
+};
+
+JsonEnvelope parseEnvelope(u32 status, const std::string& body, const char* rejectionFallback) {
+    json_error_t error{};
+    json_t* root = json_loadb(body.data(), body.size(), JSON_REJECT_DUPLICATES, &error);
+    if (!root || !json_is_object(root)) {
+        json_decref(root);
+        return {nullptr, false, "The server returned an invalid response."};
     }
-    return output;
+    if (status < 200 || status >= 300) {
+        std::string message = stringField(root, "message");
+        json_decref(root);
+        return {nullptr, false, message.empty() ? rejectionFallback : std::move(message)};
+    }
+    return {root, true, {}};
 }
 
-std::vector<std::uint8_t> decodeBase64(const std::string& input) {
-    static constexpr int Decode[128] = {
-        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,62,-1,-1,-1,63,
-        52,53,54,55,56,57,58,59,60,61,-1,-1,-1, 0,-1,-1,
-        -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,
-        15,16,17,18,19,20,21,22,23,24,25,-1,-1,-1,-1,-1,
-        -1,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,
-        41,42,43,44,45,46,47,48,49,50,51,-1,-1,-1,-1,-1
-    };
-    std::vector<std::uint8_t> output;
-    output.reserve((input.size() * 3) / 4);
-    std::uint32_t buffer = 0;
-    int bits = 0;
-    for (unsigned char c : input) {
-        if (c == '=' || c >= 128) {
-            break;
-        }
-        const int v = Decode[c];
-        if (v < 0) {
-            continue;
-        }
-        buffer = (buffer << 6) | static_cast<std::uint32_t>(v);
-        bits += 6;
-        if (bits >= 8) {
-            bits -= 8;
-            output.push_back(static_cast<std::uint8_t>((buffer >> bits) & 0xFF));
-        }
+bool parsePokemonSummaryEntry(
+    json_t* entry,
+    PokemonSummary& summary,
+    int& slot,
+    std::vector<std::uint8_t>& payload
+) {
+    if (!json_is_object(entry)) {
+        return false;
     }
-    return output;
+    slot = intField<int>(entry, "slot", 0);
+    if (slot < 1 || slot > 30) {
+        return false;
+    }
+
+    summary.species = intField<std::uint16_t>(entry, "species", 0);
+    summary.level = intField<std::uint8_t>(entry, "level", 0);
+    summary.nickname = stringField(entry, "nickname");
+    summary.trainerName = stringField(entry, "trainerName");
+    summary.gameCode = stringField(entry, "gameCode");
+    summary.format = intField<std::uint8_t>(entry, "format", 0);
+    summary.shiny = boolField(entry, "shiny");
+    summary.heldItem = intField<std::uint16_t>(entry, "heldItem", 0);
+
+    payload = Base64::decode(stringField(entry, "payloadBase64"));
+    const pksm::Generation gen = PokemonTransfer::generationFromFormat(summary.format);
+    if (payload.empty() || gen == pksm::Generation::UNUSED) {
+        return true;
+    }
+    std::vector<std::uint8_t> buffer(payload);
+    auto pkx = pksm::PKX::getPKM(gen, buffer.data(), buffer.size(), false);
+    if (!pkx || static_cast<std::uint16_t>(pkx->species()) == 0) {
+        return true;
+    }
+    summary.type1 = pkx->type1();
+    summary.type2 = pkx->type2();
+    summary.originGame = pkx->version();
+    summary.language = pkx->language();
+    summary.moves = {pkx->move(0), pkx->move(1), pkx->move(2), pkx->move(3)};
+    summary.ability = pkx->ability();
+    summary.nature = pkx->nature();
+    summary.gender = pkx->gender();
+    return true;
 }
 
 AuthResult parseResponse(u32 status, const std::string& response) {
@@ -271,7 +316,7 @@ UploadResult ApiClient::uploadPokemon(
         json_object_set_new(entry, "boxPosition", json_integer(item.boxPosition));
         json_object_set_new(entry, "slot", json_integer(item.slot));
         json_object_set_new(entry, "format", json_integer(item.format));
-        json_object_set_new(entry, "payloadBase64", json_string(encodeBase64(item.payload).c_str()));
+        json_object_set_new(entry, "payloadBase64", json_string(Base64::encode(item.payload).c_str()));
         json_object_set_new(entry, "species", json_integer(item.species));
         json_object_set_new(entry, "nickname", json_string(nickname.c_str()));
         json_object_set_new(entry, "trainerName", json_string(trainerName.c_str()));
@@ -289,26 +334,15 @@ UploadResult ApiClient::uploadPokemon(
     if (!response.success) {
         return {false, response.message, 0};
     }
-    json_error_t error{};
-    json_t* parsed = json_loadb(response.body.data(), response.body.size(), JSON_REJECT_DUPLICATES, &error);
-    if (!parsed || !json_is_object(parsed)) {
-        json_decref(parsed);
-        return {false, "The server returned an invalid upload response.", 0};
-    }
-    if (response.status < 200 || response.status >= 300) {
-        std::string message = stringField(parsed, "message");
+    JsonEnvelope envelope = parseEnvelope(response.status, response.body, "The upload was rejected.");
+    if (!envelope.ok) {
         Logger::instance().warning("Pokemon batch upload rejected (HTTP "
-                                   + std::to_string(response.status) + "): " + message);
-        json_decref(parsed);
-        return {false, message.empty() ? "The upload was rejected." : std::move(message), 0};
+                                   + std::to_string(response.status) + "): " + envelope.message);
+        return {false, std::move(envelope.message), 0};
     }
-    json_t* stored = json_object_get(parsed, "stored");
-    json_t* count = json_object_get(parsed, "count");
-    const bool accepted = json_is_true(stored) && json_is_integer(count);
-    const std::uint8_t storedCount = accepted
-        ? static_cast<std::uint8_t>(json_integer_value(count))
-        : static_cast<std::uint8_t>(0);
-    json_decref(parsed);
+    const bool accepted = boolField(envelope.root, "stored") && json_is_integer(json_object_get(envelope.root, "count"));
+    const std::uint8_t storedCount = intField<std::uint8_t>(envelope.root, "count", 0);
+    json_decref(envelope.root);
     if (!accepted) {
         return {false, "The server returned an incomplete upload response.", 0};
     }
@@ -328,35 +362,22 @@ DownloadResult ApiClient::downloadPokemon(
     if (!response.success) {
         return {false, response.message, {}};
     }
-    json_error_t error{};
-    json_t* parsed = json_loadb(response.body.data(), response.body.size(), JSON_REJECT_DUPLICATES, &error);
-    if (!parsed || !json_is_object(parsed)) {
-        json_decref(parsed);
-        return {false, "The server returned an invalid response.", {}};
-    }
-    if (response.status < 200 || response.status >= 300) {
-        std::string message = stringField(parsed, "message");
-        json_decref(parsed);
-        return {false, message.empty() ? "Download rejected." : std::move(message), {}};
+    JsonEnvelope envelope = parseEnvelope(response.status, response.body, "Download rejected.");
+    if (!envelope.ok) {
+        return {false, std::move(envelope.message), {}};
     }
 
     DownloadPokemon mon;
-    json_t* value = nullptr;
-    value = json_object_get(parsed, "boxPosition");
-    mon.boxPosition = static_cast<std::uint16_t>(json_is_integer(value) ? json_integer_value(value) : boxPosition);
-    value = json_object_get(parsed, "slot");
-    mon.slot = static_cast<std::uint8_t>(json_is_integer(value) ? json_integer_value(value) : slot);
-    value = json_object_get(parsed, "format");
-    mon.format = static_cast<std::uint8_t>(json_is_integer(value) ? json_integer_value(value) : 0);
-    value = json_object_get(parsed, "species");
-    mon.species = static_cast<std::uint16_t>(json_is_integer(value) ? json_integer_value(value) : 0);
-    value = json_object_get(parsed, "level");
-    mon.level = static_cast<std::uint8_t>(json_is_integer(value) ? json_integer_value(value) : 0);
-    mon.nickname = stringField(parsed, "nickname");
-    mon.trainerName = stringField(parsed, "trainerName");
-    mon.gameCode = stringField(parsed, "gameCode");
-    mon.payload = decodeBase64(stringField(parsed, "payloadBase64"));
-    json_decref(parsed);
+    mon.boxPosition = intField<std::uint16_t>(envelope.root, "boxPosition", boxPosition);
+    mon.slot = intField<std::uint8_t>(envelope.root, "slot", slot);
+    mon.format = intField<std::uint8_t>(envelope.root, "format", 0);
+    mon.species = intField<std::uint16_t>(envelope.root, "species", 0);
+    mon.level = intField<std::uint8_t>(envelope.root, "level", 0);
+    mon.nickname = stringField(envelope.root, "nickname");
+    mon.trainerName = stringField(envelope.root, "trainerName");
+    mon.gameCode = stringField(envelope.root, "gameCode");
+    mon.payload = Base64::decode(stringField(envelope.root, "payloadBase64"));
+    json_decref(envelope.root);
     if (mon.payload.empty() || mon.format == 0) {
         return {false, "Payload missing.", {}};
     }
@@ -377,11 +398,9 @@ DeleteResult ApiClient::deleteCloudPokemon(
         return {false, response.message};
     }
     if (response.status < 200 || response.status >= 300) {
-        json_error_t error{};
-        json_t* parsed = json_loadb(response.body.data(), response.body.size(), JSON_REJECT_DUPLICATES, &error);
-        std::string message = parsed ? stringField(parsed, "message") : std::string{};
-        json_decref(parsed);
-        return {false, message.empty() ? "Delete rejected." : std::move(message)};
+        JsonEnvelope envelope = parseEnvelope(response.status, response.body, "Delete rejected.");
+        json_decref(envelope.root);
+        return {false, envelope.ok ? "Delete rejected." : std::move(envelope.message)};
     }
     return {true, "Deleted."};
 }
@@ -401,63 +420,20 @@ BoxListResult ApiClient::listCloudBox(
         result.message = response.message;
         return result;
     }
-    json_error_t error{};
-    json_t* parsed = json_loadb(response.body.data(), response.body.size(), JSON_REJECT_DUPLICATES, &error);
-    if (!parsed || !json_is_object(parsed)) {
-        json_decref(parsed);
-        result.message = "The server returned an invalid response.";
+    JsonEnvelope envelope = parseEnvelope(response.status, response.body, "Box listing rejected.");
+    if (!envelope.ok) {
+        result.message = std::move(envelope.message);
         return result;
     }
-    if (response.status < 200 || response.status >= 300) {
-        std::string message = stringField(parsed, "message");
-        json_decref(parsed);
-        result.message = message.empty() ? "Box listing rejected." : std::move(message);
-        return result;
-    }
-    json_t* array = json_object_get(parsed, "pokemon");
+    json_t* array = json_object_get(envelope.root, "pokemon");
     if (json_is_array(array)) {
         const std::size_t count = json_array_size(array);
         for (std::size_t i = 0; i < count; ++i) {
-            json_t* entry = json_array_get(array, i);
-            if (!json_is_object(entry)) {
-                continue;
-            }
-            json_t* slotValue = json_object_get(entry, "slot");
-            const int slot = json_is_integer(slotValue) ? static_cast<int>(json_integer_value(slotValue)) : 0;
-            if (slot < 1 || slot > 30) {
-                continue;
-            }
             PokemonSummary summary;
-            json_t* species = json_object_get(entry, "species");
-            summary.species = static_cast<std::uint16_t>(json_is_integer(species) ? json_integer_value(species) : 0);
-            json_t* level = json_object_get(entry, "level");
-            summary.level = static_cast<std::uint8_t>(json_is_integer(level) ? json_integer_value(level) : 0);
-            summary.nickname = stringField(entry, "nickname");
-            summary.trainerName = stringField(entry, "trainerName");
-            summary.gameCode = stringField(entry, "gameCode");
-            json_t* formatValue = json_object_get(entry, "format");
-            summary.format = static_cast<std::uint8_t>(json_is_integer(formatValue) ? json_integer_value(formatValue) : 0);
-            json_t* shinyValue = json_object_get(entry, "shiny");
-            summary.shiny = json_is_true(shinyValue);
-            json_t* heldItemValue = json_object_get(entry, "heldItem");
-            summary.heldItem = static_cast<std::uint16_t>(
-                json_is_integer(heldItemValue) ? json_integer_value(heldItemValue) : 0);
-
-            const std::vector<std::uint8_t> payload = decodeBase64(stringField(entry, "payloadBase64"));
-            const pksm::Generation gen = PokemonTransfer::generationFromFormat(summary.format);
-            if (!payload.empty() && gen != pksm::Generation::UNUSED) {
-                std::vector<std::uint8_t> buffer(payload);
-                auto pkx = pksm::PKX::getPKM(gen, buffer.data(), buffer.size(), false);
-                if (pkx && static_cast<std::uint16_t>(pkx->species()) != 0) {
-                    summary.type1 = pkx->type1();
-                    summary.type2 = pkx->type2();
-                    summary.originGame = pkx->version();
-                    summary.language = pkx->language();
-                    summary.moves = {pkx->move(0), pkx->move(1), pkx->move(2), pkx->move(3)};
-                    summary.ability = pkx->ability();
-                    summary.nature = pkx->nature();
-                    summary.gender = pkx->gender();
-                }
+            int slot = 0;
+            std::vector<std::uint8_t> payload;
+            if (!parsePokemonSummaryEntry(json_array_get(array, i), summary, slot, payload)) {
+                continue;
             }
             if (!payload.empty()) {
                 result.payloads[static_cast<std::size_t>(slot - 1)] = {summary.format, payload};
@@ -465,7 +441,7 @@ BoxListResult ApiClient::listCloudBox(
             result.pokemon[static_cast<std::size_t>(slot - 1)] = std::move(summary);
         }
     }
-    json_decref(parsed);
+    json_decref(envelope.root);
     result.success = true;
     result.message = "Box loaded.";
     return result;
@@ -492,19 +468,12 @@ RenameBoxResult ApiClient::renameBox(
     if (!response.success) {
         return {false, response.message, {}};
     }
-    json_error_t error{};
-    json_t* parsed = json_loadb(response.body.data(), response.body.size(), JSON_REJECT_DUPLICATES, &error);
-    if (!parsed || !json_is_object(parsed)) {
-        json_decref(parsed);
-        return {false, "The server returned an invalid response.", {}};
+    JsonEnvelope envelope = parseEnvelope(response.status, response.body, "Rename rejected.");
+    if (!envelope.ok) {
+        return {false, std::move(envelope.message), {}};
     }
-    if (response.status < 200 || response.status >= 300) {
-        std::string message = stringField(parsed, "message");
-        json_decref(parsed);
-        return {false, message.empty() ? "Rename rejected." : std::move(message), {}};
-    }
-    std::string storedName = stringField(parsed, "name");
-    json_decref(parsed);
+    std::string storedName = stringField(envelope.root, "name");
+    json_decref(envelope.root);
     return {true, "Box renamed.", storedName.empty() ? name : std::move(storedName)};
 }
 
@@ -516,39 +485,28 @@ BoxNamesResult ApiClient::listBoxNames(const std::string& accessToken) {
     if (!response.success) {
         return {false, response.message, {}};
     }
-    json_error_t error{};
-    json_t* parsed = json_loadb(response.body.data(), response.body.size(), JSON_REJECT_DUPLICATES, &error);
-    if (!parsed || !json_is_object(parsed)) {
-        json_decref(parsed);
-        return {false, "The server returned an invalid response.", {}};
-    }
-    if (response.status < 200 || response.status >= 300) {
-        std::string message = stringField(parsed, "message");
-        json_decref(parsed);
-        return {false, message.empty() ? "Box listing rejected." : std::move(message), {}};
+    JsonEnvelope envelope = parseEnvelope(response.status, response.body, "Box listing rejected.");
+    if (!envelope.ok) {
+        return {false, std::move(envelope.message), {}};
     }
     std::vector<BoxNameEntry> boxes;
-    json_t* array = json_object_get(parsed, "boxes");
+    json_t* array = json_object_get(envelope.root, "boxes");
     if (json_is_array(array)) {
         const std::size_t count = json_array_size(array);
         for (std::size_t i = 0; i < count; ++i) {
             json_t* entry = json_array_get(array, i);
-            if (!json_is_object(entry)) {
-                continue;
-            }
-            json_t* positionValue = json_object_get(entry, "position");
-            if (!json_is_integer(positionValue)) {
+            if (!json_is_object(entry) || !json_is_integer(json_object_get(entry, "position"))) {
                 continue;
             }
             BoxNameEntry item;
-            item.position = static_cast<std::uint16_t>(json_integer_value(positionValue));
+            item.position = intField<std::uint16_t>(entry, "position", 0);
             item.name = stringField(entry, "name");
             if (!item.name.empty()) {
                 boxes.push_back(std::move(item));
             }
         }
     }
-    json_decref(parsed);
+    json_decref(envelope.root);
     return {true, "Boxes loaded.", std::move(boxes)};
 }
 
@@ -609,22 +567,12 @@ FileDownloadResult ApiClient::downloadClientUpdate(
     const std::string path = "/v1/client/update/" + tag + "/" + assetName;
     const std::string url = ServerConfig::baseUrl() + path;
     httpcContext context{};
-    Result result = httpcOpenContext(&context, HTTPC_METHOD_GET, url.c_str(), 0);
-    const auto& rootCertificate = trustedRootCertificate();
-    if (R_SUCCEEDED(result) && rootCertificate.empty()) {
-        httpcCloseContext(&context);
-        return {false, "The trusted server certificate is unavailable.", 0};
+    std::string openError;
+    Result result = openTrustedContext(context, HTTPC_METHOD_GET, url, openError);
+    if (R_FAILED(result)) {
+        return {false, openError, 0};
     }
-    if (R_SUCCEEDED(result)) {
-        result = httpcAddTrustedRootCA(
-            &context,
-            rootCertificate.data(),
-            static_cast<u32>(rootCertificate.size())
-        );
-    }
-    if (R_SUCCEEDED(result)) {
-        result = httpcAddRequestHeaderField(&context, "Accept", "application/octet-stream");
-    }
+    result = httpcAddRequestHeaderField(&context, "Accept", "application/octet-stream");
     if (R_SUCCEEDED(result)) {
         result = httpcBeginRequest(&context);
     }
@@ -751,29 +699,11 @@ ApiClient::HttpResult ApiClient::request(
         httpMethod == HTTPC_METHOD_PUT ? "PUT " : "POST "
     ) + path);
     httpcContext context{};
-    Result result = httpcOpenContext(&context, httpMethod, url.c_str(), 0);
+    std::string openError;
+    Result result = openTrustedContext(context, httpMethod, url, openError);
     if (R_FAILED(result)) {
-        const std::string code = resultCode(result);
-        Logger::instance().error("HTTP context failed: " + code);
-        return {false, 0, {}, "Connection setup failed (" + code + ")."};
-    }
-
-    const auto& rootCertificate = trustedRootCertificate();
-    if (rootCertificate.empty()) {
-        httpcCloseContext(&context);
-        Logger::instance().error("Trusted server certificate is unavailable");
-        return {false, 0, {}, "The trusted server certificate is unavailable."};
-    }
-    result = httpcAddTrustedRootCA(
-        &context,
-        rootCertificate.data(),
-        static_cast<u32>(rootCertificate.size())
-    );
-    if (R_FAILED(result)) {
-        const std::string code = resultCode(result);
-        httpcCloseContext(&context);
-        Logger::instance().error("Trusted root CA failed: " + code);
-        return {false, 0, {}, "TLS certificate setup failed (" + code + ")."};
+        Logger::instance().error("HTTP context setup failed: " + openError);
+        return {false, 0, {}, openError};
     }
 
     std::vector<u32> upload;

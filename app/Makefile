@@ -31,6 +31,10 @@ PKSM_CORE := vendor/PKSM-Core
 SOURCES := source/app \
 	source/core \
 	source/save \
+	source/save/catalog \
+	source/save/adapter \
+	source/save/pokemon \
+	source/io \
 	source/network \
 	source/bank \
 	source/audio \

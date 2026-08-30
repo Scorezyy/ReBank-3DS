@@ -18,11 +18,14 @@ LoadingScreen::Stage LoadingScreen::currentStage() const {
     if (app_.welcomeBackPending_) {
         return Stage::WelcomeBack;
     }
+    switch (app_.saveLoadService_.phase()) {
+        case SaveLoadService::Phase::SearchingGames: return Stage::SearchingGames;
+        case SaveLoadService::Phase::ReadingIcons: return Stage::ReadingIcons;
+        case SaveLoadService::Phase::ReadingSave: return Stage::ReadingSave;
+        case SaveLoadService::Phase::SearchingPokemon: return Stage::SearchingPokemon;
+        default: break;
+    }
     switch (app_.loadService_.phase()) {
-        case LoadService::Phase::SearchingGames: return Stage::SearchingGames;
-        case LoadService::Phase::ReadingIcons: return Stage::ReadingIcons;
-        case LoadService::Phase::ReadingSave: return Stage::ReadingSave;
-        case LoadService::Phase::SearchingPokemon: return Stage::SearchingPokemon;
         case LoadService::Phase::LoadingBank: return Stage::LoadingBank;
         default: return Stage::Waiting;
     }
@@ -92,8 +95,12 @@ void LoadingScreen::render() {
         && stage != Stage::WelcomeBack;
 
     if (determinate) {
-        float& displayedProgress = app_.loadService_.displayedProgress();
-        const float target = static_cast<float>(std::clamp(app_.loadService_.progress(), 0, 100));
+        const bool isSaveStage = stage == Stage::SearchingGames || stage == Stage::ReadingIcons
+            || stage == Stage::ReadingSave || stage == Stage::SearchingPokemon;
+        float& displayedProgress = isSaveStage
+            ? app_.saveLoadService_.displayedProgress() : app_.loadService_.displayedProgress();
+        const float target = static_cast<float>(std::clamp(
+            isSaveStage ? app_.saveLoadService_.progress() : app_.loadService_.progress(), 0, 100));
         if (target < displayedProgress) {
             displayedProgress = target;
         } else {

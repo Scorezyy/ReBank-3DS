@@ -44,4 +44,5 @@ public:
     C2D_SpriteSheet genderMaleIcon = nullptr;
     C2D_SpriteSheet genderFemaleIcon = nullptr;
     C2D_SpriteSheet genderlessIcon = nullptr;
+    C2D_SpriteSheet gameSelectorCard = nullptr;
 };

@@ -1,15 +1,9 @@
 #pragma once
 
-#include "save/GameCatalog.hpp"
+#include "save/catalog/GameCatalog.hpp"
+#include "save/pokemon/PokemonData.hpp"
 
 #include <3ds.h>
-#include <enums/Ability.hpp>
-#include <enums/GameVersion.hpp>
-#include <enums/Gender.hpp>
-#include <enums/Language.hpp>
-#include <enums/Move.hpp>
-#include <enums/Nature.hpp>
-#include <enums/Type.hpp>
 
 #include <array>
 #include <cstddef>
@@ -22,26 +16,6 @@ namespace pksm {
 class Sav;
 }
 
-struct PokemonSummary {
-    std::uint16_t species = 0;
-    std::uint16_t form = 0;
-    std::uint8_t level = 0;
-    bool shiny = false;
-    std::uint16_t heldItem = 0;
-    std::string nickname;
-    std::string trainerName;
-    std::string gameCode;
-    std::uint8_t format = 0;
-    pksm::Type type1 = pksm::Type::Normal;
-    pksm::Type type2 = pksm::Type::Normal;
-    pksm::GameVersion originGame;
-    pksm::Language language = pksm::Language::None;
-    std::array<pksm::Move, 4> moves{};
-    pksm::Ability ability;
-    pksm::Nature nature;
-    pksm::Gender gender = pksm::Gender::Genderless;
-};
-
 struct SaveSummary {
     std::string trainerName;
     std::uint32_t trainerId = 0;
@@ -49,25 +23,17 @@ struct SaveSummary {
     std::uint16_t pokedexCount = 0;
 };
 
-struct PokemonPayload {
-    std::uint8_t format = 0;
-    std::vector<std::uint8_t> data;
-};
-
-struct BoxRead {
-    std::array<PokemonSummary, 30> summaries{};
-    std::array<PokemonPayload, 30> payloads{};
-};
-
 class SaveAdapter {
 public:
+    enum class SourcePreference { Any, CartridgeOnly, StorageOnly };
+
     SaveAdapter();
     ~SaveAdapter();
 
     SaveAdapter(const SaveAdapter&) = delete;
     SaveAdapter& operator=(const SaveAdapter&) = delete;
 
-    bool open(const GameDescriptor& game, std::string& error);
+    bool open(const GameDescriptor& game, std::string& error, SourcePreference preference = SourcePreference::Any);
     void close();
     bool loaded() const;
     bool isCartridge() const;
@@ -105,7 +71,8 @@ public:
 private:
     struct Source;
 
-    std::shared_ptr<std::uint8_t[]> locateSave(const GameDescriptor& game, std::size_t& size, Result& result);
+    std::shared_ptr<std::uint8_t[]> locateSave(const GameDescriptor& game, std::size_t& size, Result& result,
+                                                SourcePreference preference);
     bool parseSave(const GameDescriptor& game, const std::shared_ptr<std::uint8_t[]>& data,
                     std::size_t size, std::string& error);
     bool validBox(std::size_t box) const;

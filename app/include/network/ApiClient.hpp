@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "network/DeviceIdentity.hpp"
-#include "save/SaveAdapter.hpp"
+#include "save/adapter/SaveAdapter.hpp"
 
 struct AccountSession {
     std::string accountId;

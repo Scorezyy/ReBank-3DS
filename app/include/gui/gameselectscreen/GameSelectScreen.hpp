@@ -1,8 +1,8 @@
 #pragma once
 
 #include "gui/Theme.hpp"
-#include "network/LoadService.hpp"
-#include "save/SaveAdapter.hpp"
+#include "save/adapter/SaveAdapter.hpp"
+#include "save/SaveLoadService.hpp"
 
 #include <citro2d.h>
 #include <3ds.h>
@@ -13,7 +13,6 @@
 
 class App;
 
-// Lets the player browse detected Pokemon saves and pick one to open.
 class GameSelectScreen {
 public:
     explicit GameSelectScreen(App& app) : app_(app) {}
@@ -24,6 +23,8 @@ public:
 
     void refresh();
     void populateFromDiscovered(std::vector<DiscoveredGame>& discovered);
+    void refreshCartridgeSummary();
+    void applyCartridgeSummary(const SaveSummary& summary);
     void reset();
 
 private:
@@ -31,6 +32,9 @@ private:
         std::size_t catalogIndex = 0;
         SaveSummary save;
         bool cartridge = false;
+        bool storageOnly = false;
+        bool cartridgeEmpty = false;
+        bool summaryPending = false;
         C3D_Tex iconTexture{};
         Tex3DS_SubTexture iconSubTexture{};
         bool iconLoaded = false;
@@ -38,8 +42,8 @@ private:
 
     void select(std::size_t index, int direction);
     bool openSelected();
-    void drawIcon(const GameProfile& profile, float centerX, float centerY, float size, float z,
-                  u32 borderColor = Gui::Ink);
+    void pollCartridgeSlot();
+    void drawIcon(const GameProfile& profile, float centerX, float centerY, float size, float z);
     void drawHintChip(float x, float y, std::string_view key, std::string_view label);
     float carouselEase() const;
 
@@ -48,4 +52,7 @@ private:
     std::vector<GameProfile> games_;
     u64 selectionChangedAt_ = 0;
     int selectionDirection_ = 0;
+    bool cardInsertionKnown_ = false;
+    bool cardInserted_ = false;
+    bool cardSlotResultLogged_ = false;
 };

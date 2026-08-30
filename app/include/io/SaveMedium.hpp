@@ -11,9 +11,6 @@
 #include <string>
 #include <string_view>
 
-// Reading and writing raw save bytes to/from the actual storage medium -
-// a 3DS cartridge/SD title archive, a DS card over SPI, or an exported
-// .sav file on the SD card. Knows nothing about Pokemon or PKSM-Core.
 namespace SaveMedium {
 constexpr std::size_t MaximumSaveSize = 0x200000;
 
@@ -47,6 +44,8 @@ std::shared_ptr<std::uint8_t[]> readExport(
 );
 std::string dsGameCodeFromHeader();
 
+std::uint64_t cartridgeTitleId();
+
 struct DsCardRead {
     std::shared_ptr<std::uint8_t[]> data;
     std::size_t size = 0;
@@ -54,9 +53,6 @@ struct DsCardRead {
     std::size_t capacity = 0;
 };
 
-// Reads the inserted DS cartridge's save over SPI. Returns a null `data`
-// if no cartridge is inserted, its header doesn't match `expectedCode`, or
-// its save capacity isn't the one size (0x80000) this app supports.
 DsCardRead readDsCard(std::string_view expectedCode, bool infrared, Result& result);
 
 bool writeArchive(std::uint64_t titleId, FS_MediaType mediaType, const std::uint8_t* data, std::size_t size);

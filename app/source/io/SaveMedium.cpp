@@ -1,4 +1,4 @@
-#include "save/SaveMedium.hpp"
+#include "io/SaveMedium.hpp"
 #include "core/Logger.hpp"
 
 #include <algorithm>
@@ -100,13 +100,21 @@ std::shared_ptr<std::uint8_t[]> readExport(
 
 std::string dsGameCodeFromHeader() {
     FS_CardType cardType = CARD_CTR;
-    if (R_FAILED(FSUSER_GetCardType(&cardType)) || cardType != CARD_TWL) {
+    const Result typeResult = FSUSER_GetCardType(&cardType);
+    if (R_FAILED(typeResult) || cardType != CARD_TWL) {
+        char resultText[11]{};
+        std::snprintf(resultText, sizeof(resultText), "0x%08lX", static_cast<unsigned long>(typeResult));
+        Logger::instance().info(std::string("dsGameCodeFromHeader: not a TWL card (result=")
+            + resultText + ", cardType=" + std::to_string(static_cast<int>(cardType)) + ")");
         return {};
     }
     std::array<std::uint8_t, 0x3B4> header{};
-    if (R_FAILED(FSUSER_GetLegacyRomHeader(MEDIATYPE_GAME_CARD, 0, header.data()))) {
+    const Result headerResult = FSUSER_GetLegacyRomHeader(MEDIATYPE_GAME_CARD, 0, header.data());
+    if (R_FAILED(headerResult)) {
+        Logger::instance().info("dsGameCodeFromHeader: header read failed");
         return {};
     }
+    const std::string title(reinterpret_cast<const char*>(header.data()), 12);
     const std::string prefix(reinterpret_cast<const char*>(header.data() + 0x0C), 3);
     static constexpr std::array mappings{
         std::pair{"ADA", "diamond"}, std::pair{"APA", "pearl"},
@@ -117,7 +125,22 @@ std::string dsGameCodeFromHeader() {
     };
     const auto match = std::find_if(mappings.begin(), mappings.end(),
         [&](const auto& mapping) { return prefix == mapping.first; });
+    Logger::instance().info("dsGameCodeFromHeader: title=\"" + title + "\" prefix=\"" + prefix
+        + "\" matched=" + (match == mappings.end() ? "none" : match->second));
     return match == mappings.end() ? std::string{} : std::string(match->second);
+}
+
+std::uint64_t cartridgeTitleId() {
+    if (R_FAILED(amInit())) {
+        return 0;
+    }
+    u32 count = 0;
+    std::uint64_t titleId = 0;
+    if (R_SUCCEEDED(AM_GetTitleCount(MEDIATYPE_GAME_CARD, &count)) && count > 0) {
+        AM_GetTitleList(nullptr, MEDIATYPE_GAME_CARD, 1, &titleId);
+    }
+    amExit();
+    return titleId;
 }
 
 DsCardRead readDsCard(std::string_view expectedCode, bool infrared, Result& result) {

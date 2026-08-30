@@ -42,6 +42,20 @@ enum class TextId : std::size_t {
     TrashConfirmMessage,
     Yes,
     No,
+    StatusFindingSaveGames,
+    StatusNoCompatibleSaveGame,
+    StatusCheckingCartridgeSlot,
+    StatusReadingSave,
+    NoCompatibleSaveGameTitle,
+    InsertCartridgeOrCreateSave,
+    NoCartridgeInserted,
+    InsertCartridgeToLoad,
+    UnknownTrainer,
+    IdNoPrefix,
+    PlayTimePrefix,
+    PokedexPrefix,
+    CartridgeRemovedTitle,
+    CartridgeRemovedMessage,
     Count
 };
 

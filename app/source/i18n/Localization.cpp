@@ -13,7 +13,12 @@ constexpr Translation English{
     "Reading original game icons...", "Opening local save file...", "Reading box and Pokemon...",
     "Connecting to your bank...", "Progress",
     "Autologin detected...", "Logging you in automatically...", "Welcome back, ",
-    "Trash Can", "Delete these Pokemon?", "Yes", "No"
+    "Trash Can", "Delete these Pokemon?", "Yes", "No",
+    "Finding save games...", "No compatible save game found.", "Checking cartridge slot...", "Reading save...",
+    "No compatible save game", "Insert a cartridge or create a save first.",
+    "No cartridge inserted", "Insert a game cartridge to load it here.",
+    "Unknown Trainer", "ID No. ", "Play time: ", "Pokedex: ",
+    "Cartridge removed", "The game cartridge was removed. Returning to the game selection."
 };
 
 constexpr Translation German{
@@ -26,7 +31,12 @@ constexpr Translation German{
     "Spielbilder lesen...", "Spielstand öffnen...", "Boxen & Pokémon lesen...",
     "Mit Bank verbinden...", "Fortschritt",
     "Automatischer Login erkannt...", "Du wirst automatisch angemeldet...", "Willkommen zurück, ",
-    "Papierkorb", "Pokémon löschen?", "Ja", "Nein"
+    "Papierkorb", "Pokémon löschen?", "Ja", "Nein",
+    "Spielstände suchen...", "Kein passender Spielstand gefunden.", "Modulschacht prüfen...", "Spielstand wird gelesen...",
+    "Kein passender Spielstand", "Lege ein Modul ein oder erstelle zuerst einen Spielstand.",
+    "Kein Modul eingelegt", "Lege ein Spielmodul ein, um es hier zu laden.",
+    "Unbekannter Trainer", "ID-Nr. ", "Spielzeit: ", "Pokedex: ",
+    "Modul entfernt", "Das Spielmodul wurde entfernt. Du wirst zur Spielauswahl zurückgebracht."
 };
 
 constexpr Translation French{
@@ -40,7 +50,12 @@ constexpr Translation French{
     "Lecture des icones originales...", "Ouverture de la sauvegarde locale...",
     "Lecture de la boite et des Pokemon...", "Connexion a votre banque...", "Progression",
     "Connexion automatique detectee...", "Connexion automatique en cours...", "Content de te revoir, ",
-    "Corbeille", "Supprimer ces Pokemon ?", "Oui", "Non"
+    "Corbeille", "Supprimer ces Pokemon ?", "Oui", "Non",
+    "Recherche des sauvegardes...", "Aucune sauvegarde compatible trouvee.", "Verification du lecteur de cartouche...", "Lecture de la sauvegarde...",
+    "Aucune sauvegarde compatible", "Insere une cartouche ou cree d'abord une sauvegarde.",
+    "Aucune cartouche inseree", "Insere une cartouche de jeu pour la charger ici.",
+    "Dresseur inconnu", "N Dresseur ", "Temps de jeu : ", "Pokedex : ",
+    "Cartouche retiree", "La cartouche de jeu a ete retiree. Retour a la selection des jeux."
 };
 
 constexpr Translation Spanish{
@@ -54,7 +69,12 @@ constexpr Translation Spanish{
     "Leyendo iconos originales...", "Abriendo partida local...", "Leyendo caja y Pokemon...",
     "Conectando con tu banco...", "Progreso",
     "Inicio de sesion automatico detectado...", "Iniciando sesion automaticamente...", "Bienvenido de nuevo, ",
-    "Papelera", "Eliminar estos Pokemon?", "Si", "No"
+    "Papelera", "Eliminar estos Pokemon?", "Si", "No",
+    "Buscando partidas guardadas...", "No se encontro ninguna partida compatible.", "Verificando ranura del cartucho...", "Leyendo partida...",
+    "Ninguna partida compatible", "Inserta un cartucho o crea primero una partida.",
+    "Ningun cartucho insertado", "Inserta un cartucho de juego para cargarlo aqui.",
+    "Entrenador desconocido", "N.º entrenador ", "Tiempo de juego: ", "Pokedex: ",
+    "Cartucho retirado", "Se retiro el cartucho del juego. Volviendo a la seleccion de juegos."
 };
 
 constexpr Translation Italian{
@@ -68,7 +88,12 @@ constexpr Translation Italian{
     "Lettura icone originali...", "Apertura salvataggio locale...", "Lettura box e Pokemon...",
     "Connessione alla tua banca...", "Progresso",
     "Login automatico rilevato...", "Accesso automatico in corso...", "Bentornato, ",
-    "Cestino", "Eliminare questi Pokemon?", "Si", "No"
+    "Cestino", "Eliminare questi Pokemon?", "Si", "No",
+    "Ricerca salvataggi...", "Nessun salvataggio compatibile trovato.", "Controllo slot cartuccia...", "Lettura salvataggio...",
+    "Nessun salvataggio compatibile", "Inserisci una cartuccia o crea prima un salvataggio.",
+    "Nessuna cartuccia inserita", "Inserisci una cartuccia di gioco per caricarla qui.",
+    "Allenatore sconosciuto", "N. Allenatore ", "Tempo di gioco: ", "Pokedex: ",
+    "Cartuccia rimossa", "La cartuccia di gioco e stata rimossa. Ritorno alla selezione dei giochi."
 };
 
 constexpr Translation Portuguese{
@@ -82,7 +107,12 @@ constexpr Translation Portuguese{
     "Lendo icones originais...", "Abrindo save local...", "Lendo caixa e Pokemon...",
     "Conectando ao seu banco...", "Progresso",
     "Login automatico detectado...", "Entrando automaticamente...", "Bem-vindo de volta, ",
-    "Lixeira", "Excluir estes Pokemon?", "Sim", "Nao"
+    "Lixeira", "Excluir estes Pokemon?", "Sim", "Nao",
+    "Procurando jogos salvos...", "Nenhum save compativel encontrado.", "Verificando slot do cartucho...", "Lendo save...",
+    "Nenhum save compativel", "Insira um cartucho ou crie um save primeiro.",
+    "Nenhum cartucho inserido", "Insira um cartucho de jogo para carrega-lo aqui.",
+    "Treinador desconhecido", "N.º Treinador ", "Tempo de jogo: ", "Pokedex: ",
+    "Cartucho removido", "O cartucho do jogo foi removido. Voltando para a selecao de jogos."
 };
 }
 

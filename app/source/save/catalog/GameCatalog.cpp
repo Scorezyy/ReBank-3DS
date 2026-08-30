@@ -1,4 +1,4 @@
-#include "save/GameCatalog.hpp"
+#include "save/catalog/GameCatalog.hpp"
 
 #include <array>
 

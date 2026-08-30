@@ -7,7 +7,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cctype>
 #include <cmath>
 
 using namespace Gui;
@@ -19,10 +18,7 @@ void RegisterScreen::open() {
 }
 
 bool RegisterScreen::usernameValid() const {
-    return username_.size() >= 3 && username_.size() <= 32
-        && std::all_of(username_.begin(), username_.end(), [](unsigned char value) {
-            return std::isalnum(value) || value == '_' || value == '-';
-        });
+    return isValidUsername(username_);
 }
 
 void RegisterScreen::step(int delta) {
@@ -164,20 +160,7 @@ void RegisterScreen::render() {
     if (focus_ == Focus::AutoLogin) {
         drawFocusRing(autoRect, pulse);
     }
-    C2D_DrawRectSolid(autoRect.x, autoRect.y, 0.1F, autoRect.width, autoRect.height,
-                      C2D_Color32(250, 250, 254, 220));
-    const float boxX = autoRect.x + 8.0F;
-    const float boxY = autoRect.y + 5.0F;
-    const bool autoLogin = app_.autoLogin_;
-    C2D_DrawRectSolid(boxX, boxY, 0.12F, 16.0F, 16.0F,
-                      autoLogin ? C2D_Color32(40, 176, 88, 255) : C2D_Color32(210, 214, 224, 255));
-    C2D_DrawRectSolid(boxX + 2.0F, boxY + 2.0F, 0.13F, 12.0F, 12.0F,
-                      autoLogin ? C2D_Color32(80, 200, 120, 255) : C2D_Color32(240, 244, 252, 255));
-    if (autoLogin) {
-        C2D_DrawRectSolid(boxX + 4.0F, boxY + 8.0F, 0.14F, 3.0F, 4.0F, C2D_Color32(255, 255, 255, 255));
-        C2D_DrawRectSolid(boxX + 5.0F, boxY + 10.0F, 0.14F, 8.0F, 3.0F, C2D_Color32(255, 255, 255, 255));
-    }
-    app_.drawText("Auto-Login (Y)", boxX + 26.0F, autoRect.y + 7.0F, 0.44F, Ink);
+    drawAutoLoginCheckbox(app_.ui(), autoRect, app_.autoLogin_);
 
     const UiRect submitRect{SubmitButton.x, SubmitButton.y, SubmitButton.width, SubmitButton.height};
     if (focus_ == Focus::Submit) {
@@ -186,12 +169,7 @@ void RegisterScreen::render() {
     app_.drawButton(submitRect, app_.localization_.get(TextId::Submit), true);
 
     if (app_.authController_.isRunning()) {
-        for (int i = 0; i < 3; ++i) {
-            const float phase = static_cast<float>(t) * 4.0F + i * 0.6F;
-            const float px = 140.0F + i * 14.0F;
-            const float py = 226.0F - std::abs(std::sin(phase)) * 6.0F;
-            C2D_DrawCircleSolid(px, py, 0.4F, 4.0F, C2D_Color32(70, 132, 200, 255));
-        }
+        drawSubmitTypingDots(t);
     }
 }
 

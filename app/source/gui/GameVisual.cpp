@@ -1,5 +1,5 @@
 #include "gui/GameVisual.hpp"
-#include "save/GameCatalog.hpp"
+#include "save/catalog/GameCatalog.hpp"
 
 #include <citro2d.h>
 

@@ -12,9 +12,6 @@ enum class AuthOperation {
     Refresh
 };
 
-// Runs login/register/password-reset/session-refresh calls on a background
-// thread. `password` doubles as the refresh token for AuthOperation::Refresh,
-// matching how the server call itself is shaped.
 class AuthController {
 public:
     struct Completed {
@@ -32,8 +29,7 @@ public:
         std::string email,
         std::string password
     );
-    // Call once per frame. Returns true the moment a finished auth result
-    // becomes available.
+    
     bool poll(Completed& completed);
     bool isRunning() const { return task_.running(); }
 
