@@ -43,6 +43,10 @@ void BankInputController::handle(u32 keysDown, u32 keysHeld, circlePosition circ
     if (commit_.running()) {
         return;
     }
+    if (session_.trashConfirmVisible) {
+        handleTrashConfirm(keysDown, touch, touched);
+        return;
+    }
     if (keysDown & KEY_B) {
         handleBack();
         return;
@@ -103,18 +107,30 @@ void BankInputController::handleBoxShoulder(u32 keysDown) {
     const std::size_t boxLimit = app_.session_.boxLimit == 0 ? 50 : app_.session_.boxLimit;
     const bool goPrevious = keysDown & KEY_L;
     if (session_.storagePane == StoragePane::Cloud) {
+        if (session_.trashBoxActive) {
+            session_.trashBoxActive = false;
+            session_.trashTransitionStart = svcGetSystemTick();
+            session_.cloudBox = goPrevious ? boxLimit - 1 : 0;
+            storage_.refreshCloudBox();
+            return;
+        }
         storage_.persistCloudDraft();
-        session_.cloudBox = goPrevious
-            ? (session_.cloudBox == 0 ? boxLimit - 1 : session_.cloudBox - 1)
-            : (session_.cloudBox + 1) % boxLimit;
+        if ((goPrevious && session_.cloudBox == 0) || (!goPrevious && session_.cloudBox + 1 >= boxLimit)) {
+            session_.trashBoxActive = true;
+            session_.trashTransitionStart = svcGetSystemTick();
+            storage_.loadTrashBox();
+            return;
+        }
+        session_.cloudBox = goPrevious ? session_.cloudBox - 1 : session_.cloudBox + 1;
         storage_.refreshCloudBox();
-    } else {
-        storage_.persistLocalDraft();
-        session_.localBox = goPrevious
-            ? (session_.localBox == 0 ? session_.saveAdapter.boxCount() - 1 : session_.localBox - 1)
-            : (session_.localBox + 1) % session_.saveAdapter.boxCount();
-        storage_.loadLocalBox();
+        return;
     }
+
+    storage_.persistLocalDraft();
+    session_.localBox = goPrevious
+        ? (session_.localBox == 0 ? session_.saveAdapter.boxCount() - 1 : session_.localBox - 1)
+        : (session_.localBox + 1) % session_.saveAdapter.boxCount();
+    storage_.loadLocalBox();
 }
 
 void BankInputController::handleCloudNameFocus(u32 keysDown, u32 keysHeld, circlePosition circle) {
@@ -200,7 +216,8 @@ void BankInputController::handlePaneTransitions(u32 keysDown, StoragePane priorP
         && session_.storagePane == StoragePane::Cloud
         && priorSlot < 6
         && session_.focusedSlot == priorSlot
-        && !session_.hand.active) {
+        && !session_.hand.active
+        && !session_.trashBoxActive) {
         session_.cloudNameFocused = true;
     } else if ((keysDown & KEY_RIGHT)
         && priorPane == StoragePane::Local
@@ -224,12 +241,36 @@ void BankInputController::handlePaneTransitions(u32 keysDown, StoragePane priorP
 void BankInputController::handleCommitRequest() {
     if (session_.hand.active) {
         app_.status_ = "Drop the Pokemon first.";
-    } else if (!storage_.hasPendingChanges()) {
+        return;
+    }
+    if (!storage_.hasPendingChanges()) {
         app_.status_ = "Nothing to commit.";
+    } else if (!session_.trashBox.empty()) {
+        session_.trashConfirmVisible = true;
     } else if (app_.loadService_.running()) {
         commit_.requestWhenIdle();
     } else {
         commit_.begin();
+    }
+}
+
+void BankInputController::handleTrashConfirm(u32 keysDown, touchPosition touch, bool touched) {
+    constexpr UiRect yesButton{40.0F, 130.0F, 100.0F, 34.0F};
+    constexpr UiRect noButton{180.0F, 130.0F, 100.0F, 34.0F};
+    const bool touchYes = touched && (keysDown & KEY_TOUCH) && yesButton.contains(touch);
+    const bool touchNo = touched && (keysDown & KEY_TOUCH) && noButton.contains(touch);
+    if ((keysDown & KEY_A) || touchYes) {
+        session_.trashConfirmVisible = false;
+        storage_.emptyTrashBox();
+        if (app_.loadService_.running()) {
+            commit_.requestWhenIdle();
+        } else {
+            commit_.begin();
+        }
+        return;
+    }
+    if ((keysDown & KEY_B) || touchNo) {
+        session_.trashConfirmVisible = false;
     }
 }
 

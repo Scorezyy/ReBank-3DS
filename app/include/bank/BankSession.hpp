@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bank/BankTypes.hpp"
+#include "bank/TrashCanBox.hpp"
 #include "save/SaveAdapter.hpp"
 #include "save/StorageModel.hpp"
 
@@ -46,9 +47,6 @@ public:
     PartyDraft partyBaseline;
     PartyDraft partyWorking;
     Hand hand;
-    // Bumped every time the hand's identity changes (pick up, drop, swap,
-    // return). Lets an in-flight async cloud fetch that was started for a
-    // specific hand state detect it's now stale before applying its result.
     std::uint32_t handGeneration = 0;
     StoragePane storagePane = StoragePane::Local;
     bool cloudNameFocused = false;
@@ -60,4 +58,8 @@ public:
     std::string errorDialogPokemon;
     std::string errorDialogLocation;
     std::string errorDialogMessage;
+    TrashCanBox trashBox;
+    bool trashBoxActive = false;
+    bool trashConfirmVisible = false;
+    u64 trashTransitionStart = 0;
 };

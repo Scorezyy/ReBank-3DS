@@ -22,7 +22,8 @@ void CloudSyncController::pumpHandPayloadFetch() {
 }
 
 void CloudSyncController::pumpCloudPayloadPrefetch() {
-    if (session_.hand.active || session_.storagePane != StoragePane::Cloud || commit_.requested()) {
+    if (session_.hand.active || session_.storagePane != StoragePane::Cloud || commit_.requested()
+        || session_.trashBoxActive) {
         return;
     }
     if (blockedByOtherWork()) {
@@ -81,7 +82,7 @@ bool CloudSyncController::nextCloudPrefetchKey(std::uint16_t& outKey) const {
 }
 
 void CloudSyncController::pumpCloudPrefetch() {
-    if (commit_.requested() || session_.storagePane != StoragePane::Cloud) {
+    if (commit_.requested() || session_.storagePane != StoragePane::Cloud || session_.trashBoxActive) {
         return;
     }
     if (blockedByOtherWork()) {
@@ -134,12 +135,16 @@ void CloudSyncController::onCloudPickupCompleted() {
         && session_.hand.sourceIndex == app_.loadService_.pickupSlot
         && !session_.hand.payloadKnown
         && session_.handGeneration == app_.loadService_.pickupHandGeneration;
+    const bool viewingPickupBox =
+        app_.loadService_.pickupCloudBox == static_cast<std::uint16_t>(session_.cloudBox + 1);
     DownloadResult& result = app_.loadService_.pickupResult;
     if (result.success) {
         PokemonPayload payload;
         payload.format = result.pokemon.format;
         payload.data = std::move(result.pokemon.payload);
-        session_.cachedCloudPayloads[app_.loadService_.pickupSlot] = payload;
+        if (viewingPickupBox) {
+            session_.cachedCloudPayloads[app_.loadService_.pickupSlot] = payload;
+        }
         const auto pickupBoxKey = static_cast<std::uint16_t>(app_.loadService_.pickupCloudBox - 1);
         auto pickupBoxIt = session_.cloudBoxes.find(pickupBoxKey);
         if (pickupBoxIt != session_.cloudBoxes.end() && app_.loadService_.pickupSlot < 30) {
@@ -152,14 +157,15 @@ void CloudSyncController::onCloudPickupCompleted() {
         return;
     }
     if (!stillHeld) {
-        if (app_.loadService_.pickupCloudBox == static_cast<std::uint16_t>(session_.cloudBox + 1)
-            && app_.loadService_.pickupSlot < session_.payloadPrefetchFailed.size()) {
+        if (viewingPickupBox && app_.loadService_.pickupSlot < session_.payloadPrefetchFailed.size()) {
             session_.payloadPrefetchFailed[app_.loadService_.pickupSlot] = true;
         }
         Logger::instance().warning("Cloud payload prefetch failed: " + result.message);
         return;
     }
-    session_.cloudPreview[app_.loadService_.pickupSlot] = session_.hand.summary;
+    if (viewingPickupBox) {
+        session_.cloudPreview[app_.loadService_.pickupSlot] = session_.hand.summary;
+    }
     session_.hand = Hand{};
     app_.status_ = "Cannot pick up: " + result.message;
     session_.errorDialogTitle = "PICKUP FAILED";
@@ -192,9 +198,19 @@ void CloudSyncController::onCloudSwapCompleted() {
     }
     const bool stillValid = session_.hand.active
         && session_.handGeneration == app_.loadService_.pickupHandGeneration;
-    if (!stillValid || app_.loadService_.pickupCloudBox != static_cast<std::uint16_t>(session_.cloudBox + 1)) {
-        session_.cachedCloudPayloads[app_.loadService_.pickupSlot].format = result.pokemon.format;
-        session_.cachedCloudPayloads[app_.loadService_.pickupSlot].data = std::move(result.pokemon.payload);
+    const bool viewingSwapBox =
+        app_.loadService_.pickupCloudBox == static_cast<std::uint16_t>(session_.cloudBox + 1);
+    if (!stillValid || !viewingSwapBox) {
+        const auto swapBoxKey = static_cast<std::uint16_t>(app_.loadService_.pickupCloudBox - 1);
+        auto swapBoxIt = session_.cloudBoxes.find(swapBoxKey);
+        if (swapBoxIt != session_.cloudBoxes.end() && app_.loadService_.pickupSlot < 30) {
+            swapBoxIt->second.payloads[app_.loadService_.pickupSlot].format = result.pokemon.format;
+            swapBoxIt->second.payloads[app_.loadService_.pickupSlot].data = result.pokemon.payload;
+        }
+        if (viewingSwapBox) {
+            session_.cachedCloudPayloads[app_.loadService_.pickupSlot].format = result.pokemon.format;
+            session_.cachedCloudPayloads[app_.loadService_.pickupSlot].data = std::move(result.pokemon.payload);
+        }
         app_.status_ = stillValid ? "Box changed, swap cancelled." : "Swap cancelled.";
         return;
     }

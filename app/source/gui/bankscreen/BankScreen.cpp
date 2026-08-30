@@ -28,7 +28,12 @@ void BankScreen::onGameOpened() {
 }
 
 void BankScreen::renderTop(float eyeOffset) {
-    drawBoxBackground(app_.resources_.boxBackground, true);
+    constexpr double transitionSeconds = 0.4;
+    const double now = static_cast<double>(svcGetSystemTick()) / SYSCLOCK_ARM11;
+    const double since = now - static_cast<double>(session_.trashTransitionStart) / SYSCLOCK_ARM11;
+    const float step = static_cast<float>(std::clamp(since / transitionSeconds, 0.0, 1.0));
+    const float trashProgress = session_.trashBoxActive ? step : (1.0F - step);
+    drawBoxBackground(app_.resources_.boxBackground, true, trashProgress);
     renderTopHeader();
     renderTopBoxGrid(eyeOffset);
     renderTopInfoPanel();
@@ -52,10 +57,15 @@ void BankScreen::renderTopHeader() {
         drawBouncingCursor(8.0F + nameBarW * 0.5F, nameBarY - 6.0F, 3.5F, 12.0F, CursorRed);
     }
     const auto cachedCloudName = session_.cloudBoxNames.find(static_cast<std::uint16_t>(session_.cloudBox + 1));
-    const std::string cloudBoxLabel = cachedCloudName != session_.cloudBoxNames.end()
-        ? cachedCloudName->second
-        : "Bank " + std::to_string(session_.cloudBox + 1);
+    const std::string cloudBoxLabel = session_.trashBoxActive
+        ? std::string(app_.localization_.get(TextId::TrashCan))
+        : (cachedCloudName != session_.cloudBoxNames.end()
+            ? cachedCloudName->second
+            : "Bank " + std::to_string(session_.cloudBox + 1));
     app_.drawCentered(cloudBoxLabel, 8.0F + nameBarW * 0.5F, nameBarY + 5.0F, 0.55F, HeaderInk);
+    if (session_.trashBoxActive) {
+        return;
+    }
     const bool waitingOnHeldPickup = session_.hand.active && session_.hand.source == HandSource::Cloud
         && !session_.hand.payloadKnown
         && app_.loadService_.operation() == LoadService::Operation::PickupCloud;
@@ -85,7 +95,9 @@ void BankScreen::renderTopBoxGrid(float eyeOffset) {
     for (std::size_t slot = 0; slot < 30; ++slot) {
         const float cx = gridLeft + (static_cast<float>(slot % 6) + 0.5F) * pitchX;
         const float cy = gridTop + (static_cast<float>(slot / 6) + 0.5F) * pitchY;
-        const PokemonSummary& pokemon = session_.cloudPreview[slot];
+        const PokemonSummary& pokemon = session_.trashBoxActive
+            ? session_.trashBox.summaries()[slot]
+            : session_.cloudPreview[slot];
         if (app_.resources_.pokemonSprites && pokemon.species != 0) {
             const C2D_Image image = C2D_SpriteSheetGetImage(app_.resources_.pokemonSprites, pokemon.species);
             constexpr float scale = 1.0F;
@@ -133,7 +145,9 @@ void BankScreen::renderTopInfoPanel() {
     constexpr auto lang = pksm::Language::ENG;
 
     const PokemonSummary& focused = session_.storagePane == StoragePane::Cloud
-        ? session_.cloudPreview[session_.focusedSlot]
+        ? (session_.trashBoxActive
+            ? session_.trashBox.summaries()[session_.focusedSlot]
+            : session_.cloudPreview[session_.focusedSlot])
         : (session_.storagePane == StoragePane::Party
             ? session_.partyWorking.summaries[session_.focusedSlot]
             : session_.storage.pokemon(session_.focusedSlot));
@@ -278,6 +292,10 @@ void BankScreen::renderTopInfoPanel() {
 void BankScreen::render() {
     if (session_.errorDialogVisible) {
         renderErrorDialog();
+        return;
+    }
+    if (session_.trashConfirmVisible) {
+        renderTrashConfirmDialog();
         return;
     }
     renderStorageBottom();
@@ -514,4 +532,22 @@ void BankScreen::renderErrorDialog() {
                       okButton.width - 4.0F, okButton.height - 4.0F, CursorGreen);
     app_.drawCentered("OK", 160.0F, 199.0F, 0.52F, C2D_Color32(255, 255, 255, 255));
     app_.drawCentered("A / B", 268.0F, 201.0F, 0.30F, Muted);
+}
+
+void BankScreen::renderTrashConfirmDialog() {
+    C2D_DrawRectSolid(0.0F, 0.0F, 0.35F, 320.0F, 240.0F, C2D_Color32(12, 24, 19, 255));
+    C2D_DrawRectSolid(18.0F, 52.0F, 0.40F, 284.0F, 148.0F, C2D_Color32(250, 247, 238, 255));
+
+    app_.drawCentered(app_.localization_.get(TextId::TrashCan), 160.0F, 68.0F, 0.5F, HeaderInk);
+    app_.drawCentered(app_.localization_.get(TextId::TrashConfirmMessage), 160.0F, 98.0F, 0.42F, HeaderInk);
+
+    const UiRect yesButton{40.0F, 130.0F, 100.0F, 34.0F};
+    C2D_DrawRectSolid(yesButton.x, yesButton.y, 0.46F, yesButton.width, yesButton.height, CursorGreen);
+    app_.drawCentered(app_.localization_.get(TextId::Yes), 90.0F, 139.0F, 0.5F, C2D_Color32(255, 255, 255, 255));
+
+    const UiRect noButton{180.0F, 130.0F, 100.0F, 34.0F};
+    C2D_DrawRectSolid(noButton.x, noButton.y, 0.46F, noButton.width, noButton.height, Brand);
+    app_.drawCentered(app_.localization_.get(TextId::No), 230.0F, 139.0F, 0.5F, C2D_Color32(255, 255, 255, 255));
+
+    app_.drawCentered("A / B", 160.0F, 180.0F, 0.36F, HeaderInk);
 }

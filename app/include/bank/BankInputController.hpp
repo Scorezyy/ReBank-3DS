@@ -29,6 +29,7 @@ private:
     void applyMove(int direction);
     void handlePaneTransitions(u32 keysDown, StoragePane priorPane, std::size_t priorSlot);
     void handleCommitRequest();
+    void handleTrashConfirm(u32 keysDown, touchPosition touch, bool touched);
     void pumpBackgroundWork();
     void handleTouch(touchPosition touch);
     bool handleTouchLocalGrid(touchPosition touch);

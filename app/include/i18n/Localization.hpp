@@ -38,6 +38,10 @@ enum class TextId : std::size_t {
     LoadingAutoLoginDetected,
     LoadingDetailAutoLoginDetected,
     LoadingWelcomeBackPrefix,
+    TrashCan,
+    TrashConfirmMessage,
+    Yes,
+    No,
     Count
 };
 
