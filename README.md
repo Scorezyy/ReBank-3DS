@@ -23,11 +23,26 @@ Now Pokémon Bank is being shut down. Without it, a huge part of many trainers' 
 
 <br />
 
+## Install in 10 seconds
+
+Have [FBI](https://github.com/Steveice10/FBI) installed? Open it, choose **Remote Install → QR Scan**, and scan this:
+
+<div align="center">
+  <img src=".github/qr-latest-cia.png" alt="QR code linking to the newest ReBank CIA" width="200" />
+</div>
+
+That link always serves the newest build — the QR code itself never needs to change, even after future updates. No FBI? Grab the `.cia`, `.3ds`, or `.3dsx` manually from the **[Releases](../../releases)** page instead.
+
+<br />
+
 ## What you can do right now
 
 | | |
 |---|---|
 | ☁️ **Cloud storage** | Move Pokémon from your game cartridge into your personal online bank, and pull them back down whenever you want. Your collection stays yours, independent of any single cartridge. |
+| 🎮 **Automatic cartridge detection** | Insert or swap a game cartridge and ReBank picks it up on its own — no manual rescan needed. |
+| 🎒 **Party support** | View and manage your current party's six Pokémon directly from the bank, right alongside your boxes. |
+| 🗑️ **Trash Can** | Drop Pokémon you want gone into the trash box, then commit to delete them all at once — with a confirmation prompt before anything is lost for good. |
 | 🗂️ **Custom box names** | Give your cloud boxes their own names, right from the box screen, so a collection of hundreds of Pokémon stays easy to navigate. |
 | 🔁 **Cross-generation transfers** | ReBank understands Pokémon from Generation 4 all the way through Generation 7, so your collection isn't locked to a single game or console generation. |
 | ✨ **Shiny & held item indicators** | Shiny Pokémon get a star badge and held items get their own icon, right on the box screen — no need to open every Pokémon to check. |
@@ -80,11 +95,24 @@ Pokémon can move upward across these generations as you go — catch something 
 
 ## Getting started
 
-1. Grab the latest build from the **[Releases](../../releases)** page — the `.cia` file is what most people want.
-2. Install it on your Nintendo 3DS the same way you'd install any other homebrew title.
-3. Open ReBank, create a free account, and start moving Pokémon into the cloud.
+1. Install the app — scan the QR code above with FBI, or grab a file from **[Releases](../../releases)** manually.
+2. Open ReBank, create a free account, and select your game.
+3. Start moving Pokémon into the cloud.
 
-That's it — no setup, no configuration files, no external accounts needed.
+That's it — no setup, no configuration files, no external accounts needed. Once installed, ReBank also checks for and installs its own updates from within the app.
+
+<br />
+
+## How far it's come
+
+ReBank has been in active beta since its first public release, with something landing in nearly every update:
+
+- **Early betas (0.1.x)** — the foundation: Gen 4–7 save support, accounts, legality-checked transfers, pinned HTTPS, automatic self-updating, and a string of stability fixes (including tracking down a nasty Bad Egg bug across two generations of games).
+- **0.2.0** — a full UI redesign, party team support, cloud box renaming, major performance and reliability work across networking and the commit pipeline, and safer handling that stops failed transfers from ever duplicating or losing a Pokémon.
+- **0.2.1** — the Trash Can, for bulk-deleting Pokémon you no longer want.
+- **0.2.2** — automatic cartridge detection: swap cartridges freely and ReBank keeps up on its own, plus a large internal refactor to keep the codebase easy to extend.
+
+The full history, with details on every fix and feature, lives on the **[Releases](../../releases)** page.
 
 <br />
 
