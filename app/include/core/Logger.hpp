@@ -25,8 +25,7 @@ public:
     void warning(std::string_view message);
     void error(std::string_view message);
     std::deque<LogEntry> entries() const;
-    // Writes queued entries to the SD card. Main thread only: fprintf from a
-    // background thread was the cause of a reproducible ARM11 data abort.
+
     void flush();
 
 private:

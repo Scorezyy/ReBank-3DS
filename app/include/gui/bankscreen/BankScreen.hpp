@@ -5,7 +5,7 @@
 #include "bank/CloudSyncController.hpp"
 #include "bank/CommitService.hpp"
 #include "bank/StorageController.hpp"
-#include "save/SaveAdapter.hpp"
+#include "save/adapter/SaveAdapter.hpp"
 
 #include <citro2d.h>
 #include <3ds.h>
@@ -45,12 +45,22 @@ public:
     SaveAdapter& saveAdapter() { return session_.saveAdapter; }
 
 private:
+    void pollCartridgeSlot();
     void renderStorageBottom();
+    void renderStatusBar();
+    void renderLocalBoxHeader();
+    void renderLocalGrid();
+    void renderTeamHeader();
+    void renderPartyGrid();
+    void renderCommitOverlay();
+    void renderActionHints();
     void renderErrorDialog();
     void renderTrashConfirmDialog();
     void renderTopHeader();
     void renderTopBoxGrid(float eyeOffset);
     void renderTopInfoPanel();
+    void drawHeldPokemonPreview(float cx, float cy) const;
+    void drawFocusCursor(float cx, float cy, float cursorYOffset, float radius, float height) const;
 
     App& app_;
     BankSession session_;
@@ -58,4 +68,6 @@ private:
     CommitService commit_;
     CloudSyncController cloudSync_;
     BankInputController input_;
+    bool cardInsertionKnown_ = false;
+    bool cardInserted_ = false;
 };

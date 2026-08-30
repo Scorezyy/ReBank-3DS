@@ -21,6 +21,7 @@ Option:
 AccessControlInfo:
   FileSystemAccess:
     - CategoryFileSystemTool
+    - CategorySystemApplication
     - TwlCardBackup
     - DirectSdmc
     - DirectSdmcWrite

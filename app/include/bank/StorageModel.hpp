@@ -1,6 +1,6 @@
 #pragma once
 
-#include "save/SaveAdapter.hpp"
+#include "save/adapter/SaveAdapter.hpp"
 
 #include <array>
 #include <cstddef>

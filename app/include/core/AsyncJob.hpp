@@ -6,10 +6,6 @@
 #include <functional>
 #include <utility>
 
-// Like AsyncTask, but for jobs that report their outcome by writing into
-// state the caller already owns (captured by the lambda) instead of
-// returning a value - useful when a single background job can produce
-// several different kinds of results depending on what it was asked to do.
 class AsyncJob {
 public:
     AsyncJob() = default;

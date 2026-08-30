@@ -1,23 +1,9 @@
 #include "gui/elements/TextMetrics.hpp"
 
-#include <algorithm>
 #include <cstdint>
 
 namespace Gui {
 namespace {
-constexpr std::uint32_t MusicNoteFirst = 0x2669;
-constexpr std::uint32_t MusicNoteLast = 0x266C;
-constexpr std::uint32_t MusicNotePua = 0xE09A;
-constexpr std::uint32_t MaleSign = 0x2642;
-constexpr std::uint32_t FemaleSign = 0x2640;
-
-bool isKnownSafe(std::uint32_t codepoint) {
-    return (codepoint >= 0x00A0 && codepoint <= 0x024F)
-        || (codepoint >= 0x3040 && codepoint <= 0x30FF)
-        || (codepoint >= 0x4E00 && codepoint <= 0x9FFF)
-        || (codepoint >= 0xFF00 && codepoint <= 0xFFEF);
-}
-
 std::uint32_t decodeUtf8(std::string_view value, std::size_t& index, bool& valid) {
     const auto byte = static_cast<unsigned char>(value[index]);
     std::size_t length = 1;
@@ -58,48 +44,26 @@ std::uint32_t decodeUtf8(std::string_view value, std::size_t& index, bool& valid
 }
 }
 
-PreparedText prepareText(std::string_view value, C2D_Font font) {
-    PreparedText prepared;
-    prepared.value.reserve(value.size());
-    const int alterIndex = C2D_FontGetInfo(font)->alterCharIndex;
+std::string prepareText(std::string_view value, C2D_Font font) {
+    (void)font;
+    std::string prepared;
+    prepared.reserve(value.size());
     std::size_t index = 0;
     while (index < value.size()) {
         const std::size_t start = index;
         bool valid = true;
-        const std::uint32_t codepoint = decodeUtf8(value, index, valid);
-        const bool musicNote = (codepoint >= MusicNoteFirst && codepoint <= MusicNoteLast)
-            || codepoint == MusicNotePua;
-        if (musicNote) {
-            const bool doubleNote = codepoint == 0x266B || codepoint == 0x266C;
-            prepared.musicGlyphs.push_back({prepared.value.size(), doubleNote});
-            prepared.value.append("  ");
-            continue;
-        }
-        const bool renderable = valid
-            && (codepoint < 0x80
-                || (isKnownSafe(codepoint)
-                    && C2D_FontGlyphIndexFromCodePoint(font, codepoint) != alterIndex));
-        if (renderable) {
-            prepared.value.append(value.substr(start, index - start));
-            continue;
-        }
-        if (codepoint == MaleSign) {
-            prepared.value.push_back('M');
-        } else if (codepoint == FemaleSign) {
-            prepared.value.push_back('F');
+        decodeUtf8(value, index, valid);
+        if (valid) {
+            prepared.append(value.substr(start, index - start));
         } else {
-            prepared.value.push_back('?');
+            prepared.push_back('?');
         }
     }
     return prepared;
 }
 
 void parseText(C2D_Text& text, C2D_Font font, C2D_TextBuf buffer, const std::string& value) {
-    if (font) {
-        C2D_TextFontParse(&text, font, buffer, value.c_str());
-    } else {
-        C2D_TextParse(&text, buffer, value.c_str());
-    }
+    C2D_TextFontParse(&text, font, buffer, value.c_str());
 }
 
 namespace {
@@ -114,7 +78,7 @@ float textHeight(C2D_Font font, C2D_TextBuf buffer, std::string_view value, floa
     C2D_TextBuf scratch = measureBuffer();
     C2D_TextBufClear(scratch);
     C2D_Text text;
-    const std::string owned(prepareText(value, font).value);
+    const std::string owned = prepareText(value, font);
     parseText(text, font, scratch, owned);
     float width = 0.0F;
     float height = 0.0F;
@@ -127,38 +91,11 @@ float textWidth(C2D_Font font, C2D_TextBuf buffer, std::string_view value, float
     C2D_TextBuf scratch = measureBuffer();
     C2D_TextBufClear(scratch);
     C2D_Text text;
-    const std::string owned(prepareText(value, font).value);
+    const std::string owned = prepareText(value, font);
     parseText(text, font, scratch, owned);
     float width = 0.0F;
     float height = 0.0F;
     C2D_TextGetDimensions(&text, size, size, &width, &height);
     return width;
-}
-
-void drawMusicGlyphs(const PreparedText& prepared, C2D_Font font, C2D_TextBuf buffer,
-                     float x, float y, float size, u32 color) {
-    for (const MusicGlyph& glyph : prepared.musicGlyphs) {
-        const float glyphX = x + textWidth(font, buffer,
-            std::string_view(prepared.value).substr(0, glyph.offset), size);
-        const float headY = y + 19.0F * size;
-        const float topY = y + 6.0F * size;
-        const float radius = std::max(1.0F, 2.6F * size);
-        C2D_DrawCircleSolid(glyphX + 4.0F * size, headY, 0.86F, radius, color);
-        C2D_DrawRectSolid(glyphX + 5.5F * size, topY, 0.86F,
-                          std::max(1.0F, 1.5F * size), 13.0F * size, color);
-        if (glyph.doubleNote) {
-            C2D_DrawCircleSolid(glyphX + 12.0F * size, headY - 2.0F * size,
-                                0.86F, radius, color);
-            C2D_DrawRectSolid(glyphX + 13.5F * size, topY, 0.86F,
-                              std::max(1.0F, 1.5F * size), 11.0F * size, color);
-            C2D_DrawRectSolid(glyphX + 5.5F * size, topY, 0.86F,
-                              9.5F * size, std::max(1.0F, 2.0F * size), color);
-        } else {
-            C2D_DrawRectSolid(glyphX + 5.5F * size, topY, 0.86F,
-                              5.0F * size, std::max(1.0F, 1.5F * size), color);
-            C2D_DrawRectSolid(glyphX + 9.0F * size, topY, 0.86F,
-                              std::max(1.0F, 1.5F * size), 4.5F * size, color);
-        }
-    }
 }
 }

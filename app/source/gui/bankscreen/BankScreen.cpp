@@ -1,5 +1,6 @@
 #include "gui/bankscreen/BankScreen.hpp"
 #include "app/App.hpp"
+#include "core/Logger.hpp"
 #include "gui/GameVisual.hpp"
 #include "gui/elements/BoxBackground.hpp"
 #include "gui/elements/Cursor.hpp"
@@ -18,12 +19,63 @@
 
 using namespace Gui;
 
+void BankScreen::pollCartridgeSlot() {
+    if (!session_.saveAdapter.isCartridge()) {
+        cardInsertionKnown_ = false;
+        return;
+    }
+    bool inserted = false;
+    if (R_FAILED(FSUSER_CardSlotIsInserted(&inserted))) {
+        return;
+    }
+    if (!cardInsertionKnown_) {
+        cardInsertionKnown_ = true;
+        cardInserted_ = inserted;
+        return;
+    }
+    if (inserted == cardInserted_) {
+        return;
+    }
+    cardInserted_ = inserted;
+    if (inserted) {
+        return;
+    }
+    Logger::instance().warning("Cartridge removed while banking, returning to game select");
+    storage_.reset();
+    cardInsertionKnown_ = false;
+    app_.status_.clear();
+    app_.screen_ = App::Screen::GameSelect;
+    app_.showError(std::string(app_.localization_.get(TextId::CartridgeRemovedTitle)),
+                   std::string(app_.localization_.get(TextId::CartridgeRemovedMessage)));
+}
+
 void BankScreen::update(u32 keysDown, u32 keysHeld, circlePosition circle, touchPosition touch, bool touched) {
+    pollCartridgeSlot();
+    if (app_.screen_ != App::Screen::Bank) {
+        return;
+    }
     input_.handle(keysDown, keysHeld, circle, touch, touched);
 }
 
+void BankScreen::drawHeldPokemonPreview(float cx, float cy) const {
+    if (!session_.hand.active || session_.hand.summary.species == 0 || !app_.resources_.pokemonSprites) {
+        return;
+    }
+    const C2D_Image image = C2D_SpriteSheetGetImage(app_.resources_.pokemonSprites, session_.hand.summary.species);
+    constexpr float scale = 1.0F;
+    const float w = image.subtex->width * scale;
+    const float h = image.subtex->height * scale;
+    C2D_DrawImageAt(image, std::round(cx - w * 0.5F), std::round(cy - h * 0.5F), 0.6F, nullptr, scale, scale);
+}
+
+void BankScreen::drawFocusCursor(float cx, float cy, float cursorYOffset, float radius, float height) const {
+    const u32 arrowColor = session_.hand.active ? CursorGreen : CursorRed;
+    drawBouncingCursor(cx, cy - cursorYOffset, radius, height, arrowColor);
+    drawHeldPokemonPreview(cx, cy);
+}
+
 void BankScreen::onGameOpened() {
-    storage_.initializeFromOpenedGame(app_.loadService_.openGameResult);
+    storage_.initializeFromOpenedGame(app_.saveLoadService_.openGameResult);
     app_.screen_ = App::Screen::Bank;
 }
 
@@ -118,19 +170,7 @@ void BankScreen::renderTopBoxGrid(float eyeOffset) {
             drawPokemonBadges(app_.resources_.overlayIcons, pokemon, cx, cy, w * 0.5F, h * 0.5F, 0.31F);
         }
         if (session_.storagePane == StoragePane::Cloud && slot == session_.focusedSlot && !session_.cloudNameFocused) {
-            const u32 arrowColor = session_.hand.active ? CursorGreen : CursorRed;
-            drawBouncingCursor(cx, cy - 22.0F, 3.5F, 12.0F, arrowColor);
-
-            if (session_.hand.active && session_.hand.summary.species != 0 && app_.resources_.pokemonSprites) {
-                const C2D_Image image = C2D_SpriteSheetGetImage(app_.resources_.pokemonSprites, session_.hand.summary.species);
-                constexpr float scale = 1.0F;
-                const float w = image.subtex->width * scale;
-                const float h = image.subtex->height * scale;
-                C2D_DrawImageAt(image,
-                                std::round(cx - w * 0.5F),
-                                std::round(cy - h * 0.5F),
-                                0.6F, nullptr, scale, scale);
-            }
+            drawFocusCursor(cx, cy, 22.0F, 3.5F, 12.0F);
         }
     }
 }
@@ -303,7 +343,19 @@ void BankScreen::render() {
 
 void BankScreen::renderStorageBottom() {
     drawLinePattern(app_.resources_.bottomBackground, C2D_Color32(158, 224, 152, 255), false);
+    renderStatusBar();
+    renderLocalBoxHeader();
+    renderLocalGrid();
+    renderTeamHeader();
+    renderPartyGrid();
+    if (commit_.running()) {
+        renderCommitOverlay();
+        return;
+    }
+    renderActionHints();
+}
 
+void BankScreen::renderStatusBar() {
     C2D_DrawRectSolid(0.0F, 0.0F, 0.05F, 320.0F, 20.0F, C2D_Color32(215, 232, 224, 235));
     C2D_DrawCircleSolid(14.0F, 10.0F, 0.1F, 7.0F, C2D_Color32(210, 40, 40, 255));
     C2D_DrawRectSolid(7.0F, 9.0F, 0.15F, 14.0F, 2.0F, C2D_Color32(30, 30, 30, 255));
@@ -319,7 +371,9 @@ void BankScreen::renderStorageBottom() {
     }
     C2D_DrawRectSolid(252.0F, 2.0F, 0.1F, 60.0F, 16.0F, C2D_Color32(58, 58, 58, 255));
     app_.drawCentered("START", 282.0F, 5.0F, 0.4F, C2D_Color32(240, 240, 240, 255));
+}
 
+void BankScreen::renderLocalBoxHeader() {
     if (app_.resources_.boxNameBarSheet) {
         C2D_DrawImageAt(C2D_SpriteSheetGetImage(app_.resources_.boxNameBarSheet, 0), 6.0F, 26.0F, 0.14F);
     } else {
@@ -330,7 +384,9 @@ void BankScreen::renderStorageBottom() {
         ? "BOX " + std::to_string(session_.localBox + 1)
         : session_.localBoxName;
     app_.drawCentered(boxLabel, 106.0F, 31.0F, 0.55F, HeaderInk);
+}
 
+void BankScreen::renderLocalGrid() {
     constexpr float pitchX = 34.0F;
     constexpr float pitchY = 30.0F;
     constexpr float gridLeft = 8.0F;
@@ -360,22 +416,12 @@ void BankScreen::renderStorageBottom() {
             drawPokemonBadges(app_.resources_.overlayIcons, pokemon, cx, cy, w * 0.5F, h * 0.5F, 0.36F);
         }
         if (session_.storagePane == StoragePane::Local && slot == session_.focusedSlot) {
-            const u32 arrowColor = session_.hand.active ? CursorGreen : CursorRed;
-            drawBouncingCursor(cx, cy - 20.0F, 3.0F, 10.0F, arrowColor);
-
-            if (session_.hand.active && session_.hand.summary.species != 0 && app_.resources_.pokemonSprites) {
-                const C2D_Image image = C2D_SpriteSheetGetImage(app_.resources_.pokemonSprites, session_.hand.summary.species);
-                constexpr float scale = 1.0F;
-                const float w = image.subtex->width * scale;
-                const float h = image.subtex->height * scale;
-                C2D_DrawImageAt(image,
-                                std::round(cx - w * 0.5F),
-                                std::round(cy - h * 0.5F),
-                                0.6F, nullptr, scale, scale);
-            }
+            drawFocusCursor(cx, cy, 20.0F, 3.0F, 10.0F);
         }
     }
+}
 
+void BankScreen::renderTeamHeader() {
     constexpr float teamHeaderX = 218.0F;
     constexpr float teamHeaderY = 26.0F;
     constexpr float teamHeaderW = 96.0F;
@@ -394,7 +440,9 @@ void BankScreen::renderStorageBottom() {
     }
     app_.drawCentered("TEAM", teamHeaderX + teamHeaderW * 0.5F, 31.0F, 0.55F,
                       app_.resources_.teamBackground ? C2D_Color32(255, 255, 255, 255) : HeaderInk);
+}
 
+void BankScreen::renderPartyGrid() {
     constexpr float partyColAX = 244.0F;
     constexpr float partyColBX = 288.0F;
     constexpr float partyRowStep = 45.0F;
@@ -425,37 +473,28 @@ void BankScreen::renderStorageBottom() {
             drawPokemonBadges(app_.resources_.overlayIcons, pokemon, cx, cy, w * 0.5F, h * 0.5F, 0.36F);
         }
         if (session_.storagePane == StoragePane::Party && slot == session_.focusedSlot) {
-            const u32 arrowColor = session_.hand.active ? CursorGreen : CursorRed;
-            drawBouncingCursor(cx, cy - 20.0F, 3.0F, 10.0F, arrowColor);
-            if (session_.hand.active && session_.hand.summary.species != 0 && app_.resources_.pokemonSprites) {
-                const C2D_Image image = C2D_SpriteSheetGetImage(app_.resources_.pokemonSprites, session_.hand.summary.species);
-                constexpr float scale = 1.0F;
-                const float w = image.subtex->width * scale;
-                const float h = image.subtex->height * scale;
-                C2D_DrawImageAt(image,
-                                std::round(cx - w * 0.5F),
-                                std::round(cy - h * 0.5F),
-                                0.6F, nullptr, scale, scale);
-            }
+            drawFocusCursor(cx, cy, 20.0F, 3.0F, 10.0F);
         }
     }
+}
 
-    if (commit_.running()) {
-        C2D_DrawRectSolid(0.0F, 205.0F, 0.7F, 200.0F, 35.0F, C2D_Color32(0, 0, 0, 170));
-        const int phase = commit_.phase();
-        std::string label = phase == 3 ? "Writing save..."
-                           : phase == 2 ? "Uploading cloud..."
-                           : phase == 1 ? "Removing cloud..."
-                           : "Preparing...";
-        const int progress = commit_.progress();
-        label += " " + std::to_string(progress) + "%";
-        app_.drawCentered(label,
-                     100.0F, 210.0F, 0.42F, C2D_Color32(255, 255, 255, 255));
-        C2D_DrawRectSolid(10.0F, 228.0F, 0.9F, 180.0F, 6.0F, C2D_Color32(50, 50, 50, 220));
-        const float fill = 180.0F * static_cast<float>(progress) / 100.0F;
-        C2D_DrawRectSolid(10.0F, 228.0F, 0.92F, fill, 6.0F, CursorGreen);
-        return;
-    }
+void BankScreen::renderCommitOverlay() {
+    C2D_DrawRectSolid(0.0F, 205.0F, 0.7F, 200.0F, 35.0F, C2D_Color32(0, 0, 0, 170));
+    const int phase = commit_.phase();
+    std::string label = phase == 3 ? "Writing save..."
+                       : phase == 2 ? "Uploading cloud..."
+                       : phase == 1 ? "Removing cloud..."
+                       : "Preparing...";
+    const int progress = commit_.progress();
+    label += " " + std::to_string(progress) + "%";
+    app_.drawCentered(label,
+                 100.0F, 210.0F, 0.42F, C2D_Color32(255, 255, 255, 255));
+    C2D_DrawRectSolid(10.0F, 228.0F, 0.9F, 180.0F, 6.0F, C2D_Color32(50, 50, 50, 220));
+    const float fill = 180.0F * static_cast<float>(progress) / 100.0F;
+    C2D_DrawRectSolid(10.0F, 228.0F, 0.92F, fill, 6.0F, CursorGreen);
+}
+
+void BankScreen::renderActionHints() {
     const bool held = session_.hand.active;
     const bool pending = storage_.hasPendingChanges();
 

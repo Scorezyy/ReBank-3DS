@@ -1,4 +1,4 @@
-#include "save/PokemonTransfer.hpp"
+#include "save/pokemon/PokemonTransfer.hpp"
 
 #include <pkx/PK5.hpp>
 #include <pkx/PK6.hpp>

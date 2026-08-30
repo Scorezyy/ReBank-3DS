@@ -1,6 +1,10 @@
 #include "gui/GfxResources.hpp"
 #include "core/Logger.hpp"
 
+#include <3ds.h>
+
+#include <string>
+
 void GfxResources::load() {
     gfxInitDefault();
     gfxSet3D(true);
@@ -13,10 +17,22 @@ void GfxResources::load() {
     textBuffer = C2D_TextBufNew(16384);
     textBufferTopA = C2D_TextBufNew(4096);
     textBufferTopB = C2D_TextBufNew(4096);
-    textFont = C2D_FontLoadSystem(CFG_REGION_JPN);
+    u8 consoleRegion = CFG_REGION_USA;
+    const bool regionKnown = R_SUCCEEDED(CFGU_SecureInfoGetRegion(&consoleRegion));
+    if (regionKnown) {
+        textFont = C2D_FontLoadSystem(static_cast<CFG_Region>(consoleRegion));
+    }
+    const CFG_Region fallbackRegions[] = {CFG_REGION_USA, CFG_REGION_EUR, CFG_REGION_JPN};
+    for (const CFG_Region region : fallbackRegions) {
+        if (textFont) {
+            break;
+        }
+        textFont = C2D_FontLoadSystem(region);
+    }
     Logger::instance().info(textFont
-        ? "Standard font loaded from the system font archive"
-        : "Using the console's own system font");
+        ? "System font loaded (console region known=" + std::to_string(regionKnown)
+              + ", region=" + std::to_string(consoleRegion) + ")"
+        : "System font failed to load for every region, falling back to default glyphs");
     if (textFont) {
         C2D_FontSetFilter(textFont, GPU_NEAREST, GPU_LINEAR);
     }
@@ -74,6 +90,8 @@ void GfxResources::load() {
     genderlessIcon = C2D_SpriteSheetLoad("romfs:/assets/icon_genderless.t3x");
     Logger::instance().info(genderMaleIcon && genderFemaleIcon && genderlessIcon
         ? "Gender icon sheets loaded" : "Gender icon sheet load failed");
+    gameSelectorCard = C2D_SpriteSheetLoad("romfs:/assets/gameselector_card.t3x");
+    Logger::instance().info(gameSelectorCard ? "Game selector card sheet loaded" : "Game selector card sheet load failed");
 }
 
 GfxResources::~GfxResources() {
@@ -121,6 +139,9 @@ GfxResources::~GfxResources() {
     }
     if (genderlessIcon) {
         C2D_SpriteSheetFree(genderlessIcon);
+    }
+    if (gameSelectorCard) {
+        C2D_SpriteSheetFree(gameSelectorCard);
     }
     if (textFont) {
         C2D_FontFree(textFont);

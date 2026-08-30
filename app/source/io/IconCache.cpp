@@ -1,4 +1,4 @@
-#include "save/IconCache.hpp"
+#include "io/IconCache.hpp"
 
 #include "core/Logger.hpp"
 
@@ -50,5 +50,9 @@ void store(const GameDescriptor& game, bool cartridge, const std::array<std::uin
         Logger::instance().warning("Icon cache short write for " + path);
         std::remove(path.c_str());
     }
+}
+
+void invalidate(const GameDescriptor& game, bool cartridge) {
+    std::remove(cachePath(game, cartridge).c_str());
 }
 }

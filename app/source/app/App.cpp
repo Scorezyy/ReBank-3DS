@@ -1,7 +1,6 @@
 #include "app/App.hpp"
 #include "core/FsGuard.hpp"
 #include "core/ServerConfig.hpp"
-#include "gui/elements/TextMetrics.hpp"
 #include "gui/Theme.hpp"
 
 #include <utils/i18n.hpp>
@@ -9,7 +8,6 @@
 #include <array>
 #include <cmath>
 #include <cstring>
-#include <vector>
 
 using namespace Gui;
 
@@ -27,6 +25,7 @@ App::App(std::string executablePath, bool homebrew)
         i18n::init(pksm::Language::ENG);
         music_.play("romfs:/assets/music.ogg");
     resources_.load();
+    ui_.setFont(resources_.textFont);
     credentials_.init();
     beginUpdate();
 }
@@ -81,11 +80,11 @@ void App::update(u32 keysDown, u32 keysHeld, circlePosition circle, touchPositio
         return;
     }
 
-    if (errorDialogVisible_) {
+    if (errorDialog_.visible()) {
         const bool dismissTouch = (keysDown & KEY_TOUCH)
             && UiRect{92.0F, 190.0F, 136.0F, 34.0F}.contains(touch);
         if ((keysDown & (KEY_A | KEY_B)) || dismissTouch) {
-            errorDialogVisible_ = false;
+            errorDialog_.dismiss();
         }
         return;
     }
@@ -286,18 +285,28 @@ void App::pollWelcomeBack() {
 }
 
 void App::pollLoad() {
-    switch (loadService_.poll()) {
-        case LoadService::Operation::DiscoverGames:
-            gameSelectScreen_.populateFromDiscovered(loadService_.discoveredGames);
+    const SaveLoadService::Operation completedSave = saveLoadService_.poll();
+    switch (completedSave) {
+        case SaveLoadService::Operation::DiscoverGames:
+        case SaveLoadService::Operation::RescanCartridge:
+            gameSelectScreen_.populateFromDiscovered(saveLoadService_.discoveredGames);
+            gameSelectScreen_.refreshCartridgeSummary();
             break;
-        case LoadService::Operation::OpenGame:
-            if (!loadService_.openGameResult.success) {
-                status_ = loadService_.openGameResult.message;
+        case SaveLoadService::Operation::OpenGame:
+            if (!saveLoadService_.openGameResult.success) {
+                status_ = saveLoadService_.openGameResult.message;
                 screen_ = Screen::GameSelect;
             } else {
                 bankScreen_.onGameOpened();
             }
             break;
+        case SaveLoadService::Operation::CartridgeSummary:
+            gameSelectScreen_.applyCartridgeSummary(saveLoadService_.cartridgeSummary);
+            break;
+        default:
+            break;
+    }
+    switch (loadService_.poll()) {
         case LoadService::Operation::LoadBank:
             cloudBoxCache_ = loadService_.cloudBoxResult;
             cloudBoxNamesCache_ = loadService_.pendingBoxNames;
@@ -323,6 +332,7 @@ bool App::isLoading() const {
     return updateController_.isRunning()
         || authController_.isRunning()
         || loadService_.blocksUi()
+        || saveLoadService_.blocksUi()
         || welcomeBackPending_;
 }
 
@@ -330,16 +340,16 @@ void App::render() {
     C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
     const float slider = osGet3DSliderState();
 
-    activeTextBuffer_ = resources_.textBufferTopA;
-    C2D_TextBufClear(activeTextBuffer_);
+    ui_.setActiveBuffer(resources_.textBufferTopA);
+    C2D_TextBufClear(resources_.textBufferTopA);
     renderTop(resources_.topLeft, -slider * 2.5F);
 
-    activeTextBuffer_ = resources_.textBufferTopB;
-    C2D_TextBufClear(activeTextBuffer_);
+    ui_.setActiveBuffer(resources_.textBufferTopB);
+    C2D_TextBufClear(resources_.textBufferTopB);
     renderTop(resources_.topRight, slider * 2.5F);
 
-    activeTextBuffer_ = resources_.textBuffer;
-    C2D_TextBufClear(activeTextBuffer_);
+    ui_.setActiveBuffer(resources_.textBuffer);
+    C2D_TextBufClear(resources_.textBuffer);
     renderBottom();
 
     C3D_FrameEnd(0);
@@ -368,8 +378,8 @@ void App::renderTop(C3D_RenderTarget* target, float eyeOffset) {
     const float drift = std::sin(static_cast<float>(seconds) * 1.7F) * 4.0F;
     C2D_DrawCircleSolid(200.0F + eyeOffset + drift, 91.0F, 0.0F, 62.0F, Brand);
     C2D_DrawCircleSolid(200.0F + eyeOffset - drift * 0.4F, 91.0F, 0.0F, 43.0F, Accent);
-    drawCentered("ReBank", 200.0F + eyeOffset, 71.0F, 1.7F, Ink);
-    drawCentered(localization_.get(TextId::Tagline), 200.0F, 171.0F, 0.62F, Muted);
+    ui_.drawCentered("ReBank", 200.0F + eyeOffset, 71.0F, 1.7F, Ink);
+    ui_.drawCentered(localization_.get(TextId::Tagline), 200.0F, 171.0F, 0.62F, Muted);
 }
 
 void App::renderBottom() {
@@ -377,8 +387,8 @@ void App::renderBottom() {
     C2D_SceneBegin(resources_.bottom);
     C2D_DrawRectSolid(0.0F, 0.0F, 0.0F, 320.0F, 240.0F, Background);
 
-    if (errorDialogVisible_) {
-        renderErrorDialog();
+    if (errorDialog_.visible()) {
+        errorDialog_.render(ui_);
         return;
     }
 
@@ -400,8 +410,8 @@ void App::renderBottom() {
         return;
     }
     if (screen_ == Screen::Intro) {
-        drawCentered("ReBank", 160.0F, 94.0F, 1.15F, Ink);
-        drawCentered("A", 160.0F, 154.0F, 0.55F, Muted);
+        ui_.drawCentered("ReBank", 160.0F, 94.0F, 1.15F, Ink);
+        ui_.drawCentered("A", 160.0F, 154.0F, 0.55F, Muted);
         return;
     }
 
@@ -422,78 +432,28 @@ void App::renderBottom() {
     }
 }
 
-namespace {
-    
-void primeTextMode() {
-    C2D_DrawRectSolid(0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0);
-}
-}
-
 void App::drawText(std::string_view value, float x, float y, float size, u32 color) {
-    primeTextMode();
-    C2D_Text text;
-    const PreparedText prepared = prepareText(value, resources_.textFont);
-    parseText(text, resources_.textFont, activeTextBuffer_, prepared.value);
-    const float snappedX = std::round(x);
-    const float snappedY = std::round(y);
-    C2D_DrawText(&text, C2D_WithColor, snappedX, snappedY, 0.85F, size, size, color);
-    drawMusicGlyphs(prepared, resources_.textFont, activeTextBuffer_, snappedX, snappedY, size, color);
+    ui_.drawText(value, x, y, size, color);
 }
 
 void App::drawCentered(std::string_view value, float centerX, float y, float size, u32 color) {
-    primeTextMode();
-    C2D_Text text;
-    const PreparedText prepared = prepareText(value, resources_.textFont);
-    parseText(text, resources_.textFont, activeTextBuffer_, prepared.value);
-    float width = 0.0F;
-    float height = 0.0F;
-    C2D_TextGetDimensions(&text, size, size, &width, &height);
-    const float snappedX = std::round(centerX - width * 0.5F);
-    const float snappedY = std::round(y);
-    C2D_DrawText(&text, C2D_WithColor, snappedX, snappedY, 0.85F, size, size, color);
-    drawMusicGlyphs(prepared, resources_.textFont, activeTextBuffer_, snappedX, snappedY, size, color);
+    ui_.drawCentered(value, centerX, y, size, color);
 }
 
 float App::textWidth(std::string_view value, float size) {
-    primeTextMode();
-    C2D_Text text;
-    const PreparedText prepared = prepareText(value, resources_.textFont);
-    parseText(text, resources_.textFont, activeTextBuffer_, prepared.value);
-    float width = 0.0F;
-    float height = 0.0F;
-    C2D_TextGetDimensions(&text, size, size, &width, &height);
-    return width;
+    return ui_.textWidth(value, size);
 }
 
 void App::drawRight(std::string_view value, float rightX, float y, float size, u32 color) {
-    primeTextMode();
-    C2D_Text text;
-    const PreparedText prepared = prepareText(value, resources_.textFont);
-    parseText(text, resources_.textFont, activeTextBuffer_, prepared.value);
-    float width = 0.0F;
-    float height = 0.0F;
-    C2D_TextGetDimensions(&text, size, size, &width, &height);
-    const float snappedX = std::round(rightX - width);
-    const float snappedY = std::round(y);
-    C2D_DrawText(&text, C2D_WithColor, snappedX, snappedY, 0.85F, size, size, color);
-    drawMusicGlyphs(prepared, resources_.textFont, activeTextBuffer_, snappedX, snappedY, size, color);
+    ui_.drawRight(value, rightX, y, size, color);
 }
 
 void App::drawButton(const UiRect& rect, std::string_view label, bool primary) {
-    const u32 fill = primary ? Brand : Surface;
-    const u32 textColor = primary ? Surface : Ink;
-    C2D_DrawRectSolid(rect.x, rect.y, 0.1F, rect.width, rect.height, fill);
-    drawCentered(label, rect.x + rect.width * 0.5F, rect.y + 11.0F, 0.58F, textColor);
+    ui_.drawButton(rect, label, primary);
 }
 
 void App::drawField(const UiRect& rect, std::string_view label, const std::string& value, bool password) {
-    C2D_DrawRectSolid(rect.x, rect.y, 0.1F, rect.width, rect.height, Surface);
-    drawText(label, rect.x + 10.0F, rect.y + 5.0F, 0.42F, Muted);
-    std::string displayed = value;
-    if (password && !value.empty()) {
-        displayed.assign(value.size(), '*');
-    }
-    drawText(displayed, rect.x + 10.0F, rect.y + 21.0F, 0.52F, Ink);
+    ui_.drawField(rect, label, value, password);
 }
 
 void App::requestText(std::string& destination, std::string_view hint, bool password, std::size_t maxLength) {
@@ -515,56 +475,7 @@ void App::requestText(std::string& destination, std::string_view hint, bool pass
 }
 
 void App::showError(std::string title, std::string message) {
-    errorDialogTitle_ = std::move(title);
-    errorDialogMessage_ = std::move(message);
-    errorDialogVisible_ = true;
+    errorDialog_.show(std::move(title), std::move(message));
     status_.clear();
-}
-
-void App::renderErrorDialog() {
-    C2D_DrawRectSolid(0.0F, 0.0F, 0.35F, 320.0F, 240.0F, C2D_Color32(12, 24, 19, 255));
-    C2D_DrawRectSolid(18.0F, 20.0F, 0.40F, 284.0F, 208.0F, C2D_Color32(250, 247, 238, 255));
-    C2D_DrawRectSolid(18.0F, 20.0F, 0.45F, 7.0F, 208.0F, Error);
-    C2D_DrawRectSolid(25.0F, 20.0F, 0.45F, 277.0F, 36.0F, C2D_Color32(255, 225, 214, 255));
-
-    drawText(errorDialogTitle_, 36.0F, 30.0F, 0.52F, Error);
-
-    std::vector<std::string> lines;
-    std::string remaining = errorDialogMessage_.empty()
-        ? "An unexpected error occurred. Check rebank.log for details."
-        : errorDialogMessage_;
-    constexpr std::size_t MaxLineLength = 42;
-    while (!remaining.empty() && lines.size() < 6) {
-        if (remaining.size() <= MaxLineLength) {
-            lines.push_back(remaining);
-            break;
-        }
-        std::size_t split = remaining.rfind(' ', MaxLineLength);
-        if (split == std::string::npos || split == 0) {
-            split = MaxLineLength;
-        }
-        lines.push_back(remaining.substr(0, split));
-        remaining.erase(0, split);
-        while (!remaining.empty() && remaining.front() == ' ') {
-            remaining.erase(remaining.begin());
-        }
-    }
-    if (!remaining.empty() && !lines.empty()) {
-        std::string& last = lines.back();
-        if (last.size() > MaxLineLength - 3) {
-            last.resize(MaxLineLength - 3);
-        }
-        last += "...";
-    }
-    for (std::size_t index = 0; index < lines.size(); ++index) {
-        drawText(lines[index], 36.0F, 76.0F + static_cast<float>(index) * 15.0F, 0.38F, Ink);
-    }
-
-    const UiRect okButton{92.0F, 190.0F, 136.0F, 34.0F};
-    C2D_DrawRectSolid(okButton.x, okButton.y, 0.46F, okButton.width, okButton.height, Brand);
-    C2D_DrawRectSolid(okButton.x + 2.0F, okButton.y + 2.0F, 0.47F,
-                      okButton.width - 4.0F, okButton.height - 4.0F, CursorGreen);
-    drawCentered("OK", 160.0F, 199.0F, 0.52F, C2D_Color32(255, 255, 255, 255));
-    drawCentered("A / B", 268.0F, 201.0F, 0.30F, Muted);
 }
 
