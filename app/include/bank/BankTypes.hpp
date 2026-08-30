@@ -26,6 +26,7 @@ struct SwapOrigin {
     std::size_t sourceIndex = 0;
     std::size_t sourceLocalBox = 0;
     std::uint16_t sourceCloudBox = 0;
+    bool sourceTrash = false;
     PokemonSummary summary;
     PokemonPayload payload;
 };
@@ -36,6 +37,7 @@ struct Hand {
     std::size_t sourceIndex = 0;
     std::size_t sourceLocalBox = 0;
     std::uint16_t sourceCloudBox = 0;
+    bool sourceTrash = false;
     PokemonSummary summary;
     PokemonPayload payload;
     bool payloadKnown = false;

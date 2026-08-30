@@ -19,10 +19,12 @@ public:
     bool hasPendingChanges(bool verbose = false) const;
 
     void loadLocalBox();
+    void loadTrashBox();
     void persistLocalDraft();
     void persistCloudDraft();
     void refreshCloudBox(bool keepPreviousPreview = false);
     void discardPendingChanges();
+    void emptyTrashBox();
 
     void initializeFromOpenedGame(LoadService::OpenGameResult& result);
     void reset();
@@ -35,7 +37,7 @@ private:
     void dropParty();
     void dropCloud();
     void restorePokemon(HandSource source, std::size_t sourceIndex, std::size_t sourceLocalBox,
-                        std::uint16_t sourceCloudBox, const PokemonSummary& summary,
+                        std::uint16_t sourceCloudBox, bool sourceTrash, const PokemonSummary& summary,
                         const PokemonPayload& payload);
     bool localBoxDiffers(const LocalBoxDraft& a, const LocalBoxDraft& b, std::size_t slot) const;
     bool partySlotDiffers(std::size_t slot) const;

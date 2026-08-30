@@ -25,26 +25,49 @@ Tex3DS_SubTexture selectSubRegion(const C2D_Image& image, int x, int y, int endX
     }
     return tex;
 }
+
+u32 lerpColor(u32 from, u32 to, float t) {
+    t = t < 0.0F ? 0.0F : (t > 1.0F ? 1.0F : t);
+    const auto channel = [t](u32 color, int shift) {
+        const float value = static_cast<float>((color >> shift) & 0xFF);
+        return value;
+    };
+    const auto mix = [&](int shift) {
+        const float a = channel(from, shift);
+        const float b = channel(to, shift);
+        return static_cast<u8>(a + (b - a) * t);
+    };
+    return C2D_Color32(mix(0), mix(8), mix(16), 255);
+}
 }
 
-void drawBoxBackground(C2D_SpriteSheet sheet, bool top) {
+void drawBoxBackground(C2D_SpriteSheet sheet, bool top, float trashProgress) {
     if (!sheet) {
         return;
     }
     const C2D_Image gradient = C2D_SpriteSheetGetImage(
         sheet, top ? BoxBgTopGradientIdx : BoxBgBottomGradientIdx);
-    C2D_ImageTint tint{};
+    u32 topLeft;
+    u32 topRight;
+    u32 botLeft;
+    u32 botRight;
     if (top) {
-        C2D_SetImageTint(&tint, C2D_TopLeft, C2D_Color32(142, 221, 138, 255), 1.0F);
-        C2D_SetImageTint(&tint, C2D_TopRight, C2D_Color32(101, 193, 93, 255), 1.0F);
-        C2D_SetImageTint(&tint, C2D_BotLeft, C2D_Color32(161, 233, 158, 255), 1.0F);
-        C2D_SetImageTint(&tint, C2D_BotRight, C2D_Color32(119, 205, 113, 255), 1.0F);
+        topLeft = C2D_Color32(142, 221, 138, 255);
+        topRight = C2D_Color32(101, 193, 93, 255);
+        botLeft = C2D_Color32(161, 233, 158, 255);
+        botRight = C2D_Color32(119, 205, 113, 255);
     } else {
-        C2D_SetImageTint(&tint, C2D_TopLeft, C2D_Color32(125, 209, 119, 255), 1.0F);
-        C2D_SetImageTint(&tint, C2D_TopRight, C2D_Color32(161, 233, 158, 255), 1.0F);
-        C2D_SetImageTint(&tint, C2D_BotLeft, C2D_Color32(101, 193, 93, 255), 1.0F);
-        C2D_SetImageTint(&tint, C2D_BotRight, C2D_Color32(136, 217, 131, 255), 1.0F);
+        topLeft = C2D_Color32(125, 209, 119, 255);
+        topRight = C2D_Color32(161, 233, 158, 255);
+        botLeft = C2D_Color32(101, 193, 93, 255);
+        botRight = C2D_Color32(136, 217, 131, 255);
     }
+    const u32 trashRed = C2D_Color32(250, 128, 114, 255);
+    C2D_ImageTint tint{};
+    C2D_SetImageTint(&tint, C2D_TopLeft, lerpColor(topLeft, trashRed, trashProgress), 1.0F);
+    C2D_SetImageTint(&tint, C2D_TopRight, lerpColor(topRight, trashRed, trashProgress), 1.0F);
+    C2D_SetImageTint(&tint, C2D_BotLeft, lerpColor(botLeft, trashRed, trashProgress), 1.0F);
+    C2D_SetImageTint(&tint, C2D_BotRight, lerpColor(botRight, trashRed, trashProgress), 1.0F);
     C2D_DrawImageAt(gradient, 0.0F, 0.0F, 0.02F, &tint);
 
     constexpr float pixelsPerSecond = 14.0F;

@@ -47,6 +47,7 @@ public:
 private:
     void renderStorageBottom();
     void renderErrorDialog();
+    void renderTrashConfirmDialog();
     void renderTopHeader();
     void renderTopBoxGrid(float eyeOffset);
     void renderTopInfoPanel();

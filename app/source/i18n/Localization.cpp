@@ -12,7 +12,8 @@ constexpr Translation English{
     "Checking server and session...", "Checking cartridge and installed games...",
     "Reading original game icons...", "Opening local save file...", "Reading box and Pokemon...",
     "Connecting to your bank...", "Progress",
-    "Autologin detected...", "Logging you in automatically...", "Welcome back, "
+    "Autologin detected...", "Logging you in automatically...", "Welcome back, ",
+    "Trash Can", "Delete these Pokemon?", "Yes", "No"
 };
 
 constexpr Translation German{
@@ -24,7 +25,8 @@ constexpr Translation German{
     "Server & Sitzung prüfen...", "Spiele prüfen...",
     "Spielbilder lesen...", "Spielstand öffnen...", "Boxen & Pokémon lesen...",
     "Mit Bank verbinden...", "Fortschritt",
-    "Automatischer Login erkannt...", "Du wirst automatisch angemeldet...", "Willkommen zurück, "
+    "Automatischer Login erkannt...", "Du wirst automatisch angemeldet...", "Willkommen zurück, ",
+    "Papierkorb", "Pokémon löschen?", "Ja", "Nein"
 };
 
 constexpr Translation French{
@@ -37,7 +39,8 @@ constexpr Translation French{
     "Verification du serveur et de la session...", "Verification de la cartouche et des jeux installes...",
     "Lecture des icones originales...", "Ouverture de la sauvegarde locale...",
     "Lecture de la boite et des Pokemon...", "Connexion a votre banque...", "Progression",
-    "Connexion automatique detectee...", "Connexion automatique en cours...", "Content de te revoir, "
+    "Connexion automatique detectee...", "Connexion automatique en cours...", "Content de te revoir, ",
+    "Corbeille", "Supprimer ces Pokemon ?", "Oui", "Non"
 };
 
 constexpr Translation Spanish{
@@ -50,7 +53,8 @@ constexpr Translation Spanish{
     "Verificando servidor y sesion...", "Verificando cartucho y juegos instalados...",
     "Leyendo iconos originales...", "Abriendo partida local...", "Leyendo caja y Pokemon...",
     "Conectando con tu banco...", "Progreso",
-    "Inicio de sesion automatico detectado...", "Iniciando sesion automaticamente...", "Bienvenido de nuevo, "
+    "Inicio de sesion automatico detectado...", "Iniciando sesion automaticamente...", "Bienvenido de nuevo, ",
+    "Papelera", "Eliminar estos Pokemon?", "Si", "No"
 };
 
 constexpr Translation Italian{
@@ -63,7 +67,8 @@ constexpr Translation Italian{
     "Verifica server e sessione...", "Verifica cartuccia e giochi installati...",
     "Lettura icone originali...", "Apertura salvataggio locale...", "Lettura box e Pokemon...",
     "Connessione alla tua banca...", "Progresso",
-    "Login automatico rilevato...", "Accesso automatico in corso...", "Bentornato, "
+    "Login automatico rilevato...", "Accesso automatico in corso...", "Bentornato, ",
+    "Cestino", "Eliminare questi Pokemon?", "Si", "No"
 };
 
 constexpr Translation Portuguese{
@@ -76,7 +81,8 @@ constexpr Translation Portuguese{
     "Verificando servidor e sessao...", "Verificando cartucho e jogos instalados...",
     "Lendo icones originais...", "Abrindo save local...", "Lendo caixa e Pokemon...",
     "Conectando ao seu banco...", "Progresso",
-    "Login automatico detectado...", "Entrando automaticamente...", "Bem-vindo de volta, "
+    "Login automatico detectado...", "Entrando automaticamente...", "Bem-vindo de volta, ",
+    "Lixeira", "Excluir estes Pokemon?", "Sim", "Nao"
 };
 }
 
