@@ -8,6 +8,7 @@
 #include "gui/elements/Shapes.hpp"
 #include "gui/elements/TextMetrics.hpp"
 #include "gui/Theme.hpp"
+#include "save/catalog/GameCatalog.hpp"
 
 #include <enums/Species.hpp>
 #include <utils/i18n.hpp>
@@ -45,6 +46,7 @@ void BankScreen::pollCartridgeSlot() {
     cardInsertionKnown_ = false;
     app_.status_.clear();
     app_.screen_ = App::Screen::GameSelect;
+    app_.music_.setActive(false);
     app_.showError(std::string(app_.localization_.get(TextId::CartridgeRemovedTitle)),
                    std::string(app_.localization_.get(TextId::CartridgeRemovedMessage)));
 }
@@ -77,6 +79,11 @@ void BankScreen::drawFocusCursor(float cx, float cy, float cursorYOffset, float 
 void BankScreen::onGameOpened() {
     storage_.initializeFromOpenedGame(app_.saveLoadService_.openGameResult);
     app_.screen_ = App::Screen::Bank;
+    const auto games = supportedGames();
+    const std::size_t catalogIndex = app_.saveLoadService_.catalogIndex;
+    const bool virtualConsole = catalogIndex < games.size()
+        && games[catalogIndex].platform == GamePlatform::VirtualConsole;
+    app_.music_.setActive(virtualConsole);
 }
 
 void BankScreen::renderTop(float eyeOffset) {

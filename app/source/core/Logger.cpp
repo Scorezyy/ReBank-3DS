@@ -40,6 +40,9 @@ void Logger::initialize() {
         }
     }
     info("Logger initialized");
+    if (!flushThread_) {
+        flushThread_ = threadCreate(&Logger::flushWorker, this, 16 * 1024, 0x3F, -2, false);
+    }
 }
 
 void Logger::info(std::string_view message) {
@@ -69,6 +72,17 @@ void Logger::write(LogLevel level, std::string_view message) {
     }
     pendingWrites_.push_back({level, std::string(message)});
     LightLock_Unlock(&lock_);
+}
+
+void Logger::flushWorker(void* argument) {
+    static_cast<Logger*>(argument)->flushLoop();
+}
+
+void Logger::flushLoop() {
+    while (true) {
+        svcSleepThread(150'000'000LL);
+        flush();
+    }
 }
 
 void Logger::flush() {

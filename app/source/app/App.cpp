@@ -23,7 +23,7 @@ App::App(std::string executablePath, bool homebrew)
         Logger::instance().info("Server " + ServerConfig::baseUrl());
         romfsInit();
         i18n::init(pksm::Language::ENG);
-        music_.play("romfs:/assets/music.ogg");
+        music_.start("romfs:/assets/music.ogg", "romfs:/assets/music_vc.ogg");
     resources_.load();
     ui_.setFont(resources_.textFont);
     credentials_.init();
@@ -52,7 +52,6 @@ int App::run() {
 }
 
 void App::update(u32 keysDown, u32 keysHeld, circlePosition circle, touchPosition touch) {
-    Logger::instance().flush();
     const bool canExitOnStart = !isLoading()
         && (screen_ == Screen::Welcome
             || screen_ == Screen::Login
