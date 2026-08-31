@@ -2,6 +2,7 @@
 
 #include <3ds.h>
 
+#include <atomic>
 #include <deque>
 #include <string>
 #include <string_view>
@@ -21,18 +22,22 @@ class Logger {
 public:
     static Logger& instance();
     void initialize();
+    void shutdown();
     void info(std::string_view message);
     void warning(std::string_view message);
     void error(std::string_view message);
     std::deque<LogEntry> entries() const;
 
-    void flush();
-
 private:
     Logger();
     void write(LogLevel level, std::string_view message);
+    void flush();
+    static void flushWorker(void* argument);
+    void flushLoop();
 
     mutable LightLock lock_;
     std::deque<LogEntry> entries_;
     std::deque<LogEntry> pendingWrites_;
+    Thread flushThread_ = nullptr;
+    std::atomic<bool> flushRunning_{false};
 };
