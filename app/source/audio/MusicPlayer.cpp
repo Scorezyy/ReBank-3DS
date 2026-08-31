@@ -9,119 +9,140 @@ MusicPlayer::~MusicPlayer() {
     stop();
 }
 
-bool MusicPlayer::play(const char* path) {
-    stop();
-    if (R_FAILED(ndspInit())) {
-        return false;
-    }
-    ndspReady_ = true;
-
+bool MusicPlayer::openVoice(Voice& voice, const char* path) {
     FILE* file = std::fopen(path, "rb");
     if (!file) {
-        stop();
         return false;
     }
-    if (ov_open(file, &vorbis_, nullptr, 0) < 0) {
+    if (ov_open(file, &voice.vorbis, nullptr, 0) < 0) {
         std::fclose(file);
-        stop();
         return false;
     }
-    streamReady_ = true;
+    voice.streamReady = true;
 
-    const vorbis_info* info = ov_info(&vorbis_, -1);
+    const vorbis_info* info = ov_info(&voice.vorbis, -1);
     if (!info || info->channels < 1 || info->channels > 2) {
-        stop();
         return false;
     }
-    channels_ = info->channels;
-    ndspSetOutputMode(NDSP_OUTPUT_STEREO);
-    ndspChnReset(Channel);
-    ndspChnSetInterp(Channel, NDSP_INTERP_LINEAR);
-    ndspChnSetRate(Channel, static_cast<float>(info->rate));
-    ndspChnSetFormat(Channel, channels_ == 2 ? NDSP_FORMAT_STEREO_PCM16 : NDSP_FORMAT_MONO_PCM16);
+    voice.channels = info->channels;
+
+    ndspChnReset(voice.channelId);
+    ndspChnSetInterp(voice.channelId, NDSP_INTERP_LINEAR);
+    ndspChnSetRate(voice.channelId, static_cast<float>(info->rate));
+    ndspChnSetFormat(voice.channelId,
+        voice.channels == 2 ? NDSP_FORMAT_STEREO_PCM16 : NDSP_FORMAT_MONO_PCM16);
+    float silentMix[12]{};
+    ndspChnSetMix(voice.channelId, silentMix);
 
     for (std::size_t index = 0; index < BufferCount; ++index) {
-        audioData_[index] = linearAlloc(BufferSize);
-        if (!audioData_[index] || !fill(index)) {
-            stop();
+        voice.audioData[index] = linearAlloc(BufferSize);
+        if (!voice.audioData[index] || !fill(voice, index)) {
             return false;
         }
-        ndspChnWaveBufAdd(Channel, &waveBuffers_[index]);
+        ndspChnWaveBufAdd(voice.channelId, &voice.waveBuffers[index]);
     }
-    running_.store(true, std::memory_order_release);
-    worker_ = threadCreate(streamWorker, this, 32 * 1024, 0x2F, -2, false);
-    if (!worker_) {
-        running_.store(false, std::memory_order_release);
-        stop();
-        return false;
-    }
-    return true;
+    voice.running.store(true, std::memory_order_release);
+    voice.worker = threadCreate(&MusicPlayer::streamWorker, &voice, 32 * 1024, 0x2F, -2, false);
+    return voice.worker != nullptr;
 }
 
-void MusicPlayer::update() {
-}
-
-void MusicPlayer::stop() {
-    running_.store(false, std::memory_order_release);
-    if (worker_) {
-        threadJoin(worker_, U64_MAX);
-        threadFree(worker_);
-        worker_ = nullptr;
+void MusicPlayer::closeVoice(Voice& voice) {
+    voice.running.store(false, std::memory_order_release);
+    if (voice.worker) {
+        threadJoin(voice.worker, U64_MAX);
+        threadFree(voice.worker);
+        voice.worker = nullptr;
     }
-    if (ndspReady_) {
-        ndspChnReset(Channel);
+    if (voice.streamReady) {
+        ov_clear(&voice.vorbis);
+        voice.streamReady = false;
     }
-    if (streamReady_) {
-        ov_clear(&vorbis_);
-        streamReady_ = false;
-    }
-    for (void*& data : audioData_) {
+    for (void*& data : voice.audioData) {
         if (data) {
             linearFree(data);
             data = nullptr;
         }
     }
-    waveBuffers_.fill({});
+    voice.waveBuffers.fill({});
+    voice.channels = 0;
+}
+
+bool MusicPlayer::start(const char* normalPath, const char* virtualConsolePath) {
+    stop();
+    if (R_FAILED(ndspInit())) {
+        return false;
+    }
+    ndspReady_ = true;
+    ndspSetOutputMode(NDSP_OUTPUT_STEREO);
+
+    if (!openVoice(normalVoice_, normalPath) || !openVoice(virtualConsoleVoice_, virtualConsolePath)) {
+        stop();
+        return false;
+    }
+    active_ = false;
+    applyMix();
+    return true;
+}
+
+void MusicPlayer::setActive(bool virtualConsole) {
+    if (!ndspReady_) {
+        return;
+    }
+    active_ = virtualConsole;
+    applyMix();
+}
+
+void MusicPlayer::applyMix() {
+    float normalMix[12]{};
+    float virtualConsoleMix[12]{};
+    normalMix[0] = normalMix[1] = active_ ? 0.0F : 1.0F;
+    virtualConsoleMix[0] = virtualConsoleMix[1] = active_ ? 1.0F : 0.0F;
+    ndspChnSetMix(normalVoice_.channelId, normalMix);
+    ndspChnSetMix(virtualConsoleVoice_.channelId, virtualConsoleMix);
+}
+
+void MusicPlayer::stop() {
+    closeVoice(normalVoice_);
+    closeVoice(virtualConsoleVoice_);
     if (ndspReady_) {
         ndspExit();
         ndspReady_ = false;
     }
-    channels_ = 0;
 }
 
 void MusicPlayer::streamWorker(void* argument) {
-    static_cast<MusicPlayer*>(argument)->streamLoop();
+    streamLoop(*static_cast<Voice*>(argument));
 }
 
-void MusicPlayer::streamLoop() {
-    while (running_.load(std::memory_order_acquire)) {
+void MusicPlayer::streamLoop(Voice& voice) {
+    while (voice.running.load(std::memory_order_acquire)) {
         bool filled = false;
         for (std::size_t index = 0; index < BufferCount; ++index) {
-            if (waveBuffers_[index].status != NDSP_WBUF_DONE) {
+            if (voice.waveBuffers[index].status != NDSP_WBUF_DONE) {
                 continue;
             }
-            if (!fill(index)) {
-                running_.store(false, std::memory_order_release);
+            if (!fill(voice, index)) {
+                voice.running.store(false, std::memory_order_release);
                 break;
             }
-            ndspChnWaveBufAdd(Channel, &waveBuffers_[index]);
+            ndspChnWaveBufAdd(voice.channelId, &voice.waveBuffers[index]);
             filled = true;
         }
         svcSleepThread(filled ? 1000000LL : 4000000LL);
     }
 }
 
-bool MusicPlayer::fill(std::size_t index) {
-    auto* destination = static_cast<char*>(audioData_[index]);
+bool MusicPlayer::fill(Voice& voice, std::size_t index) {
+    auto* destination = static_cast<char*>(voice.audioData[index]);
     std::size_t written = 0;
     int bitstream = 0;
     int restartCount = 0;
     while (written < BufferSize) {
         const FsGuard guard;
-        const long result = ov_read(&vorbis_, destination + written, BufferSize - written, &bitstream);
+        const long result = ov_read(&voice.vorbis, destination + written, BufferSize - written, &bitstream);
         if (result > 0) {
             written += static_cast<std::size_t>(result);
-        } else if (result == 0 && restartCount++ == 0 && ov_raw_seek(&vorbis_, 0) == 0) {
+        } else if (result == 0 && restartCount++ == 0 && ov_raw_seek(&voice.vorbis, 0) == 0) {
             continue;
         } else {
             break;
@@ -131,10 +152,10 @@ bool MusicPlayer::fill(std::size_t index) {
         return false;
     }
 
-    ndspWaveBuf& waveBuffer = waveBuffers_[index];
+    ndspWaveBuf& waveBuffer = voice.waveBuffers[index];
     std::memset(&waveBuffer, 0, sizeof(waveBuffer));
-    waveBuffer.data_vaddr = audioData_[index];
-    waveBuffer.nsamples = written / (static_cast<std::size_t>(channels_) * sizeof(std::int16_t));
-    DSP_FlushDataCache(audioData_[index], written);
+    waveBuffer.data_vaddr = voice.audioData[index];
+    waveBuffer.nsamples = written / (static_cast<std::size_t>(voice.channels) * sizeof(std::int16_t));
+    DSP_FlushDataCache(voice.audioData[index], written);
     return true;
 }

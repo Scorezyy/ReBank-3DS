@@ -40,6 +40,21 @@ void Logger::initialize() {
         }
     }
     info("Logger initialized");
+    if (!flushThread_) {
+        flushRunning_.store(true, std::memory_order_release);
+        flushThread_ = threadCreate(&Logger::flushWorker, this, 16 * 1024, 0x3F, -2, false);
+    }
+}
+
+void Logger::shutdown() {
+    if (!flushThread_) {
+        return;
+    }
+    flushRunning_.store(false, std::memory_order_release);
+    threadJoin(flushThread_, U64_MAX);
+    threadFree(flushThread_);
+    flushThread_ = nullptr;
+    flush();
 }
 
 void Logger::info(std::string_view message) {
@@ -69,6 +84,17 @@ void Logger::write(LogLevel level, std::string_view message) {
     }
     pendingWrites_.push_back({level, std::string(message)});
     LightLock_Unlock(&lock_);
+}
+
+void Logger::flushWorker(void* argument) {
+    static_cast<Logger*>(argument)->flushLoop();
+}
+
+void Logger::flushLoop() {
+    while (flushRunning_.load(std::memory_order_acquire)) {
+        svcSleepThread(150'000'000LL);
+        flush();
+    }
 }
 
 void Logger::flush() {
