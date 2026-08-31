@@ -26,13 +26,15 @@ public:
     void error(std::string_view message);
     std::deque<LogEntry> entries() const;
 
-    void flush();
-
 private:
     Logger();
     void write(LogLevel level, std::string_view message);
+    void flush();
+    static void flushWorker(void* argument);
+    void flushLoop();
 
     mutable LightLock lock_;
     std::deque<LogEntry> entries_;
     std::deque<LogEntry> pendingWrites_;
+    Thread flushThread_ = nullptr;
 };
