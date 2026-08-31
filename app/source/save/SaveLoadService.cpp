@@ -2,6 +2,7 @@
 #include "app/App.hpp"
 #include "core/Logger.hpp"
 #include "save/catalog/GameCatalog.hpp"
+#include "save/catalog/VirtualConsoleTitles.hpp"
 #include "io/GameIconReader.hpp"
 #include "io/IconCache.hpp"
 #include "io/SaveMedium.hpp"
@@ -209,6 +210,7 @@ void SaveLoadService::worker(void* argument) {
 
 void SaveLoadService::discoverGames() {
     const auto games = supportedGames();
+    VirtualConsoleTitles::resetInstalledCache();
     bool cartridgeInserted = false;
     FSUSER_CardSlotIsInserted(&cartridgeInserted);
 
