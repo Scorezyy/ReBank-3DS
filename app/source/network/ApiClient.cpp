@@ -312,6 +312,14 @@ UploadResult ApiClient::uploadPokemon(
         const std::string nickname = item.nickname.empty() ? "Pokemon" : item.nickname;
         const std::string trainerName = item.trainerName.empty() ? "Unknown" : item.trainerName;
         const std::string gameCode = item.gameCode.empty() ? "unknown" : item.gameCode;
+        Logger::instance().info("Uploading box " + std::to_string(item.boxPosition) + " slot "
+                                + std::to_string(item.slot) + " species " + std::to_string(item.species)
+                                + " format " + std::to_string(item.format) + " level " + std::to_string(item.level)
+                                + " nickname \"" + nickname + "\" (" + std::to_string(nickname.size()) + " chars)"
+                                + " trainerName \"" + trainerName + "\" (" + std::to_string(trainerName.size()) + " chars)"
+                                + " gameCode \"" + gameCode + "\""
+                                + " heldItem " + std::to_string(item.heldItem)
+                                + " payloadBytes " + std::to_string(item.payload.size()));
         json_t* entry = json_object();
         json_object_set_new(entry, "boxPosition", json_integer(item.boxPosition));
         json_object_set_new(entry, "slot", json_integer(item.slot));
@@ -642,14 +650,10 @@ void ApiClient::syncClock() {
 std::uint64_t ApiClient::signedTimestampSeconds() {
     const std::int64_t localMs = static_cast<std::int64_t>(osGetTime());
     if (clockDeltaMs_.has_value()) {
-        // Calibrated against the server's own clock, so whatever the console's
-        // date/time is set to (players legitimately wind it for other games'
-        // time-based events, and it can also be double-offset by a stale manual
-        // RTC correction) no longer matters.
+        
         return static_cast<std::uint64_t>((localMs + *clockDeltaMs_) / 1000);
     }
-    // No successful calibration yet (e.g. offline) - fall back to the console's
-    // own clock, best-effort corrected for its stored manual time-offset.
+
     constexpr std::uint64_t NtpToUnixEpochOffsetSeconds = 2208988800ULL;
     std::int64_t timeOffsetMs = 0;
     CFGU_GetConfigInfoBlk2(sizeof(timeOffsetMs), 0x00030001, &timeOffsetMs);

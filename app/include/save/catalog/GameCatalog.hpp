@@ -6,10 +6,13 @@
 
 enum class GamePlatform {
     NintendoDs,
-    Nintendo3Ds
+    Nintendo3Ds,
+    VirtualConsole
 };
 
 enum class PokemonFormat : std::uint8_t {
+    Generation1 = 1,
+    Generation2 = 2,
     Generation4 = 4,
     Generation5 = 5,
     Generation6 = 6,

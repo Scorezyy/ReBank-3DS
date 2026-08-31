@@ -71,6 +71,10 @@ bool clearSlotChecked(std::vector<CommitSkippedItem>& skipped, const std::string
         return false;
     }
     if (!clear()) {
+        skipped.push_back(CommitSkippedItem{
+            describePokemon(summary), location,
+            "It couldn't be removed from this save, so it was kept here."
+        });
         return false;
     }
     Logger::instance().info(logTag + ": " + location + " cleared, was species "
@@ -353,6 +357,7 @@ void CommitService::runLocalWrites(bool& anyWrite, bool& anyFailure,
                 : hasPayload ? writeLocalSlot(boxKey, slot, draft, stillOnCloudPayloads) : true;
             if (!ok) {
                 anyFailure = true;
+                revertLocalSlot(boxKey, slot, baselineIt->second);
                 continue;
             }
             anyWrite = true;
@@ -411,6 +416,21 @@ bool CommitService::writeSaveAndVerify() {
     }
     advanceProgress();
     return true;
+}
+
+void CommitService::revertLocalSlot(std::size_t boxKey, std::size_t slot, const LocalBoxDraft& baseline) {
+    auto draftIt = session_.localDrafts.find(boxKey);
+    if (draftIt != session_.localDrafts.end()) {
+        draftIt->second.summaries[slot] = baseline.summaries[slot];
+        draftIt->second.payloads[slot] = baseline.payloads[slot];
+    }
+    if (boxKey == session_.localBox) {
+        session_.storage.set(slot, baseline.summaries[slot]);
+        session_.localPayloads[slot] = baseline.payloads[slot];
+    }
+    Logger::instance().info("revertLocalSlot: local box " + std::to_string(boxKey + 1) + " slot "
+                            + std::to_string(slot + 1) + " reverted to baseline species "
+                            + std::to_string(baseline.summaries[slot].species));
 }
 
 void CommitService::revertCloudSlots(const std::vector<BankSlot>& slots) {

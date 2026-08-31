@@ -10,6 +10,10 @@ namespace PokemonTransfer {
 
 pksm::Generation expectedGeneration(PokemonFormat format) {
     switch (format) {
+        case PokemonFormat::Generation1:
+            return pksm::Generation::ONE;
+        case PokemonFormat::Generation2:
+            return pksm::Generation::TWO;
         case PokemonFormat::Generation4:
             return pksm::Generation::FOUR;
         case PokemonFormat::Generation5:
@@ -23,6 +27,12 @@ pksm::Generation expectedGeneration(PokemonFormat format) {
 }
 
 std::uint8_t pokemonFormat(pksm::Generation generation) {
+    if (generation == pksm::Generation::ONE) {
+        return 1;
+    }
+    if (generation == pksm::Generation::TWO) {
+        return 2;
+    }
     if (generation == pksm::Generation::FOUR) {
         return 4;
     }
@@ -40,6 +50,8 @@ std::uint8_t pokemonFormat(pksm::Generation generation) {
 
 pksm::Generation generationFromFormat(std::uint8_t format) {
     switch (format) {
+        case 1: return pksm::Generation::ONE;
+        case 2: return pksm::Generation::TWO;
         case 4: return pksm::Generation::FOUR;
         case 5: return pksm::Generation::FIVE;
         case 6: return pksm::Generation::SIX;
@@ -57,12 +69,18 @@ std::unique_ptr<pksm::PKX> convertForSave(
     if (sourceFormat >= targetGeneration) {
         return nullptr;
     }
+    std::unique_ptr<pksm::PKX> converted;
     switch (targetGeneration) {
-        case 5: return source.convertToG5(save);
-        case 6: return source.convertToG6(save);
-        case 7: return source.convertToG7(save);
+        case 5: converted = source.convertToG5(save); break;
+        case 6: converted = source.convertToG6(save); break;
+        case 7: converted = source.convertToG7(save); break;
         default: return nullptr;
     }
+    if (converted && !converted->nicknamed()) {
+        converted->nickname(converted->species().localize(converted->language()));
+        converted->refreshChecksum();
+    }
+    return converted;
 }
 
 }
