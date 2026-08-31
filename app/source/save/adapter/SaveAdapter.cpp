@@ -1,5 +1,6 @@
 #include "save/adapter/SaveAdapter.hpp"
 #include "core/Logger.hpp"
+#include "save/catalog/VirtualConsoleTitles.hpp"
 #include "save/pokemon/PokemonTransfer.hpp"
 #include "io/SaveMedium.hpp"
 #include "spi.hpp"
@@ -69,49 +70,80 @@ std::shared_ptr<std::uint8_t[]> SaveAdapter::locateSave(const GameDescriptor& ga
                                                           SourcePreference preference) {
     const bool allowCartridge = preference != SourcePreference::StorageOnly;
     const bool allowStorage = preference != SourcePreference::CartridgeOnly;
-    if (game.platform == GamePlatform::Nintendo3Ds) {
-        const auto mapping = std::find_if(SaveMedium::TitleMappings.begin(), SaveMedium::TitleMappings.end(),
-            [&](const auto& item) { return item.code == game.code; });
-        if (mapping != SaveMedium::TitleMappings.end()) {
-            source_->titleId = mapping->titleId;
-            if (allowCartridge) {
-                if (auto data = SaveMedium::readArchive(mapping->titleId, MEDIATYPE_GAME_CARD, size, result)) {
-                    source_->kind = Source::Kind::ArchiveGameCard;
-                    return data;
-                }
-            }
-            if (allowStorage) {
-                if (auto data = SaveMedium::readArchive(mapping->titleId, MEDIATYPE_SD, size, result)) {
-                    source_->kind = Source::Kind::ArchiveSd;
-                    return data;
-                }
-            }
-        }
-    } else if (allowCartridge) {
-        source_->infrared = game.code == "heartgold" || game.code == "soulsilver"
-            || game.code == "black" || game.code == "white"
-            || game.code == "black2" || game.code == "white2";
-        SaveMedium::DsCardRead dsRead = SaveMedium::readDsCard(game.code, source_->infrared, result);
-        if (dsRead.data) {
-            source_->kind = Source::Kind::DsCard;
-            source_->cardType = dsRead.cardType;
-            source_->capacity = dsRead.capacity;
-            size = dsRead.size;
-            return std::move(dsRead.data);
-        }
-    }
 
-    if (!allowStorage) {
-        return nullptr;
+    std::shared_ptr<std::uint8_t[]> data;
+    if (game.platform == GamePlatform::Nintendo3Ds) {
+        data = locate3dsCartridgeSave(game, size, result, allowCartridge, allowStorage);
+    } else if (game.platform == GamePlatform::VirtualConsole) {
+        data = allowStorage ? locateVirtualConsoleSave(game, size, result) : nullptr;
+    } else if (allowCartridge) {
+        data = locateNintendoDsCartridgeSave(game, size, result);
+    }
+    if (data || !allowStorage) {
+        return data;
     }
 
     std::string path;
-    if (auto data = SaveMedium::readExport(game.code, size, path)) {
+    if (auto exported = SaveMedium::readExport(game.code, size, path)) {
         source_->kind = Source::Kind::SdFile;
         source_->sdPath = path;
-        return data;
+        return exported;
     }
     return nullptr;
+}
+
+std::shared_ptr<std::uint8_t[]> SaveAdapter::locate3dsCartridgeSave(const GameDescriptor& game, std::size_t& size,
+                                                                      Result& result, bool allowCartridge,
+                                                                      bool allowStorage) {
+    const auto mapping = std::find_if(SaveMedium::TitleMappings.begin(), SaveMedium::TitleMappings.end(),
+        [&](const auto& item) { return item.code == game.code; });
+    if (mapping == SaveMedium::TitleMappings.end()) {
+        return nullptr;
+    }
+    source_->titleId = mapping->titleId;
+    if (allowCartridge) {
+        if (auto data = SaveMedium::readArchive(mapping->titleId, MEDIATYPE_GAME_CARD, size, result)) {
+            source_->kind = Source::Kind::ArchiveGameCard;
+            return data;
+        }
+    }
+    if (allowStorage) {
+        if (auto data = SaveMedium::readArchive(mapping->titleId, MEDIATYPE_SD, size, result)) {
+            source_->kind = Source::Kind::ArchiveSd;
+            return data;
+        }
+    }
+    return nullptr;
+}
+
+std::shared_ptr<std::uint8_t[]> SaveAdapter::locateVirtualConsoleSave(const GameDescriptor& game, std::size_t& size,
+                                                                        Result& result) {
+    const auto titleId = VirtualConsoleTitles::resolveInstalledTitleId(game.code);
+    if (!titleId) {
+        return nullptr;
+    }
+    auto data = SaveMedium::readArchive(*titleId, MEDIATYPE_SD, size, result);
+    if (data) {
+        source_->titleId = *titleId;
+        source_->kind = Source::Kind::ArchiveSd;
+    }
+    return data;
+}
+
+std::shared_ptr<std::uint8_t[]> SaveAdapter::locateNintendoDsCartridgeSave(const GameDescriptor& game,
+                                                                             std::size_t& size, Result& result) {
+    source_->infrared = game.code == "heartgold" || game.code == "soulsilver"
+        || game.code == "black" || game.code == "white"
+        || game.code == "black2" || game.code == "white2";
+    SaveMedium::DsCardRead dsRead = SaveMedium::readDsCard(game.code, source_->infrared, result);
+    if (!dsRead.data) {
+        return nullptr;
+    }
+    source_->kind = Source::Kind::DsCard;
+    source_->cardType = dsRead.cardType;
+    source_->capacity = dsRead.capacity;
+    size = dsRead.size;
+    return std::move(dsRead.data);
 }
 
 bool SaveAdapter::parseSave(const GameDescriptor& game, const std::shared_ptr<std::uint8_t[]>& data,

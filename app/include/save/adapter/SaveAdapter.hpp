@@ -73,6 +73,12 @@ private:
 
     std::shared_ptr<std::uint8_t[]> locateSave(const GameDescriptor& game, std::size_t& size, Result& result,
                                                 SourcePreference preference);
+    std::shared_ptr<std::uint8_t[]> locate3dsCartridgeSave(const GameDescriptor& game, std::size_t& size,
+                                                             Result& result, bool allowCartridge, bool allowStorage);
+    std::shared_ptr<std::uint8_t[]> locateVirtualConsoleSave(const GameDescriptor& game, std::size_t& size,
+                                                                Result& result);
+    std::shared_ptr<std::uint8_t[]> locateNintendoDsCartridgeSave(const GameDescriptor& game, std::size_t& size,
+                                                                     Result& result);
     bool parseSave(const GameDescriptor& game, const std::shared_ptr<std::uint8_t[]>& data,
                     std::size_t size, std::string& error);
     bool validBox(std::size_t box) const;

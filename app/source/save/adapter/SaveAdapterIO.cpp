@@ -113,6 +113,9 @@ PokemonPayload SaveAdapter::readPokemon(std::size_t box, std::size_t slot) const
                                 + std::to_string(static_cast<std::uint16_t>(parsed->species()))
                                 + " format " + std::to_string(PokemonTransfer::pokemonFormat(save_->generation()))
                                 + " checksum 0x" + std::to_string(parsed->checksum())
+                                + " nickname=\"" + parsed->nickname() + "\""
+                                + " nicknamed=" + (parsed->nicknamed() ? "1" : "0")
+                                + " language=" + std::to_string(static_cast<int>(parsed->language()))
                                 + " " + eggMetInfo(*parsed)
                                 + " bytes " + std::to_string(raw.size()));
         return {

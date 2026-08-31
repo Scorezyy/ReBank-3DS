@@ -2,6 +2,7 @@
 #include "core/FsGuard.hpp"
 #include "io/IconCache.hpp"
 #include "io/SaveMedium.hpp"
+#include "save/catalog/VirtualConsoleTitles.hpp"
 
 #include <3ds.h>
 
@@ -37,16 +38,11 @@ bool readDsCartridgeIcon(std::array<std::uint16_t, 48 * 48>& pixels) {
     return true;
 }
 
-bool read3dsIcon(const GameDescriptor& game, bool cartridge, std::array<std::uint16_t, 48 * 48>& pixels) {
-    const auto mapping = std::find_if(SaveMedium::TitleMappings.begin(), SaveMedium::TitleMappings.end(),
-        [&](const auto& item) { return item.code == game.code; });
-    if (mapping == SaveMedium::TitleMappings.end()) {
-        return false;
-    }
-    const FS_MediaType mediaType = cartridge ? MEDIATYPE_GAME_CARD : MEDIATYPE_SD;
+bool read3dsIconForTitle(std::uint64_t titleId, FS_MediaType mediaType,
+                         std::array<std::uint16_t, 48 * 48>& pixels) {
     const std::uint32_t archivePathData[4] = {
-        static_cast<std::uint32_t>(mapping->titleId),
-        static_cast<std::uint32_t>(mapping->titleId >> 32),
+        static_cast<std::uint32_t>(titleId),
+        static_cast<std::uint32_t>(titleId >> 32),
         static_cast<std::uint32_t>(mediaType),
         0
     };
@@ -85,6 +81,17 @@ bool read3dsIcon(const GameDescriptor& game, bool cartridge, std::array<std::uin
         }
     }
     return true;
+}
+
+bool read3dsIcon(const GameDescriptor& game, bool cartridge, std::array<std::uint16_t, 48 * 48>& pixels) {
+    const FS_MediaType mediaType = cartridge ? MEDIATYPE_GAME_CARD : MEDIATYPE_SD;
+    const auto mapping = std::find_if(SaveMedium::TitleMappings.begin(), SaveMedium::TitleMappings.end(),
+        [&](const auto& item) { return item.code == game.code; });
+    if (mapping != SaveMedium::TitleMappings.end()) {
+        return read3dsIconForTitle(mapping->titleId, mediaType, pixels);
+    }
+    const auto vcTitleId = VirtualConsoleTitles::resolveInstalledTitleId(game.code);
+    return vcTitleId && read3dsIconForTitle(*vcTitleId, mediaType, pixels);
 }
 }
 

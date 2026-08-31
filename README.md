@@ -44,7 +44,8 @@ That link always serves the newest build — the QR code itself never needs to c
 | 🎒 **Party support** | View and manage your current party's six Pokémon directly from the bank, right alongside your boxes. |
 | 🗑️ **Trash Can** | Drop Pokémon you want gone into the trash box, then commit to delete them all at once — with a confirmation prompt before anything is lost for good. |
 | 🗂️ **Custom box names** | Give your cloud boxes their own names, right from the box screen, so a collection of hundreds of Pokémon stays easy to navigate. |
-| 🔁 **Cross-generation transfers** | ReBank understands Pokémon from Generation 4 all the way through Generation 7, so your collection isn't locked to a single game or console generation. |
+| 🔁 **Cross-generation transfers** | ReBank understands Pokémon from Generation 1 all the way through Generation 7, so your collection isn't locked to a single game or console generation. |
+| 🕹️ **Virtual Console support** | Pull Pokémon straight out of the Gen 1/2 Virtual Console re-releases — Red, Blue, Yellow, Gold, Silver, and Crystal — and carry them forward into every later generation. |
 | ✨ **Shiny & held item indicators** | Shiny Pokémon get a star badge and held items get their own icon, right on the box screen — no need to open every Pokémon to check. |
 | 🔐 **A safe account of your own** | Sign up with just a username and password. Your session is remembered securely on your device, so you're not stuck logging in every time. |
 | 🌍 **Multi-language support** | English, German, French, Spanish, Italian, and Portuguese, selectable right in the app. |
@@ -55,6 +56,8 @@ That link always serves the newest build — the QR code itself never needs to c
 
 ReBank works with save files from:
 
+- **Generation 1 (Virtual Console)** — Red, Blue, Yellow
+- **Generation 2 (Virtual Console)** — Gold, Silver, Crystal
 - **Generation 4** — Diamond, Pearl, Platinum, HeartGold, SoulSilver
 - **Generation 5** — Black, White, Black 2, White 2
 - **Generation 6** — X, Y, Omega Ruby, Alpha Sapphire
@@ -111,6 +114,7 @@ ReBank has been in active beta since its first public release, with something la
 - **0.2.0** — a full UI redesign, party team support, cloud box renaming, major performance and reliability work across networking and the commit pipeline, and safer handling that stops failed transfers from ever duplicating or losing a Pokémon.
 - **0.2.1** — the Trash Can, for bulk-deleting Pokémon you no longer want.
 - **0.2.2** — automatic cartridge detection: swap cartridges freely and ReBank keeps up on its own, plus a large internal refactor to keep the codebase easy to extend.
+- **0.2.3** — Generation 1 & 2 Virtual Console support: pull Pokémon straight out of Red, Blue, Yellow, Gold, Silver, and Crystal.
 
 The full history, with details on every fix and feature, lives on the **[Releases](../../releases)** page.
 

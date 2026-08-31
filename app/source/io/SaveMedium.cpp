@@ -57,6 +57,15 @@ std::shared_ptr<std::uint8_t[]> readArchive(
         0
     );
     if (R_FAILED(result)) {
+        result = FSUSER_OpenFile(
+            &file,
+            archive,
+            fsMakePath(PATH_ASCII, "/sav.dat"),
+            FS_OPEN_READ,
+            0
+        );
+    }
+    if (R_FAILED(result)) {
         FSUSER_CloseArchive(archive);
         return nullptr;
     }
@@ -199,6 +208,12 @@ bool writeArchive(std::uint64_t titleId, FS_MediaType mediaType, const std::uint
         &file, archive, fsMakePath(PATH_ASCII, "/main"),
         FS_OPEN_WRITE, 0
     );
+    if (R_FAILED(result)) {
+        result = FSUSER_OpenFile(
+            &file, archive, fsMakePath(PATH_ASCII, "/sav.dat"),
+            FS_OPEN_WRITE, 0
+        );
+    }
     if (R_FAILED(result)) {
         FSUSER_CloseArchive(archive);
         return false;

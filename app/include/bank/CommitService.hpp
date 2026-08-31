@@ -56,6 +56,7 @@ private:
 
     void runDeletes(const std::vector<BankSlot>& deletes);
     void revertCloudSlots(const std::vector<BankSlot>& slots);
+    void revertLocalSlot(std::size_t boxKey, std::size_t slot, const LocalBoxDraft& baseline);
 
     void advanceProgress();
 

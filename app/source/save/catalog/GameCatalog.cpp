@@ -20,7 +20,13 @@ constexpr std::array Games{
     GameDescriptor{"sun", "Pokemon Sun", GamePlatform::Nintendo3Ds, PokemonFormat::Generation7},
     GameDescriptor{"moon", "Pokemon Moon", GamePlatform::Nintendo3Ds, PokemonFormat::Generation7},
     GameDescriptor{"ultra-sun", "Pokemon Ultra Sun", GamePlatform::Nintendo3Ds, PokemonFormat::Generation7},
-    GameDescriptor{"ultra-moon", "Pokemon Ultra Moon", GamePlatform::Nintendo3Ds, PokemonFormat::Generation7}
+    GameDescriptor{"ultra-moon", "Pokemon Ultra Moon", GamePlatform::Nintendo3Ds, PokemonFormat::Generation7},
+    GameDescriptor{"red", "Pokemon Red", GamePlatform::VirtualConsole, PokemonFormat::Generation1},
+    GameDescriptor{"blue", "Pokemon Blue", GamePlatform::VirtualConsole, PokemonFormat::Generation1},
+    GameDescriptor{"yellow", "Pokemon Yellow", GamePlatform::VirtualConsole, PokemonFormat::Generation1},
+    GameDescriptor{"gold", "Pokemon Gold", GamePlatform::VirtualConsole, PokemonFormat::Generation2},
+    GameDescriptor{"silver", "Pokemon Silver", GamePlatform::VirtualConsole, PokemonFormat::Generation2},
+    GameDescriptor{"crystal", "Pokemon Crystal", GamePlatform::VirtualConsole, PokemonFormat::Generation2}
 };
 }
 
