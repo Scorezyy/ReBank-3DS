@@ -93,6 +93,7 @@ void BankInputController::handleBack() {
         session_.storagePane = StoragePane::Local;
     } else {
         app_.screen_ = App::Screen::GameSelect;
+        app_.music_.setActive(false);
     }
 }
 

@@ -1,4 +1,5 @@
 #include "app/App.hpp"
+#include "core/Logger.hpp"
 
 #include <3ds.h>
 
@@ -9,6 +10,7 @@ int main(int argc, char* argv[]) {
     const std::string executablePath = argc > 0 && argv[0] ? argv[0] : "";
     App app(executablePath, envIsHomebrew());
     const int result = app.run();
+    Logger::instance().shutdown();
     if (cfgReady) {
         cfguExit();
     }
