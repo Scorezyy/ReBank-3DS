@@ -56,7 +56,7 @@ That link always serves the newest build — the QR code itself never needs to c
 
 ReBank works with save files from:
 
-- **Generation 1 (Virtual Console)** — Red, Blue, Yellow
+- **Generation 1 (Virtual Console)** — Red, Green, Blue, Yellow
 - **Generation 2 (Virtual Console)** — Gold, Silver, Crystal
 - **Generation 4** — Diamond, Pearl, Platinum, HeartGold, SoulSilver
 - **Generation 5** — Black, White, Black 2, White 2
@@ -114,6 +114,7 @@ ReBank has been in active beta since its first public release, with something la
 - **0.2.0** — a full UI redesign, party team support, cloud box renaming, major performance and reliability work across networking and the commit pipeline, and safer handling that stops failed transfers from ever duplicating or losing a Pokémon.
 - **0.2.1** — the Trash Can, for bulk-deleting Pokémon you no longer want.
 - **0.2.2** — automatic cartridge detection: swap cartridges freely and ReBank keeps up on its own, plus a large internal refactor to keep the codebase easy to extend.
+- **0.2.5** — Added Pokémon Green (JPN Virtual Console) support.
 - **0.2.3** — Generation 1 & 2 Virtual Console support: pull Pokémon straight out of Red, Blue, Yellow, Gold, Silver, and Crystal.
 
 The full history, with details on every fix and feature, lives on the **[Releases](../../releases)** page.
