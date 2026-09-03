@@ -16,6 +16,7 @@ struct KnownTitle {
 };
 
 constexpr std::array KnownTitles{
+    KnownTitle{"green", 0x0004000000170D00ULL},
     KnownTitle{"red", 0x0004000000170C00ULL},
     KnownTitle{"red", 0x0004000000171000ULL},
     KnownTitle{"red", 0x0004000000171300ULL},
