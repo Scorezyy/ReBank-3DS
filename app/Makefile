@@ -37,6 +37,7 @@ SOURCES := source/app \
 	source/io \
 	source/network \
 	source/bank \
+	source/selection \
 	source/audio \
 	source/i18n \
 	source/gui \

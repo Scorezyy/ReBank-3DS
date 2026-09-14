@@ -131,9 +131,11 @@ void StorageController::pickUpCloud() {
         Logger::instance().info("pickUpCloud: bank " + std::to_string(session_.cloudBox + 1) + " slot "
                                 + std::to_string(session_.focusedSlot + 1) + " species " + std::to_string(mon.species)
                                 + " \"" + mon.nickname + "\" payload pending fetch");
-        if (!app_.loadService_.running()) {
+        if (!app_.loadService_.busy()) {
             app_.loadService_.pickupSlot = session_.focusedSlot;
             app_.loadService_.pickupCloudBox = static_cast<std::uint16_t>(session_.cloudBox + 1);
+            app_.loadService_.pickupTargetSlot = session_.focusedSlot;
+            app_.loadService_.pickupTargetCloudBox = static_cast<std::uint16_t>(session_.cloudBox + 1);
             app_.loadService_.pickupSummary = mon;
             app_.loadService_.pickupHandGeneration = session_.handGeneration;
             app_.loadService_.begin(LoadService::Operation::PickupCloud);
@@ -337,11 +339,13 @@ void StorageController::dropCloudBank() {
         app_.status_ = "Please sign in again.";
         return;
     } else {
-        if (app_.loadService_.running()) {
+        if (app_.loadService_.busy()) {
             return;
         }
         app_.loadService_.pickupSlot = session_.focusedSlot;
         app_.loadService_.pickupCloudBox = static_cast<std::uint16_t>(session_.cloudBox + 1);
+        app_.loadService_.pickupTargetSlot = session_.focusedSlot;
+        app_.loadService_.pickupTargetCloudBox = static_cast<std::uint16_t>(session_.cloudBox + 1);
         app_.loadService_.pickupSummary = session_.cloudPreview[session_.focusedSlot];
         app_.loadService_.pickupHandGeneration = session_.handGeneration;
         app_.status_ = "Fetching occupant...";
@@ -657,11 +661,23 @@ void StorageController::persistLocalDraft() {
     }
 }
 
+bool StorageController::cloudBoxLoaded() const {
+    return session_.cloudBoxes.count(static_cast<std::uint16_t>(session_.cloudBox)) != 0;
+}
+
 void StorageController::persistCloudDraft() {
     const auto boxKey = static_cast<std::uint16_t>(session_.cloudBox);
-    auto& draft = session_.cloudBoxes[boxKey];
-    draft.summaries = session_.cloudPreview;
-    draft.pending = session_.pendingUploadPayloads;
+    auto draftIt = session_.cloudBoxes.find(boxKey);
+    if (draftIt == session_.cloudBoxes.end()) {
+        return;
+    }
+    draftIt->second.summaries = session_.cloudPreview;
+    draftIt->second.pending = session_.pendingUploadPayloads;
+}
+
+void StorageController::persistDrafts() {
+    persistLocalDraft();
+    persistCloudDraft();
 }
 
 void StorageController::refreshCloudBox(bool keepPreviousPreview) {
@@ -669,6 +685,7 @@ void StorageController::refreshCloudBox(bool keepPreviousPreview) {
     if (app_.session_.accessToken.empty()) {
         session_.cloudPreview.fill({});
         session_.pendingUploadPayloads = {};
+        session_.cloudViewAwaitingLoad = false;
         return;
     }
 
@@ -680,11 +697,13 @@ void StorageController::refreshCloudBox(bool keepPreviousPreview) {
         }
         session_.cachedCloudPayloads = {};
         session_.payloadPrefetchFailed = {};
+        session_.cloudViewAwaitingLoad = true;
         app_.status_.clear();
         app_.loadService_.cloudBoxKey = boxKey;
         app_.loadService_.begin(LoadService::Operation::CloudBox);
         return;
     }
+    session_.cloudViewAwaitingLoad = false;
     session_.cloudPreview = it->second.summaries;
     session_.pendingUploadPayloads = it->second.pending;
     session_.cachedCloudPayloads = it->second.payloads;
@@ -755,6 +774,7 @@ void StorageController::initializeFromOpenedGame(SaveLoadService::OpenGameResult
         session_.cloudBoxNames[entry.position] = entry.name;
     }
 
+    session_.cloudViewAwaitingLoad = false;
     const auto existingBox0 = session_.cloudBoxes.find(0);
     if (existingBox0 != session_.cloudBoxes.end()) {
         session_.cloudPreview = existingBox0->second.summaries;
@@ -772,6 +792,7 @@ void StorageController::initializeFromOpenedGame(SaveLoadService::OpenGameResult
     } else {
         session_.cloudPreview.fill({});
         session_.cachedCloudPayloads = {};
+        session_.cloudViewAwaitingLoad = true;
         app_.status_.clear();
     }
     app_.cloudBoxCache_ = {};

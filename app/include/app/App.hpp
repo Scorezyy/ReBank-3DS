@@ -55,6 +55,7 @@ private:
     friend class CommitService;
     friend class CloudSyncController;
     friend class BankInputController;
+    friend class SelectionController;
     friend class LoadService;
     friend class SaveLoadService;
     friend class LoadingScreen;

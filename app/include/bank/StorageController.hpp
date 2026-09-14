@@ -22,12 +22,18 @@ public:
     void loadTrashBox();
     void persistLocalDraft();
     void persistCloudDraft();
+    void persistDrafts();
+    bool cloudBoxLoaded() const;
     void refreshCloudBox(bool keepPreviousPreview = false);
     void discardPendingChanges();
     void emptyTrashBox();
 
     void initializeFromOpenedGame(SaveLoadService::OpenGameResult& result);
     void reset();
+
+    void restorePokemon(HandSource source, std::size_t sourceIndex, std::size_t sourceLocalBox,
+                        std::uint16_t sourceCloudBox, bool sourceTrash, const PokemonSummary& summary,
+                        const PokemonPayload& payload);
 
 private:
     void pickUpLocal();
@@ -38,9 +44,6 @@ private:
     void dropCloud();
     void dropCloudTrash();
     void dropCloudBank();
-    void restorePokemon(HandSource source, std::size_t sourceIndex, std::size_t sourceLocalBox,
-                        std::uint16_t sourceCloudBox, bool sourceTrash, const PokemonSummary& summary,
-                        const PokemonPayload& payload);
     SwapOrigin captureSwapOrigin() const;
     bool localBoxDiffers(const LocalBoxDraft& a, const LocalBoxDraft& b, std::size_t slot) const;
     bool partySlotDiffers(std::size_t slot) const;

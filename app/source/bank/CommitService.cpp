@@ -462,7 +462,15 @@ void CommitService::runDeletes(const std::vector<BankSlot>& deletes) {
         if (!dr.success) {
             Logger::instance().warning("Commit: cloud delete failed for Bank " + std::to_string(deletion.first)
                                        + " Slot " + std::to_string(deletion.second) + ": " + dr.message);
+            const auto it = session_.cloudBoxes.find(static_cast<std::uint16_t>(deletion.first - 1));
+            const PokemonSummary before = it != session_.cloudBoxes.end()
+                ? it->second.baseline[deletion.second - 1] : PokemonSummary{};
             revertCloudSlots({deletion});
+            result_.skipped.push_back(CommitSkippedItem{
+                describePokemon(before),
+                "Bank " + std::to_string(deletion.first) + "  |  Slot " + std::to_string(deletion.second),
+                "It was already moved elsewhere but could not be removed from the cloud - check for a duplicate."
+            });
             continue;
         }
         auto it = session_.cloudBoxes.find(static_cast<std::uint16_t>(deletion.first - 1));
@@ -540,14 +548,8 @@ void CommitService::runCommit() {
 
     bool anyLocalWrite = false;
     bool anyLocalFailure = false;
-    const bool deferLocalWrites = !unresolvedPayloads.empty() && !deletes.empty();
-    if (deferLocalWrites) {
-        anyLocalFailure = true;
-        Logger::instance().warning("Commit: upload rejected while cloud Pokemon were moved locally; local draft deferred");
-    } else {
-        runLocalWrites(anyLocalWrite, anyLocalFailure, unresolvedPayloads, stillOnCloudPayloads);
-        runPartyWrites(anyLocalWrite, anyLocalFailure, unresolvedPayloads, stillOnCloudPayloads);
-    }
+    runLocalWrites(anyLocalWrite, anyLocalFailure, unresolvedPayloads, stillOnCloudPayloads);
+    runPartyWrites(anyLocalWrite, anyLocalFailure, unresolvedPayloads, stillOnCloudPayloads);
 
     if (anyLocalWrite && !writeSaveAndVerify()) {
         result_.message = "Local save write failed. Uploads that already completed were kept; nothing was deleted from the cloud.";

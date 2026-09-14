@@ -1,4 +1,5 @@
 #include "core/ServerConfig.hpp"
+#include "core/ObfuscatedString.hpp"
 
 #ifndef REBANK_SERVER_SCHEME
 #error REBANK_SERVER_SCHEME must be defined by config/server.mk
@@ -32,6 +33,7 @@ std::string ServerConfig::baseUrl() {
     return std::string(scheme()) + "://" + std::string(host()) + ":" + std::to_string(port());
 }
 
-std::string_view ServerConfig::clientSecret() {
-    return REBANK_CLIENT_SECRET;
+std::string ServerConfig::clientSecret() {
+    static const auto obfuscated = OBFUSCATED_STRING(REBANK_CLIENT_SECRET);
+    return obfuscated.decode();
 }

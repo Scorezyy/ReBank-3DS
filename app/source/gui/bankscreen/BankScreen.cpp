@@ -9,6 +9,7 @@
 #include "gui/elements/TextMetrics.hpp"
 #include "gui/Theme.hpp"
 #include "save/catalog/GameCatalog.hpp"
+#include "selection/GridGeometry.hpp"
 
 #include <enums/Species.hpp>
 #include <utils/i18n.hpp>
@@ -16,6 +17,7 @@
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <utility>
 #include <vector>
 
 using namespace Gui;
@@ -59,20 +61,47 @@ void BankScreen::update(u32 keysDown, u32 keysHeld, circlePosition circle, touch
     input_.handle(keysDown, keysHeld, circle, touch, touched);
 }
 
-void BankScreen::drawHeldPokemonPreview(float cx, float cy) const {
-    if (!session_.hand.active || session_.hand.summary.species == 0 || !app_.resources_.pokemonSprites) {
+void BankScreen::drawCarriedSprite(const PokemonSummary& summary, float cx, float cy, float z) const {
+    if (summary.species == 0 || !app_.resources_.pokemonSprites) {
         return;
     }
-    const C2D_Image image = C2D_SpriteSheetGetImage(app_.resources_.pokemonSprites, session_.hand.summary.species);
+    const C2D_Image image = C2D_SpriteSheetGetImage(app_.resources_.pokemonSprites, summary.species);
     constexpr float scale = 1.0F;
     const float w = image.subtex->width * scale;
     const float h = image.subtex->height * scale;
-    C2D_DrawImageAt(image, std::round(cx - w * 0.5F), std::round(cy - h * 0.5F), 0.6F, nullptr, scale, scale);
+
+    const float shadowW = w * 0.6F;
+    const float shadowH = shadowW * 0.35F;
+    const float shadowCy = cy + h * 0.42F;
+    C2D_DrawEllipseSolid(cx - shadowW * 0.5F, shadowCy - shadowH * 0.5F, z - 0.02F, shadowW, shadowH,
+                         C2D_Color32(20, 20, 20, 90));
+
+    constexpr float lift = 8.0F;
+    const float spriteCy = cy - lift;
+    C2D_DrawImageAt(image, std::round(cx - w * 0.5F), std::round(spriteCy - h * 0.5F), z, nullptr, scale, scale);
+    drawPokemonBadges(app_.resources_.overlayIcons, summary, cx, spriteCy, w * 0.5F, h * 0.5F, z + 0.01F);
+}
+
+void BankScreen::drawHeldPokemonPreview(float cx, float cy) const {
+    if (!session_.hand.active) {
+        return;
+    }
+    drawCarriedSprite(session_.hand.summary, cx, cy, 0.6F);
+}
+
+void BankScreen::drawHeldRegionSprite(const PokemonSummary& summary, float cx, float cy) const {
+    drawCarriedSprite(summary, cx, cy, HeldRegionSpriteDepth);
+}
+
+u32 BankScreen::focusCursorColor() const {
+    if (session_.hand.active || selection_.holding()) {
+        return CursorGreen;
+    }
+    return selectionModeAccent();
 }
 
 void BankScreen::drawFocusCursor(float cx, float cy, float cursorYOffset, float radius, float height) const {
-    const u32 arrowColor = session_.hand.active ? CursorGreen : CursorRed;
-    drawBouncingCursor(cx, cy - cursorYOffset, radius, height, arrowColor);
+    drawBouncingCursor(cx, cy - cursorYOffset, radius, height, focusCursorColor());
     drawHeldPokemonPreview(cx, cy);
 }
 
@@ -128,11 +157,13 @@ void BankScreen::renderTopHeader() {
     const bool waitingOnHeldPickup = session_.hand.active && session_.hand.source == HandSource::Cloud
         && !session_.hand.payloadKnown
         && app_.loadService_.operation() == LoadService::Operation::PickupCloud;
-    if (app_.loadService_.running()
+    const bool waitingOnHeldRegion = selection_.holding() && selection_.nextPayloadRequest().has_value();
+    if ((app_.loadService_.running()
         && ((app_.loadService_.operation() == LoadService::Operation::CloudBox
              && app_.loadService_.cloudBoxKey == static_cast<std::uint16_t>(session_.cloudBox))
             || waitingOnHeldPickup
-            || app_.loadService_.operation() == LoadService::Operation::SwapCloud)) {
+            || app_.loadService_.operation() == LoadService::Operation::SwapCloud))
+        || waitingOnHeldRegion) {
         const double seconds = static_cast<double>(svcGetSystemTick()) / SYSCLOCK_ARM11;
         const float pulse = 0.45F + 0.55F * std::sin(static_cast<float>(seconds) * 6.0F);
         C2D_DrawCircleSolid(312.0F, nameBarY + 15.0F, 0.4F, 3.0F + pulse * 2.0F, HeaderInk);
@@ -168,18 +199,25 @@ void BankScreen::renderTopBoxGrid(float eyeOffset) {
             const std::uint8_t monFormat = pokemon.format != 0
                 ? pokemon.format
                 : pokemonFormatFromCode(pokemon.gameCode);
-            const bool incompatible = saveGen != 0 && monFormat != 0
-                && monFormat > saveGen;
+            const bool incompatible = saveGen != 0 && monFormat != 0 && monFormat > saveGen;
             C2D_ImageTint tint{};
-            C2D_PlainImageTint(&tint, C2D_Color32(72, 72, 72, 255), 0.82F);
-            C2D_DrawImageAt(image, spriteX, spriteY, 0.3F,
-                            incompatible ? &tint : nullptr, scale, scale);
+            if (incompatible) {
+                C2D_PlainImageTint(&tint, C2D_Color32(72, 72, 72, 255), 0.82F);
+            }
+            C2D_DrawImageAt(image, spriteX, spriteY, 0.3F, incompatible ? &tint : nullptr, scale, scale);
             drawPokemonBadges(app_.resources_.overlayIcons, pokemon, cx, cy, w * 0.5F, h * 0.5F, 0.31F);
+        }
+        const auto heldSummary = selection_.heldSummaryAt(
+            StorageAddress{StoragePane::Cloud, session_.trashBoxActive}, slot);
+        if (heldSummary) {
+            drawSelectionOverlay(cx, cy, pitchX * 0.5F, pitchY * 0.5F);
+            drawHeldRegionSprite(*heldSummary, cx, cy);
         }
         if (session_.storagePane == StoragePane::Cloud && slot == session_.focusedSlot && !session_.cloudNameFocused) {
             drawFocusCursor(cx, cy, 22.0F, 3.5F, 12.0F);
         }
     }
+    renderMarkedArea(pitchX, pitchY, gridLeft, gridTop, StoragePane::Cloud);
 }
 
 void BankScreen::renderTopInfoPanel() {
@@ -362,9 +400,22 @@ void BankScreen::renderStorageBottom() {
     renderActionHints();
 }
 
+u32 BankScreen::selectionModeAccent() const {
+    switch (selection_.mode()) {
+        case SelectionMode::Row:
+            return CursorBlue;
+        case SelectionMode::Area:
+            return CursorGreen;
+        case SelectionMode::Single:
+            break;
+    }
+    return CursorRed;
+}
+
 void BankScreen::renderStatusBar() {
     C2D_DrawRectSolid(0.0F, 0.0F, 0.05F, 320.0F, 20.0F, C2D_Color32(215, 232, 224, 235));
-    C2D_DrawCircleSolid(14.0F, 10.0F, 0.1F, 7.0F, C2D_Color32(210, 40, 40, 255));
+    const u32 ballColor = selectionModeAccent();
+    C2D_DrawCircleSolid(14.0F, 10.0F, 0.1F, 7.0F, ballColor);
     C2D_DrawRectSolid(7.0F, 9.0F, 0.15F, 14.0F, 2.0F, C2D_Color32(30, 30, 30, 255));
     C2D_DrawCircleSolid(14.0F, 10.0F, 0.2F, 2.5F, C2D_Color32(240, 240, 240, 255));
     const bool fetching = app_.loadService_.running()
@@ -376,8 +427,23 @@ void BankScreen::renderStatusBar() {
     if (storage_.hasPendingChanges()) {
         app_.drawText("PENDING", 100.0F, 6.0F, 0.34F, CursorGreen);
     }
-    C2D_DrawRectSolid(252.0F, 2.0F, 0.1F, 60.0F, 16.0F, C2D_Color32(58, 58, 58, 255));
-    app_.drawCentered("START", 282.0F, 5.0F, 0.4F, C2D_Color32(240, 240, 240, 255));
+
+    constexpr float modePillX = 160.0F;
+    constexpr float modePillW = 78.0F;
+    constexpr float pillH = 16.0F;
+    constexpr float pillY = 2.0F;
+    drawRoundedRect(modePillX, pillY, modePillW, pillH, 8.0F, 0.10F, ballColor);
+    drawRoundedRect(modePillX + 2.0F, pillY + 1.5F, modePillW - 4.0F, pillH - 3.0F, 6.5F, 0.11F,
+                    C2D_Color32(255, 255, 255, 235));
+    const std::string modeLabel = selection_.mode() == SelectionMode::Row ? "ROW"
+        : selection_.mode() == SelectionMode::Area ? "MULTI" : "SINGLE";
+    app_.drawCentered(modeLabel, modePillX + modePillW * 0.5F, pillY + 3.0F, 0.36F, ballColor);
+
+    constexpr float startPillX = 246.0F;
+    constexpr float startPillW = 68.0F;
+    drawRoundedRect(startPillX, pillY, startPillW, pillH, 8.0F, 0.10F, C2D_Color32(58, 58, 58, 255));
+    app_.drawCentered("START", startPillX + startPillW * 0.5F, pillY + 3.0F, 0.32F,
+                      C2D_Color32(240, 240, 240, 255));
 }
 
 void BankScreen::renderLocalBoxHeader() {
@@ -422,9 +488,34 @@ void BankScreen::renderLocalGrid() {
             }
             drawPokemonBadges(app_.resources_.overlayIcons, pokemon, cx, cy, w * 0.5F, h * 0.5F, 0.36F);
         }
+        const auto heldSummary = selection_.heldSummaryAt(StorageAddress{StoragePane::Local, false}, slot);
+        if (heldSummary) {
+            drawSelectionOverlay(cx, cy, pitchX * 0.5F, pitchY * 0.5F);
+            drawHeldRegionSprite(*heldSummary, cx, cy);
+        }
         if (session_.storagePane == StoragePane::Local && slot == session_.focusedSlot) {
             drawFocusCursor(cx, cy, 20.0F, 3.0F, 10.0F);
         }
+    }
+    renderMarkedArea(pitchX, pitchY, gridLeft, gridTop, StoragePane::Local);
+}
+
+void BankScreen::drawSelectionOverlay(float cx, float cy, float halfWidth, float halfHeight) const {
+    C2D_DrawRectSolid(cx - halfWidth, cy - halfHeight, SelectionHighlightDepth, halfWidth * 2.0F,
+                      halfHeight * 2.0F, SelectionHighlightFill);
+}
+
+void BankScreen::renderMarkedArea(float pitchX, float pitchY, float gridLeft, float gridTop,
+                                  StoragePane pane) {
+    if (session_.storagePane != pane) {
+        return;
+    }
+    const GridGeometry grid = GridGeometry::forPane(pane);
+    for (std::size_t slot : selection_.markedSlots()) {
+        const GridPoint point = grid.pointOf(slot);
+        C2D_DrawRectSolid(gridLeft + static_cast<float>(point.column) * pitchX,
+                          gridTop + static_cast<float>(point.row) * pitchY,
+                          SelectionHighlightDepth, pitchX, pitchY, SelectionHighlightFill);
     }
 }
 
@@ -449,39 +540,63 @@ void BankScreen::renderTeamHeader() {
                       app_.resources_.teamBackground ? C2D_Color32(255, 255, 255, 255) : HeaderInk);
 }
 
-void BankScreen::renderPartyGrid() {
+std::pair<float, float> BankScreen::partyTileCenter(std::size_t slot) const {
     constexpr float partyColAX = 244.0F;
     constexpr float partyColBX = 288.0F;
     constexpr float partyRowStep = 45.0F;
     constexpr float partyColATop = 86.0F;
     constexpr float partyColBTop = 108.0F;
+    const std::size_t column = slot % 2;
+    const std::size_t row = slot / 2;
+    return {
+        column == 0 ? partyColAX : partyColBX,
+        (column == 0 ? partyColATop : partyColBTop) + static_cast<float>(row) * partyRowStep
+    };
+}
+
+void BankScreen::renderPartyGrid() {
     const int partyCount = session_.partyMemberCount();
     for (std::size_t slot = 0; slot < 6; ++slot) {
-        const std::size_t column = slot % 2;
-        const std::size_t row = slot / 2;
-        const float cx = column == 0 ? partyColAX : partyColBX;
-        const float cy = (column == 0 ? partyColATop : partyColBTop) + static_cast<float>(row) * partyRowStep;
+        const auto [cx, cy] = partyTileCenter(slot);
         constexpr float tileSize = 34.0F;
         drawRoundedRect(cx - tileSize * 0.5F, cy - tileSize * 0.5F, tileSize, tileSize, 8.0F, 0.10F, CursorGreen);
         drawRoundedRect(cx - tileSize * 0.5F + 2.0F, cy - tileSize * 0.5F + 2.0F, tileSize - 4.0F, tileSize - 4.0F,
                         7.0F, 0.11F, BoxPlate);
         const PokemonSummary& pokemon = session_.partyWorking.summaries[slot];
-
         const bool isLastMember = pokemon.species != 0 && partyCount <= 1;
         if (app_.resources_.pokemonSprites && pokemon.species != 0) {
             const C2D_Image image = C2D_SpriteSheetGetImage(app_.resources_.pokemonSprites, pokemon.species);
             constexpr float scale = 1.0F;
             const float w = image.subtex->width * scale;
             const float h = image.subtex->height * scale;
-            C2D_ImageTint lockedTint{};
-            C2D_PlainImageTint(&lockedTint, C2D_Color32(72, 72, 72, 255), 0.82F);
+            C2D_ImageTint tint{};
+            if (isLastMember) {
+                C2D_PlainImageTint(&tint, C2D_Color32(72, 72, 72, 255), 0.82F);
+            }
             C2D_DrawImageAt(image, std::round(cx - w * 0.5F), std::round(cy - h * 0.5F),
-                            0.3F, isLastMember ? &lockedTint : nullptr, scale, scale);
+                            0.3F, isLastMember ? &tint : nullptr, scale, scale);
             drawPokemonBadges(app_.resources_.overlayIcons, pokemon, cx, cy, w * 0.5F, h * 0.5F, 0.36F);
+        }
+        const auto heldSummary = selection_.heldSummaryAt(StorageAddress{StoragePane::Party, false}, slot);
+        if (heldSummary) {
+            drawSelectionOverlay(cx, cy, tileSize * 0.5F, tileSize * 0.5F);
+            drawHeldRegionSprite(*heldSummary, cx, cy);
         }
         if (session_.storagePane == StoragePane::Party && slot == session_.focusedSlot) {
             drawFocusCursor(cx, cy, 20.0F, 3.0F, 10.0F);
         }
+    }
+    renderMarkedPartyArea();
+}
+
+void BankScreen::renderMarkedPartyArea() {
+    if (session_.storagePane != StoragePane::Party) {
+        return;
+    }
+    constexpr float tileSize = 34.0F;
+    for (std::size_t slot : selection_.markedSlots()) {
+        const auto [cx, cy] = partyTileCenter(slot);
+        drawSelectionOverlay(cx, cy, tileSize * 0.5F, tileSize * 0.5F);
     }
 }
 

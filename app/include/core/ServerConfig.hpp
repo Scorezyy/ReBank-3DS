@@ -10,5 +10,5 @@ public:
     static std::string_view host();
     static std::uint16_t port();
     static std::string baseUrl();
-    static std::string_view clientSecret();
+    static std::string clientSecret();
 };

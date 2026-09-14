@@ -3,6 +3,7 @@
 #include "bank/BankSession.hpp"
 #include "bank/CommitService.hpp"
 #include "network/RenameController.hpp"
+#include "selection/SelectionController.hpp"
 
 #include <cstdint>
 #include <string>
@@ -11,11 +12,13 @@ class App;
 
 class CloudSyncController {
 public:
-    CloudSyncController(App& app, BankSession& session, CommitService& commit)
-        : app_(app), session_(session), commit_(commit) {}
+    CloudSyncController(App& app, BankSession& session, CommitService& commit,
+                        SelectionController& selection)
+        : app_(app), session_(session), commit_(commit), selection_(selection) {}
 
     void pumpHandPayloadFetch();
     void pumpCloudPayloadPrefetch();
+    void pumpHeldRegionPayloadFetch();
     void pumpCloudPrefetch();
 
     void onCloudBoxLoaded();
@@ -33,5 +36,6 @@ private:
     App& app_;
     BankSession& session_;
     CommitService& commit_;
+    SelectionController& selection_;
     RenameController renameController_;
 };
