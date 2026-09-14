@@ -4,11 +4,13 @@
 #include "bank/TrashCanBox.hpp"
 #include "save/adapter/SaveAdapter.hpp"
 #include "bank/StorageModel.hpp"
+#include "selection/SelectionState.hpp"
 
 #include <3ds.h>
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -48,10 +50,13 @@ public:
     PartyDraft partyWorking;
     Hand hand;
     std::uint32_t handGeneration = 0;
+    SelectionState selection;
     StoragePane storagePane = StoragePane::Local;
     bool cloudNameFocused = false;
     std::unordered_map<std::uint16_t, std::string> cloudBoxNames;
     int heldDirection = 0;
+    u64 regionFetchRetryAt = 0;
+    bool cloudViewAwaitingLoad = false;
     u64 directionRepeatAt = 0;
     bool errorDialogVisible = false;
     std::string errorDialogTitle = "TRANSFER BLOCKED";

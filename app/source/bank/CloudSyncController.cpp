@@ -3,30 +3,34 @@
 #include "app/App.hpp"
 #include "core/Logger.hpp"
 
+#include <optional>
+
 bool CloudSyncController::blockedByOtherWork() const {
-    return app_.loadService_.running() || renameController_.isRunning() || commit_.running();
+    return app_.loadService_.busy() || renameController_.isRunning() || commit_.running();
 }
 
 void CloudSyncController::pumpHandPayloadFetch() {
     if (!session_.hand.active || session_.hand.source != HandSource::Cloud || session_.hand.payloadKnown) {
         return;
     }
-    if (app_.loadService_.running()) {
+    if (app_.loadService_.busy()) {
         return;
     }
     app_.loadService_.pickupSlot = session_.hand.sourceIndex;
     app_.loadService_.pickupCloudBox = session_.hand.sourceCloudBox;
+    app_.loadService_.pickupTargetSlot = session_.hand.sourceIndex;
+    app_.loadService_.pickupTargetCloudBox = session_.hand.sourceCloudBox;
     app_.loadService_.pickupSummary = session_.hand.summary;
     app_.loadService_.pickupHandGeneration = session_.handGeneration;
     app_.loadService_.begin(LoadService::Operation::PickupCloud);
 }
 
 void CloudSyncController::pumpCloudPayloadPrefetch() {
-    if (session_.hand.active || session_.storagePane != StoragePane::Cloud || commit_.requested()
-        || session_.trashBoxActive) {
+    if (session_.hand.active || selection_.engaged() || session_.storagePane != StoragePane::Cloud
+        || commit_.requested() || session_.trashBoxActive) {
         return;
     }
-    if (blockedByOtherWork()) {
+    if (blockedByOtherWork() || svcGetSystemTick() < session_.regionFetchRetryAt) {
         return;
     }
     for (std::size_t slot = 0; slot < session_.cloudPreview.size(); ++slot) {
@@ -43,10 +47,31 @@ void CloudSyncController::pumpCloudPayloadPrefetch() {
                                 + std::to_string(session_.cloudBox + 1) + " slot " + std::to_string(slot + 1));
         app_.loadService_.pickupSlot = slot;
         app_.loadService_.pickupCloudBox = static_cast<std::uint16_t>(session_.cloudBox + 1);
+        app_.loadService_.pickupTargetSlot = slot;
+        app_.loadService_.pickupTargetCloudBox = static_cast<std::uint16_t>(session_.cloudBox + 1);
         app_.loadService_.pickupSummary = session_.cloudPreview[slot];
         app_.loadService_.begin(LoadService::Operation::PickupCloud);
         return;
     }
+}
+
+void CloudSyncController::pumpHeldRegionPayloadFetch() {
+    if (blockedByOtherWork() || svcGetSystemTick() < session_.regionFetchRetryAt) {
+        return;
+    }
+    const std::optional<RegionPayloadRequest> request = selection_.nextPayloadRequest();
+    if (!request) {
+        return;
+    }
+    Logger::instance().info("region payload fetch: bank " + std::to_string(request->cloudBox) + " slot "
+                            + std::to_string(request->slot + 1));
+    app_.loadService_.pickupSlot = request->slot;
+    app_.loadService_.pickupCloudBox = request->cloudBox;
+    app_.loadService_.pickupTargetSlot = request->slot;
+    app_.loadService_.pickupTargetCloudBox = request->cloudBox;
+    app_.loadService_.pickupSummary = request->summary;
+    app_.loadService_.pickupHandGeneration = session_.handGeneration;
+    app_.loadService_.begin(LoadService::Operation::PickupCloud);
 }
 
 bool CloudSyncController::nextCloudPrefetchKey(std::uint16_t& outKey) const {
@@ -85,6 +110,9 @@ void CloudSyncController::pumpCloudPrefetch() {
     if (commit_.requested() || session_.storagePane != StoragePane::Cloud || session_.trashBoxActive) {
         return;
     }
+    if (selection_.holding() && !session_.cloudViewAwaitingLoad) {
+        return;
+    }
     if (blockedByOtherWork()) {
         return;
     }
@@ -104,16 +132,24 @@ void CloudSyncController::onCloudBoxLoaded() {
                             + " success=" + std::to_string(result.success)
                             + " currentCloudBox=" + std::to_string(session_.cloudBox + 1));
     if (result.success) {
-        CloudBoxDraft draft;
-        draft.baseline = result.pokemon;
-        draft.summaries = result.pokemon;
-        draft.payloads = result.payloads;
-        session_.cloudBoxes[boxKey] = std::move(draft);
+        auto existing = session_.cloudBoxes.find(boxKey);
+        if (existing == session_.cloudBoxes.end()) {
+            CloudBoxDraft draft;
+            draft.baseline = result.pokemon;
+            draft.summaries = result.pokemon;
+            draft.payloads = result.payloads;
+            existing = session_.cloudBoxes.emplace(boxKey, std::move(draft)).first;
+        } else {
+            existing->second.baseline = result.pokemon;
+            existing->second.payloads = result.payloads;
+            Logger::instance().info("onCloudBoxLoaded: kept local edits for box " + std::to_string(boxKey + 1));
+        }
         session_.cloudPrefetchCooldownUntil.erase(boxKey);
         if (session_.cloudBox == boxKey) {
-            session_.cloudPreview = session_.cloudBoxes[boxKey].summaries;
-            session_.pendingUploadPayloads = session_.cloudBoxes[boxKey].pending;
-            session_.cachedCloudPayloads = session_.cloudBoxes[boxKey].payloads;
+            session_.cloudViewAwaitingLoad = false;
+            session_.cloudPreview = existing->second.summaries;
+            session_.pendingUploadPayloads = existing->second.pending;
+            session_.cachedCloudPayloads = existing->second.payloads;
             session_.payloadPrefetchFailed = {};
         }
         app_.status_.clear();
@@ -122,6 +158,7 @@ void CloudSyncController::onCloudBoxLoaded() {
     if (session_.cloudBox == boxKey) {
         session_.cloudPreview.fill({});
         session_.pendingUploadPayloads = {};
+        session_.cloudViewAwaitingLoad = false;
     }
 
     session_.cloudPrefetchCooldownUntil[boxKey] = svcGetSystemTick() + static_cast<u64>(15.0 * SYSCLOCK_ARM11);
@@ -130,26 +167,29 @@ void CloudSyncController::onCloudBoxLoaded() {
 }
 
 void CloudSyncController::onCloudPickupCompleted() {
+    LoadService& load = app_.loadService_;
     const bool stillHeld = session_.hand.active
         && session_.hand.source == HandSource::Cloud
-        && session_.hand.sourceIndex == app_.loadService_.pickupSlot
+        && session_.hand.sourceIndex == load.pickupSlot
         && !session_.hand.payloadKnown
-        && session_.handGeneration == app_.loadService_.pickupHandGeneration;
-    const bool viewingPickupBox =
-        app_.loadService_.pickupCloudBox == static_cast<std::uint16_t>(session_.cloudBox + 1);
-    DownloadResult& result = app_.loadService_.pickupResult;
+        && session_.handGeneration == load.pickupHandGeneration;
+    const bool viewingTargetBox =
+        load.pickupTargetCloudBox == static_cast<std::uint16_t>(session_.cloudBox + 1);
+    DownloadResult& result = load.pickupResult;
     if (result.success) {
         PokemonPayload payload;
         payload.format = result.pokemon.format;
         payload.data = std::move(result.pokemon.payload);
-        if (viewingPickupBox) {
-            session_.cachedCloudPayloads[app_.loadService_.pickupSlot] = payload;
+        if (viewingTargetBox) {
+            session_.cachedCloudPayloads[load.pickupTargetSlot] = payload;
         }
-        const auto pickupBoxKey = static_cast<std::uint16_t>(app_.loadService_.pickupCloudBox - 1);
-        auto pickupBoxIt = session_.cloudBoxes.find(pickupBoxKey);
-        if (pickupBoxIt != session_.cloudBoxes.end() && app_.loadService_.pickupSlot < 30) {
-            pickupBoxIt->second.payloads[app_.loadService_.pickupSlot] = payload;
+        const auto targetBoxKey = static_cast<std::uint16_t>(load.pickupTargetCloudBox - 1);
+        auto targetBoxIt = session_.cloudBoxes.find(targetBoxKey);
+        if (targetBoxIt != session_.cloudBoxes.end() && load.pickupTargetSlot < 30) {
+            targetBoxIt->second.payloads[load.pickupTargetSlot] = payload;
         }
+        selection_.deliverPayload(load.pickupCloudBox, load.pickupSlot, payload);
+        selection_.retryPlacement();
         if (stillHeld) {
             session_.hand.payload = std::move(payload);
             session_.hand.payloadKnown = !session_.hand.payload.data.empty();
@@ -157,21 +197,24 @@ void CloudSyncController::onCloudPickupCompleted() {
         return;
     }
     if (!stillHeld) {
-        if (viewingPickupBox && app_.loadService_.pickupSlot < session_.payloadPrefetchFailed.size()) {
-            session_.payloadPrefetchFailed[app_.loadService_.pickupSlot] = true;
+        if (selection_.holding()) {
+            selection_.failPayload(load.pickupCloudBox, load.pickupSlot);
+            session_.regionFetchRetryAt = svcGetSystemTick() + static_cast<u64>(3.0 * SYSCLOCK_ARM11);
+        } else if (viewingTargetBox && load.pickupTargetSlot < session_.payloadPrefetchFailed.size()) {
+            session_.payloadPrefetchFailed[load.pickupTargetSlot] = true;
         }
         Logger::instance().warning("Cloud payload prefetch failed: " + result.message);
         return;
     }
-    if (viewingPickupBox) {
-        session_.cloudPreview[app_.loadService_.pickupSlot] = session_.hand.summary;
+    if (viewingTargetBox) {
+        session_.cloudPreview[load.pickupTargetSlot] = session_.hand.summary;
     }
     session_.hand = Hand{};
     app_.status_ = "Cannot pick up: " + result.message;
     session_.errorDialogTitle = "PICKUP FAILED";
-    session_.errorDialogPokemon = app_.loadService_.pickupSummary.nickname.empty()
+    session_.errorDialogPokemon = load.pickupSummary.nickname.empty()
         ? "Unknown Pokemon"
-        : app_.loadService_.pickupSummary.nickname;
+        : load.pickupSummary.nickname;
     session_.errorDialogLocation.clear();
     session_.errorDialogMessage = result.message.empty()
         ? "The Pokemon payload could not be read."

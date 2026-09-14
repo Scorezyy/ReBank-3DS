@@ -8,7 +8,7 @@ namespace Gui {
 void drawDownArrow(float cx, float topY, float size, u32 color) {
     for (int i = 0; i < 6; ++i) {
         const float w = size * (1.0F - static_cast<float>(i) / 6.0F);
-        C2D_DrawRectSolid(cx - w * 0.5F, topY + i * (size / 6.0F + 0.5F), 0.5F,
+        C2D_DrawRectSolid(cx - w * 0.5F, topY + i * (size / 6.0F + 0.5F), 0.97F,
                           w, size / 6.0F + 1.0F, color);
     }
 }

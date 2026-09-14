@@ -42,6 +42,7 @@ That link always serves the newest build — the QR code itself never needs to c
 | ☁️ **Cloud storage** | Move Pokémon from your game cartridge into your personal online bank, and pull them back down whenever you want. Your collection stays yours, independent of any single cartridge. |
 | 🎮 **Automatic cartridge detection** | Insert or swap a game cartridge and ReBank picks it up on its own — no manual rescan needed. |
 | 🎒 **Party support** | View and manage your current party's six Pokémon directly from the bank, right alongside your boxes. |
+| 🧰 **Multi-select tool** | Press **Start** to grab a whole row or a custom rectangle of Pokémon at once, then move, swap, or drop the entire selection in one go instead of one Pokémon at a time. |
 | 🗑️ **Trash Can** | Drop Pokémon you want gone into the trash box, then commit to delete them all at once — with a confirmation prompt before anything is lost for good. |
 | 🗂️ **Custom box names** | Give your cloud boxes their own names, right from the box screen, so a collection of hundreds of Pokémon stays easy to navigate. |
 | 🔁 **Cross-generation transfers** | ReBank understands Pokémon from Generation 1 all the way through Generation 7, so your collection isn't locked to a single game or console generation. |
@@ -114,8 +115,8 @@ ReBank has been in active beta since its first public release, with something la
 - **0.2.0** — a full UI redesign, party team support, cloud box renaming, major performance and reliability work across networking and the commit pipeline, and safer handling that stops failed transfers from ever duplicating or losing a Pokémon.
 - **0.2.1** — the Trash Can, for bulk-deleting Pokémon you no longer want.
 - **0.2.2** — automatic cartridge detection: swap cartridges freely and ReBank keeps up on its own, plus a large internal refactor to keep the codebase easy to extend.
-- **0.2.5** — Added Pokémon Green (JPN Virtual Console) support.
 - **0.2.3** — Generation 1 & 2 Virtual Console support: pull Pokémon straight out of Red, Blue, Yellow, Gold, Silver, and Crystal.
+- **0.2.5** — Added Pokémon Green (JPN Virtual Console) support.
 
 The full history, with details on every fix and feature, lives on the **[Releases](../../releases)** page.
 

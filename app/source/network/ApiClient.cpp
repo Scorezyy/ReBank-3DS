@@ -21,7 +21,6 @@
 
 namespace {
 constexpr std::size_t MaximumResponseSize = 64 * 1024;
-constexpr std::size_t MaximumCertificateSize = 16 * 1024;
 constexpr std::size_t MaximumUpdateSize = 5 * 1024 * 1024;
 constexpr std::size_t DownloadChunkSize = 32 * 1024;
 constexpr u64 RequestTimeout = 30'000'000'000ULL;
@@ -30,30 +29,6 @@ std::string resultCode(Result result) {
     char text[11]{};
     std::snprintf(text, sizeof(text), "0x%08lX", static_cast<unsigned long>(result));
     return text;
-}
-
-const std::vector<u8>& trustedRootCertificate() {
-    static const std::vector<u8> certificate = [] {
-        FILE* file = std::fopen("romfs:/assets/rebank-ca.der", "rb");
-        if (!file) {
-            return std::vector<u8>{};
-        }
-        std::fseek(file, 0, SEEK_END);
-        const long size = std::ftell(file);
-        std::rewind(file);
-        if (size <= 0 || static_cast<std::size_t>(size) > MaximumCertificateSize) {
-            std::fclose(file);
-            return std::vector<u8>{};
-        }
-        std::vector<u8> contents(static_cast<std::size_t>(size));
-        const std::size_t read = std::fread(contents.data(), 1, contents.size(), file);
-        std::fclose(file);
-        if (read != contents.size()) {
-            return std::vector<u8>{};
-        }
-        return contents;
-    }();
-    return certificate;
 }
 
 std::string dumpJson(json_t* value) {
@@ -85,18 +60,6 @@ Result openTrustedContext(httpcContext& context, HTTPC_RequestMethod method, con
     Result result = httpcOpenContext(&context, method, url.c_str(), 0);
     if (R_FAILED(result)) {
         outMessage = "Connection setup failed (" + resultCode(result) + ").";
-        return result;
-    }
-    const auto& rootCertificate = trustedRootCertificate();
-    if (rootCertificate.empty()) {
-        httpcCloseContext(&context);
-        outMessage = "The trusted server certificate is unavailable.";
-        return static_cast<Result>(-1);
-    }
-    result = httpcAddTrustedRootCA(&context, rootCertificate.data(), static_cast<u32>(rootCertificate.size()));
-    if (R_FAILED(result)) {
-        httpcCloseContext(&context);
-        outMessage = "TLS certificate setup failed (" + resultCode(result) + ").";
     }
     return result;
 }

@@ -31,6 +31,7 @@ public:
     Operation poll();
 
     bool running() const { return job_.running(); }
+    bool busy() const { return operation_ != Operation::None; }
     Operation operation() const { return operation_; }
 
     bool blocksUi() const;
@@ -43,6 +44,8 @@ public:
     std::uint16_t resolvedCloudBoxKey = 0;
     std::size_t pickupSlot = 0;
     std::uint16_t pickupCloudBox = 0;
+    std::size_t pickupTargetSlot = 0;
+    std::uint16_t pickupTargetCloudBox = 0;
     PokemonSummary pickupSummary;
     
     std::uint32_t pickupHandGeneration = 0;

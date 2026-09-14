@@ -4,11 +4,14 @@
 #include "bank/BankSession.hpp"
 #include "bank/CloudSyncController.hpp"
 #include "bank/CommitService.hpp"
+#include "selection/SelectionController.hpp"
 #include "bank/StorageController.hpp"
 #include "save/adapter/SaveAdapter.hpp"
 
 #include <citro2d.h>
 #include <3ds.h>
+
+#include <utility>
 
 class App;
 
@@ -22,8 +25,9 @@ public:
         : app_(app),
           storage_(app_, session_),
           commit_(app_, session_, storage_),
-          cloudSync_(app_, session_, commit_),
-          input_(app_, session_, storage_, cloudSync_, commit_) {}
+          selection_(app_, session_, storage_),
+          cloudSync_(app_, session_, commit_, selection_),
+          input_(app_, session_, storage_, cloudSync_, commit_, selection_) {}
 
     void update(u32 keysDown, u32 keysHeld, circlePosition circle, touchPosition touch, bool touched);
     void renderTop(float eyeOffset);
@@ -50,6 +54,10 @@ private:
     void renderStatusBar();
     void renderLocalBoxHeader();
     void renderLocalGrid();
+    void renderMarkedArea(float pitchX, float pitchY, float gridLeft, float gridTop, StoragePane pane);
+    void renderMarkedPartyArea();
+    void drawSelectionOverlay(float cx, float cy, float halfWidth, float halfHeight) const;
+    std::pair<float, float> partyTileCenter(std::size_t slot) const;
     void renderTeamHeader();
     void renderPartyGrid();
     void renderCommitOverlay();
@@ -59,13 +67,18 @@ private:
     void renderTopHeader();
     void renderTopBoxGrid(float eyeOffset);
     void renderTopInfoPanel();
+    void drawCarriedSprite(const PokemonSummary& summary, float cx, float cy, float z) const;
     void drawHeldPokemonPreview(float cx, float cy) const;
+    void drawHeldRegionSprite(const PokemonSummary& summary, float cx, float cy) const;
     void drawFocusCursor(float cx, float cy, float cursorYOffset, float radius, float height) const;
+    u32 focusCursorColor() const;
+    u32 selectionModeAccent() const;
 
     App& app_;
     BankSession session_;
     StorageController storage_;
     CommitService commit_;
+    SelectionController selection_;
     CloudSyncController cloudSync_;
     BankInputController input_;
     bool cardInsertionKnown_ = false;
