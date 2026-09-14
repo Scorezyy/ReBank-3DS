@@ -5,6 +5,7 @@
 #include "bank/PayloadHash.hpp"
 
 #include <algorithm>
+#include <map>
 
 namespace {
 bool parseBankSlot(const std::string& message, std::uint16_t& bank, std::uint8_t& slot) {
@@ -319,6 +320,61 @@ void CommitService::commitCloudUploadBaseline(const std::vector<UploadPokemon>& 
     }
 }
 
+void CommitService::resolveDuplicateCloudPayloads(const std::vector<UploadPokemon>& uploaded) {
+    std::map<std::vector<std::uint8_t>, std::vector<BankSlot>> byPayload;
+    for (const auto& [boxKey, draft] : session_.cloudBoxes) {
+        const auto boxPosition = static_cast<std::uint16_t>(boxKey + 1);
+        for (std::size_t slot = 0; slot < 30; ++slot) {
+            if (draft.summaries[slot].species == 0 || draft.payloads[slot].data.empty()) {
+                continue;
+            }
+            byPayload[draft.payloads[slot].data].push_back({boxPosition, static_cast<std::uint8_t>(slot + 1)});
+        }
+    }
+    for (auto& [payload, locations] : byPayload) {
+        if (locations.size() < 2) {
+            continue;
+        }
+        // A slot whose own upload succeeded this commit is the confirmed new home;
+        // any other slot still holding the same payload is a stale leftover from a reverted overwrite.
+        const auto isFreshUpload = [&](const BankSlot& location) {
+            return std::any_of(uploaded.begin(), uploaded.end(), [&](const UploadPokemon& item) {
+                return item.boxPosition == location.first && item.slot == location.second;
+            });
+        };
+        auto keepIt = std::find_if(locations.begin(), locations.end(), isFreshUpload);
+        const BankSlot keep = keepIt != locations.end() ? *keepIt : locations.front();
+        for (const auto& location : locations) {
+            if (location == keep) {
+                continue;
+            }
+            Logger::instance().warning("resolveDuplicateCloudPayloads: bank " + std::to_string(location.first)
+                                       + " slot " + std::to_string(location.second)
+                                       + " duplicates bank " + std::to_string(keep.first) + " slot "
+                                       + std::to_string(keep.second) + ", deleting duplicate");
+            if (location.first == 0 || location.second == 0 || location.second > 30) {
+                continue;
+            }
+            auto it = session_.cloudBoxes.find(static_cast<std::uint16_t>(location.first - 1));
+            if (it == session_.cloudBoxes.end()) {
+                continue;
+            }
+            DeleteResult dr = app_.api_.deleteCloudPokemon(location.first, location.second, app_.session_.accessToken);
+            if (!dr.success) {
+                Logger::instance().error("resolveDuplicateCloudPayloads: failed to delete duplicate at bank "
+                                         + std::to_string(location.first) + " slot " + std::to_string(location.second)
+                                         + ": " + dr.message);
+                continue;
+            }
+            const std::size_t slot = static_cast<std::size_t>(location.second - 1);
+            it->second.baseline[slot] = PokemonSummary{};
+            it->second.summaries[slot] = PokemonSummary{};
+            it->second.payloads[slot] = {};
+            it->second.pending[slot] = {};
+        }
+    }
+}
+
 bool CommitService::clearLocalSlot(std::size_t boxKey, std::size_t slot, const LocalBoxDraft& baseline,
                                     const std::vector<std::vector<std::uint8_t>>& unresolvedPayloads) {
     const std::string location = "Local box " + std::to_string(boxKey + 1) + "  |  Slot " + std::to_string(slot + 1);
@@ -506,6 +562,7 @@ void CommitService::runCommit() {
     const std::vector<UploadPokemon> attempted = uploads;
     const std::vector<UploadPokemon> uploaded = runUploads(std::move(uploads));
     commitCloudUploadBaseline(uploaded);
+    resolveDuplicateCloudPayloads(uploaded);
     std::vector<std::vector<std::uint8_t>> unresolvedPayloads;
     std::vector<std::vector<std::uint8_t>> stillOnCloudPayloads;
     for (const auto& attempt : attempted) {

@@ -39,6 +39,7 @@ private:
     std::vector<UploadPokemon> runUploads(std::vector<UploadPokemon> uploads);
     void commitCloudUploadBaseline(const std::vector<UploadPokemon>& uploaded);
     void recordSkippedUpload(const UploadPokemon& upload, const std::string& reason);
+    void resolveDuplicateCloudPayloads(const std::vector<UploadPokemon>& uploaded);
 
     bool clearLocalSlot(std::size_t boxKey, std::size_t slot, const LocalBoxDraft& baseline,
                          const std::vector<std::vector<std::uint8_t>>& unresolvedPayloads);
