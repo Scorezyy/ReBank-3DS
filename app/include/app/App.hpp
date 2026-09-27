@@ -75,6 +75,7 @@ private:
     void finishIntro();
     void beginAuth(AuthOperation operation, std::string authUsername, std::string authEmail, std::string authPassword);
     void pollAuth();
+    void pollSessionRejected();
     void pollWelcomeBack();
     void beginUpdate();
     void pollUpdate();

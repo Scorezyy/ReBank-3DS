@@ -69,6 +69,7 @@ void App::update(u32 keysDown, u32 keysHeld, circlePosition circle, touchPositio
     pollLoad();
     bankScreen_.pollCommit();
     bankScreen_.pollRenameBox();
+    pollSessionRejected();
 
     if (bankScreen_.errorDialogVisible()) {
         const bool dismissTouch = (keysDown & KEY_TOUCH)
@@ -202,6 +203,26 @@ void App::beginAuth(AuthOperation operation, std::string authUsername, std::stri
         status_ = "Could not start the login process.";
         Logger::instance().error("Authentication worker creation failed");
     }
+}
+
+void App::pollSessionRejected() {
+    if (isLoading() || bankScreen_.backgroundWorkRunning()) {
+        return;
+    }
+    if (!api_.consumeSessionRejected()) {
+        return;
+    }
+    if (screen_ == Screen::Welcome || screen_ == Screen::Login
+        || screen_ == Screen::Register || screen_ == Screen::ResetPassword) {
+        return;
+    }
+    Logger::instance().warning("Session rejected by the server - signing out");
+    sessionStore_.clear();
+    session_ = {};
+    autoLogin_ = false;
+    bankScreen_.dismissErrorDialog();
+    screen_ = Screen::Welcome;
+    showError("SIGNED OUT", "Another device signed in to this account. Please sign in again.");
 }
 
 void App::pollAuth() {

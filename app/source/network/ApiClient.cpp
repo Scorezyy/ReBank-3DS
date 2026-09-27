@@ -23,12 +23,52 @@ namespace {
 constexpr std::size_t MaximumResponseSize = 64 * 1024;
 constexpr std::size_t MaximumUpdateSize = 5 * 1024 * 1024;
 constexpr std::size_t DownloadChunkSize = 32 * 1024;
+constexpr std::size_t MaximumCertificateSize = 16 * 1024;
 constexpr u64 RequestTimeout = 30'000'000'000ULL;
+constexpr const char* TrustedRootPaths[] = {
+    "romfs:/assets/tls/usertrust-rsa.der",
+    "romfs:/assets/tls/sectigo-r46.der",
+    "romfs:/assets/tls/isrg-x1.der",
+};
 
 std::string resultCode(Result result) {
     char text[11]{};
     std::snprintf(text, sizeof(text), "0x%08lX", static_cast<unsigned long>(result));
     return text;
+}
+
+std::vector<u8> readCertificate(const char* path) {
+    FILE* file = std::fopen(path, "rb");
+    if (!file) {
+        return {};
+    }
+    std::fseek(file, 0, SEEK_END);
+    const long size = std::ftell(file);
+    std::rewind(file);
+    if (size <= 0 || static_cast<std::size_t>(size) > MaximumCertificateSize) {
+        std::fclose(file);
+        return {};
+    }
+    std::vector<u8> contents(static_cast<std::size_t>(size));
+    const std::size_t read = std::fread(contents.data(), 1, contents.size(), file);
+    std::fclose(file);
+    return read == contents.size() ? contents : std::vector<u8>{};
+}
+
+const std::vector<std::vector<u8>>& trustedRootCertificates() {
+    static const std::vector<std::vector<u8>> certificates = [] {
+        std::vector<std::vector<u8>> loaded;
+        for (const char* path : TrustedRootPaths) {
+            std::vector<u8> certificate = readCertificate(path);
+            if (certificate.empty()) {
+                Logger::instance().error(std::string("Trusted root missing: ") + path);
+                continue;
+            }
+            loaded.push_back(std::move(certificate));
+        }
+        return loaded;
+    }();
+    return certificates;
 }
 
 std::string dumpJson(json_t* value) {
@@ -60,6 +100,13 @@ Result openTrustedContext(httpcContext& context, HTTPC_RequestMethod method, con
     Result result = httpcOpenContext(&context, method, url.c_str(), 0);
     if (R_FAILED(result)) {
         outMessage = "Connection setup failed (" + resultCode(result) + ").";
+        return result;
+    }
+    for (const auto& certificate : trustedRootCertificates()) {
+        const Result added = httpcAddTrustedRootCA(&context, certificate.data(), static_cast<u32>(certificate.size()));
+        if (R_FAILED(added)) {
+            Logger::instance().error("Trusted root rejected: " + resultCode(added));
+        }
     }
     return result;
 }
@@ -199,6 +246,12 @@ ApiClient::~ApiClient() {
 
 bool ApiClient::available() const {
     return initialized_;
+}
+
+bool ApiClient::consumeSessionRejected() {
+    const bool rejected = sessionRejected_;
+    sessionRejected_ = false;
+    return rejected;
 }
 
 AuthResult ApiClient::login(const std::string& username, const std::string& password) {
@@ -741,6 +794,9 @@ ApiClient::HttpResult ApiClient::request(
 
     response[downloaded] = 0;
     Logger::instance().info("HTTP " + std::to_string(status));
+    if (status == 401 && !authorization.empty()) {
+        sessionRejected_ = true;
+    }
     return {
         true,
         status,

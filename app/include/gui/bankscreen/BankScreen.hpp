@@ -35,6 +35,7 @@ public:
 
     void pollCommit() { commit_.poll(); }
     void pollRenameBox() { cloudSync_.pollRenameBox(); }
+    bool backgroundWorkRunning() const { return commit_.running() || cloudSync_.renameInProgress(); }
 
     void onGameOpened();
     void onCloudBoxLoaded() { cloudSync_.onCloudBoxLoaded(); }
