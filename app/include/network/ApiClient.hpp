@@ -150,6 +150,8 @@ public:
         std::uint32_t expectedSize
     );
 
+    bool consumeSessionRejected();
+
 private:
     struct HttpResult {
         bool success = false;
@@ -175,6 +177,7 @@ private:
     void syncClock();
     std::uint64_t signedTimestampSeconds();
     bool initialized_ = false;
+    bool sessionRejected_ = false;
     DeviceIdentity deviceIdentity_;
     std::optional<std::int64_t> clockDeltaMs_;
 };
