@@ -27,3 +27,4 @@ struct GameDescriptor {
 };
 
 std::span<const GameDescriptor> supportedGames();
+const GameDescriptor* findGame(std::string_view code);

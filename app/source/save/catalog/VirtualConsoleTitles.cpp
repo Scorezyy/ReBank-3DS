@@ -1,5 +1,8 @@
 #include "save/catalog/VirtualConsoleTitles.hpp"
 
+#include "core/AppPaths.hpp"
+#include "core/FsGuard.hpp"
+
 #include <3ds.h>
 
 #include <algorithm>
@@ -57,39 +60,32 @@ constexpr std::array KnownTitles{
     KnownTitle{"crystal", 0x0004000000173400ULL}
 };
 
-constexpr const char* ConfigFilePath = "sdmc:/3ds/ReBank/vc_titles.cfg";
-
-std::vector<std::uint64_t>& installedTitleCache() {
-    static std::vector<std::uint64_t> cache;
+std::optional<std::vector<std::uint64_t>>& installedTitleCache() {
+    static std::optional<std::vector<std::uint64_t>> cache;
     return cache;
 }
 
-bool& installedTitleCachePopulated() {
-    static bool populated = false;
-    return populated;
+std::vector<std::uint64_t> listInstalledTitles() {
+    std::vector<std::uint64_t> titles;
+    if (R_FAILED(amInit())) {
+        return titles;
+    }
+    u32 count = 0;
+    if (R_SUCCEEDED(AM_GetTitleCount(MEDIATYPE_SD, &count)) && count > 0) {
+        titles.resize(count);
+        u32 read = 0;
+        titles.resize(R_SUCCEEDED(AM_GetTitleList(&read, MEDIATYPE_SD, count, titles.data())) ? read : 0);
+    }
+    amExit();
+    return titles;
 }
 
 const std::vector<std::uint64_t>& installedTitles() {
-    if (installedTitleCachePopulated()) {
-        return installedTitleCache();
+    std::optional<std::vector<std::uint64_t>>& cache = installedTitleCache();
+    if (!cache) {
+        cache = listInstalledTitles();
     }
-    std::vector<std::uint64_t>& cache = installedTitleCache();
-    cache.clear();
-    if (R_SUCCEEDED(amInit())) {
-        u32 count = 0;
-        if (R_SUCCEEDED(AM_GetTitleCount(MEDIATYPE_SD, &count)) && count > 0) {
-            cache.resize(count);
-            u32 read = 0;
-            if (R_SUCCEEDED(AM_GetTitleList(&read, MEDIATYPE_SD, count, cache.data()))) {
-                cache.resize(read);
-            } else {
-                cache.clear();
-            }
-        }
-        amExit();
-    }
-    installedTitleCachePopulated() = true;
-    return cache;
+    return *cache;
 }
 
 bool isInstalled(std::uint64_t titleId) {
@@ -109,7 +105,8 @@ std::string_view trimmed(std::string_view text) {
 }
 
 std::optional<std::uint64_t> configuredTitleId(std::string_view code) {
-    FILE* file = std::fopen(ConfigFilePath, "r");
+    const FsGuard guard;
+    FILE* file = std::fopen(AppPaths::file("vc_titles.cfg").c_str(), "r");
     if (!file) {
         return std::nullopt;
     }
@@ -136,8 +133,7 @@ std::optional<std::uint64_t> configuredTitleId(std::string_view code) {
 namespace VirtualConsoleTitles {
 
 void resetInstalledCache() {
-    installedTitleCachePopulated() = false;
-    installedTitleCache().clear();
+    installedTitleCache().reset();
 }
 
 std::optional<std::uint64_t> resolveInstalledTitleId(std::string_view code) {

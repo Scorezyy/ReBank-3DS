@@ -20,6 +20,8 @@ ifeq ($(wildcard $(TOPDIR)/config/client-secret$(CONFIG_SUFFIX).mk),)
 $(error config/client-secret$(CONFIG_SUFFIX).mk is missing. Copy config/client-secret$(CONFIG_SUFFIX).mk.example to config/client-secret$(CONFIG_SUFFIX).mk and fill in a real secret shared with your $(BUILD_ENV) server's CLIENT_HMAC_SECRET)
 endif
 include $(TOPDIR)/config/client-secret$(CONFIG_SUFFIX).mk
+REBANK_UPDATE_KEY_MODULUS ?=
+-include $(TOPDIR)/config/update-key.mk
 
 ifeq ($(wildcard $(TOPDIR)/source/core/RequestSigning.cpp),)
 $(error source/core/RequestSigning.cpp is missing. Copy source/core/RequestSigning.cpp.example to source/core/RequestSigning.cpp, or supply your own, matching whatever your server verifies)
@@ -36,20 +38,15 @@ SOURCES := source/app \
 	source/save/pokemon \
 	source/io \
 	source/network \
+	source/account \
+	source/update \
 	source/bank \
 	source/selection \
 	source/audio \
 	source/i18n \
 	source/gui \
 	source/gui/elements \
-	source/gui/welcomescreen \
-	source/gui/loginscreen \
-	source/gui/registerscreen \
-	source/gui/resetpasswordscreen \
-	source/gui/gameselectscreen \
-	source/gui/bankscreen \
-	source/gui/logsscreen \
-	source/gui/loadingscreen \
+	source/gui/screens \
 	vendor/PKSM-SPI \
 	$(PKSM_CORE)/memecrypto \
 	$(PKSM_CORE)/source/i18n \
@@ -72,7 +69,8 @@ CFLAGS += $(INCLUDE) -D__3DS__ \
 		  -DREBANK_SERVER_SCHEME=\"$(REBANK_SERVER_SCHEME)\" \
 		  -DREBANK_SERVER_HOST=\"$(REBANK_SERVER_HOST)\" \
 		  -DREBANK_SERVER_PORT=$(REBANK_SERVER_PORT) \
-		  -DREBANK_CLIENT_SECRET=\"$(REBANK_CLIENT_SECRET)\"
+		  -DREBANK_CLIENT_SECRET=\"$(REBANK_CLIENT_SECRET)\" \
+		  -DREBANK_UPDATE_KEY_MODULUS=\"$(REBANK_UPDATE_KEY_MODULUS)\"
 CXXFLAGS := $(CFLAGS) -fno-rtti -std=gnu++20
 ASFLAGS := -g $(ARCH)
 LDFLAGS := -specs=3dsx.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)

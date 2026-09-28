@@ -13,5 +13,3 @@ enum class CursorDirection : std::uint8_t {
 };
 
 GridPoint stepOf(CursorDirection direction);
-bool isVertical(CursorDirection direction);
-bool isHorizontal(CursorDirection direction);

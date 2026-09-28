@@ -1,38 +1,34 @@
 #pragma once
 
-#include "network/ApiClient.hpp"
-#include "network/AuthController.hpp"
-#include "network/CredentialStore.hpp"
-#include "network/LoadService.hpp"
-#include "save/catalog/GameCatalog.hpp"
-#include "save/adapter/SaveAdapter.hpp"
-#include "save/SaveLoadService.hpp"
-#include "gui/GfxResources.hpp"
-#include "gui/Theme.hpp"
-#include "gui/UiRenderer.hpp"
-#include "gui/elements/ErrorDialog.hpp"
-#include "gui/bankscreen/BankScreen.hpp"
-#include "gui/gameselectscreen/GameSelectScreen.hpp"
-#include "gui/loadingscreen/LoadingScreen.hpp"
-#include "gui/loginscreen/LoginScreen.hpp"
-#include "gui/logsscreen/LogsScreen.hpp"
-#include "gui/registerscreen/RegisterScreen.hpp"
-#include "gui/resetpasswordscreen/ResetPasswordScreen.hpp"
-#include "gui/welcomescreen/WelcomeScreen.hpp"
-#include "i18n/Localization.hpp"
-#include "core/Logger.hpp"
+#include "account/AuthController.hpp"
+#include "account/DeviceIdentity.hpp"
+#include "account/SessionStore.hpp"
 #include "audio/MusicPlayer.hpp"
-#include "network/SessionStore.hpp"
-#include "network/UpdateController.hpp"
+#include "bank/LoadService.hpp"
+#include "core/AsyncTask.hpp"
+#include "core/ErrorNotice.hpp"
+#include "gui/GfxResources.hpp"
+#include "gui/UiRenderer.hpp"
+#include "gui/screens/BankScreen.hpp"
+#include "gui/screens/GameSelectScreen.hpp"
+#include "gui/screens/IntroScreen.hpp"
+#include "gui/screens/LoadingScreen.hpp"
+#include "gui/screens/LoginScreen.hpp"
+#include "gui/screens/LogsScreen.hpp"
+#include "gui/screens/RegisterScreen.hpp"
+#include "gui/screens/ResetPasswordScreen.hpp"
+#include "gui/screens/WelcomeScreen.hpp"
+#include "i18n/Localization.hpp"
+#include "network/ApiClient.hpp"
+#include "save/SaveLoadService.hpp"
+#include "save/adapter/SaveAdapter.hpp"
+#include "update/UpdateInstaller.hpp"
 
 #include <citro2d.h>
 
-#include <atomic>
-#include <array>
-#include <memory>
+#include <cstddef>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 #include <vector>
 
 class App {
@@ -41,86 +37,79 @@ public:
     ~App();
     int run();
 
-    UiRenderer& ui() { return ui_; }
-
 private:
+    friend class Screen;
+    friend class IntroScreen;
     friend class WelcomeScreen;
+    friend class AuthFormScreen;
     friend class LoginScreen;
     friend class RegisterScreen;
     friend class ResetPasswordScreen;
     friend class GameSelectScreen;
     friend class LogsScreen;
     friend class BankScreen;
-    friend class StorageController;
-    friend class CommitService;
-    friend class CloudSyncController;
-    friend class BankInputController;
-    friend class SelectionController;
-    friend class LoadService;
-    friend class SaveLoadService;
     friend class LoadingScreen;
 
-    enum class Screen {
-        Intro,
-        Welcome,
-        Login,
-        Register,
-        ResetPassword,
-        GameSelect,
-        Bank,
-        Logs
-    };
+    void update(const InputFrame& input);
+    void pollBackgroundWork();
+    bool onAuthScreen() const;
+    bool canExit() const;
+    Screen& activeScreen();
 
-    void update(u32 keysDown, u32 keysHeld, circlePosition circle, touchPosition touch);
     void finishIntro();
-    void beginAuth(AuthOperation operation, std::string authUsername, std::string authEmail, std::string authPassword);
+    void beginAuth(AuthRequest request);
     void pollAuth();
+    void onAuthFailed(const AuthController::Completed& completed);
+    void onAuthSucceeded(AuthController::Completed completed);
     void pollSessionRejected();
     void pollWelcomeBack();
     void beginUpdate();
     void pollUpdate();
-    void pollLoad();
-    bool isLoading() const;
-    void render();
-    void renderTop(C3D_RenderTarget* target, float eyeOffset);
-    void renderBottom();
+    void pollSaveLoad();
+    void pollBankLoad();
+    void resetAccountState();
     void logout();
     void toggleAutoLogin();
-    void drawText(std::string_view value, float x, float y, float size, u32 color);
-    void drawCentered(std::string_view value, float centerX, float y, float size, u32 color);
-    void drawRight(std::string_view value, float rightX, float y, float size, u32 color);
-    float textWidth(std::string_view value, float size);
-    void drawButton(const UiRect& rect, std::string_view label, bool primary);
-    void drawField(const UiRect& rect, std::string_view label, const std::string& value, bool password);
+    bool isLoading() const;
+    bool isLoadingWork() const;
+
+    void render();
+    void beginScene(C3D_RenderTarget* target, C2D_TextBuf buffer, float width);
+    void renderTop(C3D_RenderTarget* target, C2D_TextBuf buffer, float eyeOffset);
+    void renderBottom();
+
     void requestText(std::string& destination, std::string_view hint, bool password, std::size_t maxLength = 256);
     void showError(std::string title, std::string message);
+    void showError(TextId title, TextId message);
 
     Localization localization_;
-    Screen screen_;
-    Screen previousScreen_;
+    ScreenId screen_ = ScreenId::Intro;
+    ScreenId previousScreen_ = ScreenId::Welcome;
     GfxResources resources_;
     UiRenderer ui_;
-    ErrorDialog errorDialog_;
+    ErrorNotice errors_;
     std::string status_;
+    DeviceIdentity deviceIdentity_;
     ApiClient api_;
     std::string executablePath_;
     bool homebrew_;
-    UpdateController updateController_;
-    SessionStore sessionStore_;
+    AsyncTask<UpdateInstallResult> updateTask_;
+    SessionStore sessionStore_{deviceIdentity_};
     AccountSession session_;
-    AuthController authController_;
-    LoadService loadService_{*this};
-    SaveLoadService saveLoadService_{*this};
+    AuthController authController_{api_};
+    LoadService loadService_{api_, session_};
+    SaveAdapter saveAdapter_;
+    SaveLoadService saveLoadService_{saveAdapter_};
     MusicPlayer music_;
-    bool running_;
-    CredentialStore credentials_;
-    bool autoLogin_ = false;
+    bool running_ = true;
+    bool autoLogin_ = true;
     std::string accountUsername_;
     bool bootAutoLoginInProgress_ = false;
     bool welcomeBackPending_ = false;
     u64 welcomeBackUntil_ = 0;
     BoxListResult cloudBoxCache_;
     std::vector<BoxNameEntry> cloudBoxNamesCache_;
+    IntroScreen introScreen_{*this};
     WelcomeScreen welcomeScreen_{*this};
     LoginScreen loginScreen_{*this};
     RegisterScreen registerScreen_{*this};

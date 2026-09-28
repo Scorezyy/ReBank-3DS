@@ -1,50 +1,47 @@
 #pragma once
 
+#include "bank/BankContext.hpp"
 #include "bank/BankSession.hpp"
 #include "bank/CloudSyncController.hpp"
 #include "bank/CommitService.hpp"
 #include "bank/StorageController.hpp"
+#include "gui/InputFrame.hpp"
 #include "selection/CursorDirection.hpp"
 #include "selection/SelectionController.hpp"
 
 #include <3ds.h>
-#include <citro2d.h>
 
-class App;
-
-// Translates raw buttons/circle-pad/touch input into bank-screen actions,
-// delegating the actual state changes to StorageController, CloudSyncController,
-// CommitService and SelectionController. Nothing here touches rendering.
 class BankInputController {
 public:
-    BankInputController(App& app, BankSession& session, StorageController& storage,
-                         CloudSyncController& cloudSync, CommitService& commit, SelectionController& selection)
-        : app_(app), session_(session), storage_(storage), cloudSync_(cloudSync), commit_(commit),
+    BankInputController(BankContext& context, BankSession& session, StorageController& storage,
+                        CloudSyncController& cloudSync, CommitService& commit, SelectionController& selection)
+        : context_(context), session_(session), storage_(storage), cloudSync_(cloudSync), commit_(commit),
           selection_(selection) {}
 
-    void handle(u32 keysDown, u32 keysHeld, circlePosition circle, touchPosition touch, bool touched);
+    void handle(const InputFrame& input);
 
 private:
-    void handleSelection(u32 keysDown, u32 keysHeld, circlePosition circle);
+    void handleSelection(const InputFrame& input);
     void handleBack();
-    void handleBoxShoulder(u32 keysDown);
-    void handleCloudNameFocus(u32 keysDown, u32 keysHeld, circlePosition circle);
-    void handleMovement(u32 keysDown, u32 keysHeld, circlePosition circle);
-    void moveFocus(CursorDirection direction);
+    void handleBoxShoulder(const InputFrame& input);
+    void handleCloudNameFocus(const InputFrame& input);
+    void handleMovement(const InputFrame& input);
     void handlePaneTransitions(CursorDirection pressed, StoragePane priorPane, std::size_t priorSlot);
-    void enterPane(StoragePane pane, std::size_t slot);
     void handleCommitRequest();
-    void handleTrashConfirm(u32 keysDown, touchPosition touch, bool touched);
+    void startCommit();
+    void handleTrashConfirm(const InputFrame& input);
     void pumpBackgroundWork();
-    void handleTouch(touchPosition touch);
-    bool handleTouchGrid(touchPosition touch, StoragePane pane);
+    void handleTouch(const InputFrame& input);
     void activateSlot(StoragePane pane, std::size_t slot);
-    CursorDirection repeatedDirection(u32 keysDown, u32 keysHeld, circlePosition circle);
+    void enterPane(StoragePane pane, std::size_t slot);
+    CursorDirection repeatedDirection(const InputFrame& input);
 
-    App& app_;
+    BankContext& context_;
     BankSession& session_;
     StorageController& storage_;
     CloudSyncController& cloudSync_;
     CommitService& commit_;
     SelectionController& selection_;
+    CursorDirection heldDirection_ = CursorDirection::None;
+    u64 directionRepeatAt_ = 0;
 };

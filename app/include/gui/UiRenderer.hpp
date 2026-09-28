@@ -20,6 +20,11 @@ public:
     void drawField(const UiRect& rect, std::string_view label, const std::string& value, bool password);
 
 private:
+    enum class Anchor { Left, Center, Right };
+
+    C2D_Text parse(std::string_view value);
+    void draw(std::string_view value, float x, float y, float size, u32 color, Anchor anchor);
+
     C2D_Font font_ = nullptr;
     C2D_TextBuf activeBuffer_ = nullptr;
 };

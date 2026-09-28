@@ -1,41 +1,48 @@
 #pragma once
 
-#include "core/AsyncJob.hpp"
+#include "core/BackgroundOperation.hpp"
+#include "io/GameIconReader.hpp"
 #include "save/adapter/SaveAdapter.hpp"
 
-#include <array>
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <vector>
 
-class App;
-struct DiscoveredGame {
+struct GameSource {
     std::size_t catalogIndex = 0;
     SaveSummary save;
     bool cartridge = false;
     bool storageOnly = false;
-    std::shared_ptr<std::array<std::uint16_t, 48 * 48>> iconPixels;
+
+    bool readsCartridge() const { return cartridge && !storageOnly; }
 };
 
-class SaveLoadService {
-public:
-    enum class Operation {
-        None,
-        DiscoverGames,
-        RescanCartridge,
-        CartridgeSummary,
-        OpenGame
-    };
+struct DiscoveredGame : GameSource {
+    bool summaryKnown = false;
+    std::shared_ptr<IconPixels> iconPixels;
+};
 
-    enum class Phase {
-        Idle,
-        SearchingGames,
-        ReadingIcons,
-        ReadingSave,
-        SearchingPokemon
-    };
+enum class SaveOperation {
+    None,
+    DiscoverGames,
+    RescanCartridge,
+    Summary,
+    OpenGame
+};
+
+enum class SavePhase {
+    Idle,
+    SearchingGames,
+    ReadingIcons,
+    ReadingSave,
+    SearchingPokemon
+};
+
+class SaveLoadService : public BackgroundOperation<SaveOperation, SavePhase> {
+public:
+    using Operation = SaveOperation;
+    using Phase = SavePhase;
 
     struct OpenGameResult {
         bool success = false;
@@ -43,47 +50,41 @@ public:
         SaveSummary save;
         std::size_t localBox = 0;
         std::string localBoxName;
-        std::array<PokemonSummary, 30> localPokemon{};
-        std::array<PokemonPayload, 30> localPayloads{};
-        std::array<PokemonSummary, 6> localParty{};
-        std::array<PokemonPayload, 6> localPartyPayloads{};
+        BoxSlots localPokemon;
+        PartySlots localParty;
     };
 
-    explicit SaveLoadService(App& app) : app_(app) {}
+    explicit SaveLoadService(SaveAdapter& saveAdapter)
+        : BackgroundOperation("SaveLoadService"), saveAdapter_(saveAdapter) {}
 
     void begin(Operation operation);
-    Operation poll();
+    bool beginSummary(std::size_t catalogIndex, bool cartridge);
+    bool beginOpen(std::size_t catalogIndex, SaveAdapter::SourcePreference preference);
+    Operation poll() { return takeCompleted(); }
     void dropCartridgeGames() { discoveredGames = digitalCache_; }
-
-    bool running() const { return job_.running(); }
-    Operation operation() const { return operation_; }
-
-    bool blocksUi() const;
-
-    Phase phase() const { return phase_.load(std::memory_order_acquire); }
-    int progress() const { return progress_.load(std::memory_order_acquire); }
-    float& displayedProgress() { return displayedProgress_; }
+    bool blocksUi() const {
+        return busy() && operation() != Operation::RescanCartridge && operation() != Operation::Summary;
+    }
 
     std::size_t catalogIndex = 0;
     SaveAdapter::SourcePreference openSourcePreference = SaveAdapter::SourcePreference::Any;
 
     std::vector<DiscoveredGame> discoveredGames;
     OpenGameResult openGameResult;
-    SaveSummary cartridgeSummary;
+    SaveSummary summaryResult;
+    bool summaryCartridge = false;
 
 private:
-    static void worker(void* argument);
+    bool beginFor(std::size_t index, Operation operation);
+    void work(Operation operation);
+    std::size_t addCartridgeGame();
+    void addStorageGames(std::size_t cartridgeCatalogIndex);
+    void readDiscoveredIcons();
     void discoverGames();
     void rescanCartridge();
-    void fetchCartridgeSummary();
+    void fetchSummary();
     void openGame();
-    bool jobFinished_ = false;
 
-    App& app_;
-    AsyncJob job_;
+    SaveAdapter& saveAdapter_;
     std::vector<DiscoveredGame> digitalCache_;
-    Operation operation_ = Operation::None;
-    std::atomic<Phase> phase_{Phase::Idle};
-    std::atomic<int> progress_{0};
-    float displayedProgress_ = 0.0F;
 };

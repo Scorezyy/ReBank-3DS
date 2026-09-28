@@ -3,102 +3,69 @@
 
 #include <3ds.h>
 
+#include <algorithm>
 #include <cmath>
 
 namespace Gui {
 namespace {
-Tex3DS_SubTexture selectSubRegion(const C2D_Image& image, int x, int y, int endX, int endY) {
-    Tex3DS_SubTexture tex = *image.subtex;
-    if (x != endX) {
-        const int deltaX = endX - x;
-        const float texRL = tex.left - tex.right;
-        tex.left = tex.left - texRL / static_cast<float>(tex.width) * static_cast<float>(x);
-        tex.right = tex.left - texRL / static_cast<float>(tex.width) * static_cast<float>(deltaX);
-        tex.width = static_cast<u16>(deltaX);
-    }
-    if (y != endY) {
-        const int deltaY = endY - y;
-        const float texTB = tex.top - tex.bottom;
-        tex.top = tex.top - texTB / static_cast<float>(tex.height) * static_cast<float>(y);
-        tex.bottom = tex.top - texTB / static_cast<float>(tex.height) * static_cast<float>(deltaY);
-        tex.height = static_cast<u16>(deltaY);
-    }
-    return tex;
+constexpr float ScreenWidth = 400.0F;
+constexpr float ScrollPixelsPerSecond = 14.0F;
+constexpr u32 TrashRed = C2D_Color32(250, 128, 114, 255);
+
+Tex3DS_SubTexture horizontalSlice(const C2D_Image& image, int startX, int width) {
+    Tex3DS_SubTexture slice = *image.subtex;
+    const float texelWidth = (slice.left - slice.right) / static_cast<float>(slice.width);
+    slice.left -= texelWidth * static_cast<float>(startX);
+    slice.right = slice.left - texelWidth * static_cast<float>(width);
+    slice.width = static_cast<u16>(width);
+    return slice;
 }
 
 u32 lerpColor(u32 from, u32 to, float t) {
-    t = t < 0.0F ? 0.0F : (t > 1.0F ? 1.0F : t);
-    const auto channel = [t](u32 color, int shift) {
-        const float value = static_cast<float>((color >> shift) & 0xFF);
-        return value;
-    };
+    t = std::clamp(t, 0.0F, 1.0F);
     const auto mix = [&](int shift) {
-        const float a = channel(from, shift);
-        const float b = channel(to, shift);
+        const float a = static_cast<float>((from >> shift) & 0xFF);
+        const float b = static_cast<float>((to >> shift) & 0xFF);
         return static_cast<u8>(a + (b - a) * t);
     };
     return C2D_Color32(mix(0), mix(8), mix(16), 255);
 }
 }
 
-void drawBoxBackground(C2D_SpriteSheet sheet, bool top, float trashProgress) {
+void drawBoxBackground(C2D_SpriteSheet sheet, float trashProgress) {
     if (!sheet) {
         return;
     }
-    const C2D_Image gradient = C2D_SpriteSheetGetImage(
-        sheet, top ? BoxBgTopGradientIdx : BoxBgBottomGradientIdx);
-    u32 topLeft;
-    u32 topRight;
-    u32 botLeft;
-    u32 botRight;
-    if (top) {
-        topLeft = C2D_Color32(142, 221, 138, 255);
-        topRight = C2D_Color32(101, 193, 93, 255);
-        botLeft = C2D_Color32(161, 233, 158, 255);
-        botRight = C2D_Color32(119, 205, 113, 255);
-    } else {
-        topLeft = C2D_Color32(125, 209, 119, 255);
-        topRight = C2D_Color32(161, 233, 158, 255);
-        botLeft = C2D_Color32(101, 193, 93, 255);
-        botRight = C2D_Color32(136, 217, 131, 255);
-    }
-    const u32 trashRed = C2D_Color32(250, 128, 114, 255);
+    const std::pair<C2D_Corner, u32> corners[] = {
+        {C2D_TopLeft, C2D_Color32(142, 221, 138, 255)},
+        {C2D_TopRight, C2D_Color32(101, 193, 93, 255)},
+        {C2D_BotLeft, C2D_Color32(161, 233, 158, 255)},
+        {C2D_BotRight, C2D_Color32(119, 205, 113, 255)},
+    };
     C2D_ImageTint tint{};
-    C2D_SetImageTint(&tint, C2D_TopLeft, lerpColor(topLeft, trashRed, trashProgress), 1.0F);
-    C2D_SetImageTint(&tint, C2D_TopRight, lerpColor(topRight, trashRed, trashProgress), 1.0F);
-    C2D_SetImageTint(&tint, C2D_BotLeft, lerpColor(botLeft, trashRed, trashProgress), 1.0F);
-    C2D_SetImageTint(&tint, C2D_BotRight, lerpColor(botRight, trashRed, trashProgress), 1.0F);
-    C2D_DrawImageAt(gradient, 0.0F, 0.0F, 0.02F, &tint);
+    for (const auto& [corner, color] : corners) {
+        C2D_SetImageTint(&tint, corner, lerpColor(color, TrashRed, trashProgress), 1.0F);
+    }
+    C2D_DrawImageAt(C2D_SpriteSheetGetImage(sheet, BoxBgTopGradientIdx), 0.0F, 0.0F, 0.02F, &tint);
 
-    constexpr float pixelsPerSecond = 14.0F;
     const double seconds = static_cast<double>(svcGetSystemTick()) / SYSCLOCK_ARM11;
-    const float offset = std::fmod(static_cast<float>(seconds) * pixelsPerSecond, 400.0F);
-    const float scrollA = -offset;
-    const float scrollB = 400.0F - offset;
-
+    const float offset = std::fmod(static_cast<float>(seconds) * ScrollPixelsPerSecond, ScreenWidth);
     const C2D_Image squares = C2D_SpriteSheetGetImage(sheet, BoxBgAnimSquaresIdx);
-    const Tex3DS_SubTexture leftHalf = selectSubRegion(squares, 0, 0, 400, 240);
-    const Tex3DS_SubTexture rightHalf = selectSubRegion(squares, 400, 0, 800, 240);
-    C2D_DrawImageAt({squares.tex, &leftHalf}, scrollA, 0.0F, 0.03F);
-    C2D_DrawImageAt({squares.tex, &rightHalf}, scrollB, 0.0F, 0.03F);
+    const auto width = static_cast<int>(ScreenWidth);
+    const Tex3DS_SubTexture leftHalf = horizontalSlice(squares, 0, width);
+    const Tex3DS_SubTexture rightHalf = horizontalSlice(squares, width, width);
+    C2D_DrawImageAt({squares.tex, &leftHalf}, -offset, 0.0F, 0.03F);
+    C2D_DrawImageAt({squares.tex, &rightHalf}, ScreenWidth - offset, 0.0F, 0.03F);
 }
 
-void drawLinePattern(C2D_SpriteSheet sheet, u32 baseColor, bool animated) {
+void drawLinePattern(C2D_SpriteSheet sheet, u32 baseColor) {
     C2D_DrawRectSolid(0.0F, 0.0F, 0.0F, 320.0F, 240.0F, baseColor);
     if (!sheet) {
         return;
     }
     const C2D_Image pattern = C2D_SpriteSheetGetImage(sheet, 0);
-    if (!pattern.tex) {
-        return;
+    if (pattern.tex) {
+        C2D_DrawImageAt(pattern, 0.0F, 0.0F, 0.01F);
     }
-    float driftX = 0.0F;
-    float driftY = 0.0F;
-    if (animated) {
-        const double seconds = static_cast<double>(svcGetSystemTick()) / SYSCLOCK_ARM11;
-        driftX = std::sin(static_cast<float>(seconds) * 0.23F) * 6.0F;
-        driftY = std::sin(static_cast<float>(seconds) * 0.17F + 1.3F) * 5.0F;
-    }
-    C2D_DrawImageAt(pattern, driftX, driftY, 0.01F);
 }
 }

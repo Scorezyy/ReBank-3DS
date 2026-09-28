@@ -22,5 +22,9 @@ gui_cpp.txt
 assets/3dmodel.cgfx
 assets/3dmodel.glb
 ReBank-Website/
+ReBank-Operator-Helper/
+ReBank-DiscordBot/
+deployments/
 graphify-out/
 architecture.html
+ReBank-Architektur.html

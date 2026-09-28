@@ -1,13 +1,19 @@
 #include "core/Logger.hpp"
+#include "core/AppPaths.hpp"
 #include "core/FsGuard.hpp"
 
 #include <3ds.h>
 
+#include <algorithm>
 #include <cstdio>
-#include <sys/stat.h>
 
 namespace {
-constexpr std::size_t MaximumEntries = 4000;
+constexpr std::size_t MaximumEntries = 1000;
+
+const std::string& logPath() {
+    static const std::string path = AppPaths::file("rebank.log");
+    return path;
+}
 
 const char* label(LogLevel level) {
     switch (level) {
@@ -15,9 +21,10 @@ const char* label(LogLevel level) {
             return "WARN";
         case LogLevel::Error:
             return "ERROR";
-        default:
-            return "INFO";
+        case LogLevel::Info:
+            break;
     }
+    return "INFO";
 }
 }
 
@@ -33,9 +40,8 @@ Logger::Logger() {
 void Logger::initialize() {
     {
         const FsGuard guard;
-        mkdir("sdmc:/3ds", 0777);
-        mkdir("sdmc:/3ds/ReBank", 0777);
-        if (FILE* file = std::fopen("sdmc:/3ds/ReBank/rebank.log", "w")) {
+        AppPaths::ensureDirectory();
+        if (FILE* file = std::fopen(logPath().c_str(), "w")) {
             std::fclose(file);
         }
     }
@@ -69,20 +75,22 @@ void Logger::error(std::string_view message) {
     write(LogLevel::Error, message);
 }
 
-std::deque<LogEntry> Logger::entries() const {
+std::vector<LogEntry> Logger::recent(std::size_t count) const {
     LightLock_Lock(&lock_);
-    const auto copy = entries_;
+    const std::size_t first = entries_.size() > count ? entries_.size() - count : 0;
+    std::vector<LogEntry> copy(entries_.begin() + static_cast<std::ptrdiff_t>(first), entries_.end());
     LightLock_Unlock(&lock_);
     return copy;
 }
 
 void Logger::write(LogLevel level, std::string_view message) {
+    const std::uint64_t now = osGetTime();
     LightLock_Lock(&lock_);
-    entries_.push_back({level, std::string(message)});
+    entries_.push_back({level, now, std::string(message)});
     if (entries_.size() > MaximumEntries) {
         entries_.pop_front();
     }
-    pendingWrites_.push_back({level, std::string(message)});
+    unflushed_ = std::min(unflushed_ + 1, entries_.size());
     LightLock_Unlock(&lock_);
 }
 
@@ -99,15 +107,15 @@ void Logger::flushLoop() {
 
 void Logger::flush() {
     LightLock_Lock(&lock_);
-    std::deque<LogEntry> pending;
-    pending.swap(pendingWrites_);
+    std::vector<LogEntry> pending(entries_.end() - static_cast<std::ptrdiff_t>(unflushed_), entries_.end());
+    unflushed_ = 0;
     LightLock_Unlock(&lock_);
     if (pending.empty()) {
         return;
     }
 
     const FsGuard guard;
-    FILE* file = std::fopen("sdmc:/3ds/ReBank/rebank.log", "a");
+    FILE* file = std::fopen(logPath().c_str(), "a");
     if (!file) {
         return;
     }
@@ -115,7 +123,7 @@ void Logger::flush() {
         std::fprintf(
             file,
             "%llu [%s] %.*s\n",
-            static_cast<unsigned long long>(osGetTime()),
+            static_cast<unsigned long long>(entry.timeMs),
             label(entry.level),
             static_cast<int>(entry.message.size()),
             entry.message.data()

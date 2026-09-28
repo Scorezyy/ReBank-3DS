@@ -6,6 +6,7 @@
 #include "spi.hpp"
 
 #include <3ds.h>
+#include <pkx/PKX.hpp>
 #include <sav/Sav.hpp>
 #include <sav/SavDP.hpp>
 #include <sav/SavPT.hpp>
@@ -30,8 +31,10 @@ SaveAdapter::SaveAdapter() = default;
 SaveAdapter::~SaveAdapter() = default;
 
 void SaveAdapter::close() {
+    partyEdited_ = false;
     save_.reset();
     source_.reset();
+    game_.reset();
     gameCode_.clear();
     previousBuffer_.clear();
     dirty_ = false;
@@ -41,6 +44,8 @@ bool SaveAdapter::open(const GameDescriptor& game, std::string& error, SourcePre
     save_.reset();
     source_ = std::make_unique<Source>();
     dirty_ = false;
+    partyEdited_ = false;
+    game_ = game;
     gameCode_ = game.code;
 
     std::size_t size = 0;
@@ -95,20 +100,19 @@ std::shared_ptr<std::uint8_t[]> SaveAdapter::locateSave(const GameDescriptor& ga
 std::shared_ptr<std::uint8_t[]> SaveAdapter::locate3dsCartridgeSave(const GameDescriptor& game, std::size_t& size,
                                                                       Result& result, bool allowCartridge,
                                                                       bool allowStorage) {
-    const auto mapping = std::find_if(SaveMedium::TitleMappings.begin(), SaveMedium::TitleMappings.end(),
-        [&](const auto& item) { return item.code == game.code; });
-    if (mapping == SaveMedium::TitleMappings.end()) {
+    const auto titleId = SaveMedium::titleIdFor(game.code);
+    if (!titleId) {
         return nullptr;
     }
-    source_->titleId = mapping->titleId;
+    source_->titleId = *titleId;
     if (allowCartridge) {
-        if (auto data = SaveMedium::readArchive(mapping->titleId, MEDIATYPE_GAME_CARD, size, result)) {
+        if (auto data = SaveMedium::readArchive(*titleId, MEDIATYPE_GAME_CARD, size, result)) {
             source_->kind = Source::Kind::ArchiveGameCard;
             return data;
         }
     }
     if (allowStorage) {
-        if (auto data = SaveMedium::readArchive(mapping->titleId, MEDIATYPE_SD, size, result)) {
+        if (auto data = SaveMedium::readArchive(*titleId, MEDIATYPE_SD, size, result)) {
             source_->kind = Source::Kind::ArchiveSd;
             return data;
         }
@@ -184,17 +188,19 @@ bool SaveAdapter::parseSave(const GameDescriptor& game, const std::shared_ptr<st
     return true;
 }
 
-bool SaveAdapter::loaded() const {
-    return save_ != nullptr;
-}
-
 bool SaveAdapter::isCartridge() const {
     return source_ && (source_->kind == Source::Kind::ArchiveGameCard
         || source_->kind == Source::Kind::DsCard);
 }
 
-std::string SaveAdapter::insertedDsGameCode() {
-    return SaveMedium::dsGameCodeFromHeader();
+bool SaveAdapter::storageSaveExists(const GameDescriptor& game) {
+    std::optional<std::uint64_t> titleId;
+    if (game.platform == GamePlatform::Nintendo3Ds) {
+        titleId = SaveMedium::titleIdFor(game.code);
+    } else if (game.platform == GamePlatform::VirtualConsole) {
+        titleId = VirtualConsoleTitles::resolveInstalledTitleId(game.code);
+    }
+    return (titleId && SaveMedium::archiveHasSave(*titleId, MEDIATYPE_SD)) || SaveMedium::exportExists(game.code);
 }
 
 SaveSummary SaveAdapter::summary() const {
@@ -229,17 +235,114 @@ bool SaveAdapter::validBox(std::size_t box) const {
     return save_ && box < boxCount();
 }
 
+std::size_t SaveAdapter::boxCapacity() const {
+    if (!save_ || save_->maxBoxes() <= 0) {
+        return BoxSlotCount;
+    }
+    return std::min<std::size_t>(BoxSlotCount, static_cast<std::size_t>(save_->maxSlot() / save_->maxBoxes()));
+}
+
 bool SaveAdapter::validSlot(std::size_t box, std::size_t slot) const {
-    return validBox(box) && slot < 30;
+    return validBox(box) && slot < boxCapacity();
 }
 
 bool SaveAdapter::validPartySlot(std::size_t slot) const {
-    return save_ && slot < 6;
+    return save_ && slot < PartySlotCount;
 }
 
-bool SaveAdapter::writeSave(std::string& error) {
+std::shared_ptr<std::uint8_t[]> SaveAdapter::rereadSource(std::size_t& size) const {
+    Result result = 0;
+    switch (source_->kind) {
+        case Source::Kind::ArchiveGameCard:
+            return SaveMedium::readArchive(source_->titleId, MEDIATYPE_GAME_CARD, size, result);
+        case Source::Kind::ArchiveSd:
+            return SaveMedium::readArchive(source_->titleId, MEDIATYPE_SD, size, result);
+        case Source::Kind::SdFile:
+            return SaveMedium::readFile(source_->sdPath, size);
+        case Source::Kind::DsCard: {
+            SaveMedium::DsCardRead read = SaveMedium::readDsCard(gameCode_, source_->infrared, result);
+            size = read.size;
+            return std::move(read.data);
+        }
+        default:
+            break;
+    }
+    return nullptr;
+}
+
+bool SaveAdapter::writeToSource(const std::vector<std::uint8_t>& image) {
+    switch (source_->kind) {
+        case Source::Kind::ArchiveGameCard:
+            return SaveMedium::writeArchive(source_->titleId, MEDIATYPE_GAME_CARD, image.data(), image.size());
+        case Source::Kind::ArchiveSd:
+            return SaveMedium::writeArchive(source_->titleId, MEDIATYPE_SD, image.data(), image.size());
+        case Source::Kind::DsCard:
+            return SaveMedium::writeDsCard(source_->cardType, image.data(), image.size(),
+                                           previousBuffer_.empty() ? nullptr : previousBuffer_.data(),
+                                           previousBuffer_.size());
+        case Source::Kind::SdFile:
+            return SaveMedium::writeSdFile(source_->sdPath, image.data(), image.size());
+        default:
+            break;
+    }
+    return false;
+}
+
+void SaveAdapter::beginPartyEdit() {
+    if (partyEdited_) {
+        return;
+    }
+    partyEdited_ = true;
+    auto empty = save_->emptyPkm();
+    if (!empty) {
+        return;
+    }
+    for (std::size_t slot = partyCount(); slot < PartySlotCount; ++slot) {
+        save_->pkm(*empty, static_cast<std::uint8_t>(slot));
+    }
+}
+
+void SaveAdapter::normalizeParty(bool compact) {
+    if (!partyEdited_) {
+        return;
+    }
+    std::vector<std::unique_ptr<pksm::PKX>> members;
+    std::size_t lastOccupied = 0;
+    for (std::size_t slot = 0; slot < PartySlotCount; ++slot) {
+        auto member = save_->pkm(static_cast<std::uint8_t>(slot));
+        if (member && static_cast<std::uint16_t>(member->species()) != 0) {
+            lastOccupied = slot + 1;
+            members.push_back(std::move(member));
+        }
+    }
+    if (compact) {
+        auto empty = save_->emptyPkm();
+        for (std::size_t slot = 0; slot < PartySlotCount; ++slot) {
+            if (slot < members.size()) {
+                save_->pkm(*members[slot], static_cast<std::uint8_t>(slot));
+            } else if (empty) {
+                save_->pkm(*empty, static_cast<std::uint8_t>(slot));
+            }
+        }
+        save_->partyCount(static_cast<std::uint8_t>(members.size()));
+    } else {
+        save_->partyCount(static_cast<std::uint8_t>(lastOccupied));
+    }
+    dirty_ = true;
+    Logger::instance().info("normalizeParty: " + std::to_string(members.size()) + " member(s), "
+                            + (compact ? std::string("compacted") : "count synced to " + std::to_string(lastOccupied)));
+}
+
+bool SaveAdapter::writeSave(std::string& error, bool finalWrite) {
     if (!save_ || !source_) {
         error = "No save loaded.";
+        return false;
+    }
+    try {
+        normalizeParty(finalWrite);
+    } catch (const std::exception& exception) {
+        error = "The team could not be arranged.";
+        Logger::instance().error("normalizeParty exception: " + std::string(exception.what()));
         return false;
     }
     if (!dirty_) {
@@ -252,70 +355,50 @@ bool SaveAdapter::writeSave(std::string& error) {
         Logger::instance().error("finishEditing exception: " + std::string(exception.what()));
         return false;
     }
-
-    const auto& raw = save_->rawData();
-    const std::size_t size = save_->getLength();
-    const std::uint8_t* bytes = raw.get();
-
-    bool ok = false;
-    switch (source_->kind) {
-        case Source::Kind::ArchiveGameCard:
-            ok = SaveMedium::writeArchive(source_->titleId, MEDIATYPE_GAME_CARD, bytes, size);
-            break;
-        case Source::Kind::ArchiveSd:
-            ok = SaveMedium::writeArchive(source_->titleId, MEDIATYPE_SD, bytes, size);
-            break;
-        case Source::Kind::DsCard:
-            ok = SaveMedium::writeDsCard(source_->cardType, bytes, size, source_->infrared,
-                             previousBuffer_.empty() ? nullptr : previousBuffer_.data(),
-                             previousBuffer_.size());
-            break;
-        case Source::Kind::SdFile:
-            ok = SaveMedium::writeSdFile(source_->sdPath, bytes, size);
-            break;
-        default:
-            break;
-    }
-
+    const std::uint8_t* bytes = save_->rawData().get();
+    const std::vector<std::uint8_t> image(bytes, bytes + save_->getLength());
+    const bool written = writeToSource(image);
     save_->beginEditing();
-    if (!ok) {
-        error = "Failed to write save.";
-        Logger::instance().error("writeSave: destination write failed");
+
+    std::size_t diskSize = 0;
+    const auto disk = rereadSource(diskSize);
+    const bool diskMatches = disk && diskSize == image.size()
+        && std::equal(image.begin(), image.end(), disk.get());
+    if (written && (diskMatches || !disk)) {
+        if (!disk) {
+            Logger::instance().warning("writeSave: written, but the save could not be read back to verify it");
+        }
+        previousBuffer_ = image;
+        dirty_ = false;
+        if (finalWrite) {
+            partyEdited_ = false;
+        }
+        Logger::instance().info("Save written and verified for " + gameCode_);
+        return true;
+    }
+    if (disk) {
+        previousBuffer_.assign(disk.get(), disk.get() + diskSize);
+    }
+    error = written ? "The save on disk does not match what was written." : "Failed to write save.";
+    Logger::instance().error("writeSave: " + error + (disk ? " (disk state re-read)" : " (disk state unknown)"));
+    return false;
+}
+
+bool SaveAdapter::discardUnsavedChanges(std::string& error) {
+    if (!save_ || !game_ || previousBuffer_.empty()) {
+        error = "No save loaded.";
         return false;
     }
-    previousBuffer_.assign(bytes, bytes + size);
-    dirty_ = false;
-    Logger::instance().info("Save written for " + gameCode_);
-
-    if (source_->kind == Source::Kind::ArchiveGameCard || source_->kind == Source::Kind::ArchiveSd) {
-        std::size_t verifySize = 0;
-        Result verifyResult = 0;
-        const FS_MediaType mediaType = source_->kind == Source::Kind::ArchiveGameCard
-            ? MEDIATYPE_GAME_CARD : MEDIATYPE_SD;
-        auto reread = SaveMedium::readArchive(source_->titleId, mediaType, verifySize, verifyResult);
-        if (!reread || verifySize != size) {
-            Logger::instance().error("writeSave verify: re-read failed or size mismatch (got "
-                                     + std::to_string(verifySize) + " expected "
-                                     + std::to_string(size) + ")");
-        } else {
-            std::size_t firstMismatch = SIZE_MAX;
-            std::size_t mismatchCount = 0;
-            for (std::size_t i = 0; i < size; ++i) {
-                if (reread[i] != bytes[i]) {
-                    if (firstMismatch == SIZE_MAX) {
-                        firstMismatch = i;
-                    }
-                    ++mismatchCount;
-                }
-            }
-            if (mismatchCount == 0) {
-                Logger::instance().info("writeSave verify: on-disk bytes match in-memory buffer");
-            } else {
-                Logger::instance().error("writeSave verify: " + std::to_string(mismatchCount)
-                                         + " byte(s) differ, first at offset 0x"
-                                         + std::to_string(firstMismatch));
-            }
-        }
+    const std::size_t size = previousBuffer_.size();
+    std::shared_ptr<std::uint8_t[]> data(new std::uint8_t[size]);
+    std::copy(previousBuffer_.begin(), previousBuffer_.end(), data.get());
+    save_.reset();
+    if (!parseSave(*game_, data, size, error)) {
+        Logger::instance().error("discardUnsavedChanges: last written save could not be parsed again");
+        return false;
     }
+    dirty_ = false;
+    partyEdited_ = false;
+    Logger::instance().info("discardUnsavedChanges: in-memory save reset to the last written state");
     return true;
 }

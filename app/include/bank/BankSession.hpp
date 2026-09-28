@@ -1,70 +1,75 @@
 #pragma once
 
 #include "bank/BankTypes.hpp"
-#include "bank/TrashCanBox.hpp"
 #include "save/adapter/SaveAdapter.hpp"
-#include "bank/StorageModel.hpp"
 #include "selection/SelectionState.hpp"
 
 #include <3ds.h>
 
-#include <array>
 #include <cstdint>
-#include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
-// Holds all mutable state for the bank screen: the local/cloud/party
-// storage the player is editing, the item currently held in hand, and the
-// small bits of UI state (focus, error dialog) that the storage and cloud
-// controllers need to read or update as they act on that state.
-class BankSession {
-public:
-    int partyMemberCount() const {
-        int count = 0;
-        for (const PokemonSummary& member : partyWorking.summaries) {
-            if (member.species != 0) {
-                ++count;
-            }
-        }
-        return count;
-    }
-
-    StorageModel storage;
-    SaveAdapter saveAdapter;
+struct BankState {
     SaveSummary saveSummary;
     std::size_t localBox = 0;
     std::size_t cloudBox = 0;
     std::size_t focusedSlot = 0;
+    StoragePane storagePane = StoragePane::Local;
     std::string localBoxName;
-    std::array<PokemonSummary, 30> cloudPreview{};
-    std::array<PokemonPayload, 30> localPayloads{};
-    std::array<PokemonPayload, 30> pendingUploadPayloads{};
-    std::array<PokemonPayload, 30> cachedCloudPayloads{};
-    std::array<bool, 30> payloadPrefetchFailed{};
-    std::unordered_map<std::size_t, LocalBoxDraft> localBaselines;
-    std::unordered_map<std::size_t, LocalBoxDraft> localDrafts;
+
+    BoxSlots local;
+    std::unordered_map<std::size_t, BoxSlots> localBaselines;
+    std::unordered_map<std::size_t, BoxSlots> localDrafts;
+    PartySlots partyBaseline;
+    PartySlots party;
+
+    CloudView cloud;
     std::unordered_map<std::uint16_t, CloudBoxDraft> cloudBoxes;
     std::unordered_map<std::uint16_t, u64> cloudPrefetchCooldownUntil;
-    PartyDraft partyBaseline;
-    PartyDraft partyWorking;
-    Hand hand;
-    std::uint32_t handGeneration = 0;
-    SelectionState selection;
-    StoragePane storagePane = StoragePane::Local;
-    bool cloudNameFocused = false;
     std::unordered_map<std::uint16_t, std::string> cloudBoxNames;
-    int heldDirection = 0;
-    u64 regionFetchRetryAt = 0;
-    bool cloudViewAwaitingLoad = false;
-    u64 directionRepeatAt = 0;
-    bool errorDialogVisible = false;
-    std::string errorDialogTitle = "TRANSFER BLOCKED";
-    std::string errorDialogPokemon;
-    std::string errorDialogLocation;
-    std::string errorDialogMessage;
-    TrashCanBox trashBox;
+    bool cloudNameFocused = false;
+
+    BoxSlots trash;
+    std::vector<PokemonPayload> confirmedDeletions;
     bool trashBoxActive = false;
     bool trashConfirmVisible = false;
     u64 trashTransitionStart = 0;
+
+    Hand hand;
+    std::uint32_t handGeneration = 0;
+    SelectionState selection;
+};
+
+class BankSession : public BankState {
+public:
+    explicit BankSession(SaveAdapter& adapter) : saveAdapter(adapter) {}
+
+    void resetState() {
+        const std::uint32_t generation = handGeneration;
+        static_cast<BankState&>(*this) = BankState{};
+        handGeneration = generation + 1;
+    }
+
+    std::uint16_t cloudKey() const { return static_cast<std::uint16_t>(cloudBox); }
+    std::uint16_t cloudPosition() const { return static_cast<std::uint16_t>(cloudBox + 1); }
+
+    const CloudBoxDraft* currentCloudDraft() const {
+        const auto it = cloudBoxes.find(cloudKey());
+        return it == cloudBoxes.end() ? nullptr : &it->second;
+    }
+
+    void setTrashActive(bool active) {
+        trashBoxActive = active;
+        trashTransitionStart = svcGetSystemTick();
+    }
+
+    GridGeometry grid(StoragePane pane) const { return GridGeometry::forPane(pane, saveAdapter.boxCapacity()); }
+
+    StorageAddress focusedAddress() const {
+        return {storagePane, storagePane == StoragePane::Cloud && trashBoxActive};
+    }
+
+    SaveAdapter& saveAdapter;
 };

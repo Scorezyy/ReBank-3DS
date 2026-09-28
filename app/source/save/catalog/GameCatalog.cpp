@@ -1,5 +1,6 @@
 #include "save/catalog/GameCatalog.hpp"
 
+#include <algorithm>
 #include <array>
 
 namespace {
@@ -33,4 +34,10 @@ constexpr std::array Games{
 
 std::span<const GameDescriptor> supportedGames() {
     return Games;
+}
+
+const GameDescriptor* findGame(std::string_view code) {
+    const auto match = std::find_if(Games.begin(), Games.end(),
+        [&](const GameDescriptor& game) { return game.code == code; });
+    return match == Games.end() ? nullptr : &*match;
 }

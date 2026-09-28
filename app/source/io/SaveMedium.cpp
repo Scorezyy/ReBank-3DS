@@ -1,14 +1,102 @@
 #include "io/SaveMedium.hpp"
+#include "core/AppPaths.hpp"
+#include "core/FsGuard.hpp"
+#include "core/Hex.hpp"
 #include "core/Logger.hpp"
 
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <sys/stat.h>
+#include <vector>
 
 namespace SaveMedium {
+namespace {
+constexpr std::string_view ExportDirectory = "saves";
+constexpr std::array<const char*, 2> SaveFileNames{"/main", "/sav.dat"};
+
+std::array<std::string, 2> exportPaths(std::string_view code) {
+    const std::string base = AppPaths::file(std::string(ExportDirectory) + "/" + std::string(code));
+    return {base + "/main", base + ".sav"};
+}
+
+Result openSaveArchive(std::uint64_t titleId, FS_MediaType mediaType, FS_Archive& archive) {
+    const std::uint32_t pathData[3] = {
+        static_cast<std::uint32_t>(mediaType),
+        static_cast<std::uint32_t>(titleId),
+        static_cast<std::uint32_t>(titleId >> 32)
+    };
+    return FSUSER_OpenArchive(&archive, ARCHIVE_USER_SAVEDATA, FS_Path{PATH_BINARY, sizeof(pathData), pathData});
+}
+
+Result openSaveFile(FS_Archive archive, u32 flags, Handle& file) {
+    Result result = -1;
+    for (const char* name : SaveFileNames) {
+        result = FSUSER_OpenFile(&file, archive, fsMakePath(PATH_ASCII, name), flags, 0);
+        if (R_SUCCEEDED(result)) {
+            break;
+        }
+    }
+    return result;
+}
+
+bool fileExists(const std::string& path) {
+    struct stat info{};
+    return ::stat(path.c_str(), &info) == 0;
+}
+
+bool writeWholeFile(const std::string& path, const std::uint8_t* data, std::size_t size) {
+    FILE* file = std::fopen(path.c_str(), "wb");
+    if (!file) {
+        return false;
+    }
+    bool ok = std::fwrite(data, 1, size, file) == size;
+    ok = std::fflush(file) == 0 && ok;
+    ok = std::fclose(file) == 0 && ok;
+    return ok;
+}
+
+bool fileHasContent(const std::string& path, const std::uint8_t* data, std::size_t size) {
+    std::size_t actualSize = 0;
+    const auto actual = readFile(path, actualSize);
+    return actual && actualSize == size && std::memcmp(actual.get(), data, size) == 0;
+}
+
+void ensureOriginalBackup(const std::string& path) {
+    const std::string backup = path + ".bak";
+    if (fileExists(backup) || !fileExists(path)) {
+        return;
+    }
+    std::size_t size = 0;
+    const auto original = readFile(path, size);
+    if (!original) {
+        Logger::instance().warning("Original save backup skipped: " + path + " could not be read");
+        return;
+    }
+    const std::string staging = backup + ".tmp";
+    if (!writeWholeFile(staging, original.get(), size) || !fileHasContent(staging, original.get(), size)
+        || std::rename(staging.c_str(), backup.c_str()) != 0) {
+        std::remove(staging.c_str());
+        Logger::instance().warning("Original save backup could not be written for " + path);
+    }
+}
+
+void recoverInterruptedReplace(const std::string& path) {
+    if (fileExists(path)) {
+        return;
+    }
+    for (const char* suffix : {".tmp", ".prev"}) {
+        const std::string candidate = path + suffix;
+        if (fileExists(candidate) && std::rename(candidate.c_str(), path.c_str()) == 0) {
+            Logger::instance().warning("Recovered " + path + " from " + candidate + " after an interrupted write");
+            return;
+        }
+    }
+}
+}
 
 std::shared_ptr<std::uint8_t[]> readFile(const std::string& path, std::size_t& size) {
+    const FsGuard guard;
     FILE* file = std::fopen(path.c_str(), "rb");
     if (!file) {
         return nullptr;
@@ -27,66 +115,48 @@ std::shared_ptr<std::uint8_t[]> readFile(const std::string& path, std::size_t& s
     return success ? data : nullptr;
 }
 
+std::optional<std::uint64_t> titleIdFor(std::string_view code) {
+    const auto mapping = std::find_if(TitleMappings.begin(), TitleMappings.end(),
+        [&](const TitleMapping& item) { return item.code == code; });
+    return mapping == TitleMappings.end() ? std::nullopt : std::optional(mapping->titleId);
+}
+
+std::optional<std::string_view> codeFor(std::uint64_t titleId) {
+    const auto mapping = std::find_if(TitleMappings.begin(), TitleMappings.end(),
+        [&](const TitleMapping& item) { return item.titleId == titleId; });
+    return mapping == TitleMappings.end() ? std::nullopt : std::optional(mapping->code);
+}
+
 std::shared_ptr<std::uint8_t[]> readArchive(
     std::uint64_t titleId,
     FS_MediaType mediaType,
     std::size_t& size,
     Result& result
 ) {
-    const std::uint32_t pathData[3] = {
-        static_cast<std::uint32_t>(mediaType),
-        static_cast<std::uint32_t>(titleId),
-        static_cast<std::uint32_t>(titleId >> 32)
-    };
     FS_Archive archive{};
-    result = FSUSER_OpenArchive(
-        &archive,
-        ARCHIVE_USER_SAVEDATA,
-        FS_Path{PATH_BINARY, sizeof(pathData), pathData}
-    );
+    result = openSaveArchive(titleId, mediaType, archive);
     if (R_FAILED(result)) {
         return nullptr;
     }
-
     Handle file = 0;
-    result = FSUSER_OpenFile(
-        &file,
-        archive,
-        fsMakePath(PATH_ASCII, "/main"),
-        FS_OPEN_READ,
-        0
-    );
-    if (R_FAILED(result)) {
-        result = FSUSER_OpenFile(
-            &file,
-            archive,
-            fsMakePath(PATH_ASCII, "/sav.dat"),
-            FS_OPEN_READ,
-            0
-        );
-    }
-    if (R_FAILED(result)) {
-        FSUSER_CloseArchive(archive);
-        return nullptr;
-    }
-
-    std::uint64_t fileSize = 0;
-    std::uint32_t bytesRead = 0;
-    result = FSFILE_GetSize(file, &fileSize);
-    if (R_SUCCEEDED(result) && fileSize > 0 && fileSize <= MaximumSaveSize) {
-        size = static_cast<std::size_t>(fileSize);
-        auto data = std::shared_ptr<std::uint8_t[]>(new std::uint8_t[size]());
-        result = FSFILE_Read(file, &bytesRead, 0, data.get(), static_cast<std::uint32_t>(size));
-        FSFILE_Close(file);
-        FSUSER_CloseArchive(archive);
-        if (R_SUCCEEDED(result) && bytesRead == size) {
-            return data;
+    result = openSaveFile(archive, FS_OPEN_READ, file);
+    std::shared_ptr<std::uint8_t[]> data;
+    if (R_SUCCEEDED(result)) {
+        std::uint64_t fileSize = 0;
+        result = FSFILE_GetSize(file, &fileSize);
+        if (R_SUCCEEDED(result) && fileSize > 0 && fileSize <= MaximumSaveSize) {
+            auto buffer = std::shared_ptr<std::uint8_t[]>(new std::uint8_t[fileSize]());
+            std::uint32_t bytesRead = 0;
+            result = FSFILE_Read(file, &bytesRead, 0, buffer.get(), static_cast<std::uint32_t>(fileSize));
+            if (R_SUCCEEDED(result) && bytesRead == fileSize) {
+                size = static_cast<std::size_t>(fileSize);
+                data = std::move(buffer);
+            }
         }
+        FSFILE_Close(file);
     }
-
-    FSFILE_Close(file);
     FSUSER_CloseArchive(archive);
-    return nullptr;
+    return data;
 }
 
 std::shared_ptr<std::uint8_t[]> readExport(
@@ -94,11 +164,9 @@ std::shared_ptr<std::uint8_t[]> readExport(
     std::size_t& size,
     std::string& path
 ) {
-    const std::array paths{
-        "sdmc:/3ds/ReBank/saves/" + std::string(code) + "/main",
-        "sdmc:/3ds/ReBank/saves/" + std::string(code) + ".sav"
-    };
-    for (const auto& candidate : paths) {
+    const FsGuard guard;
+    for (const std::string& candidate : exportPaths(code)) {
+        recoverInterruptedReplace(candidate);
         if (auto data = readFile(candidate, size)) {
             path = candidate;
             return data;
@@ -107,14 +175,37 @@ std::shared_ptr<std::uint8_t[]> readExport(
     return nullptr;
 }
 
+bool archiveHasSave(std::uint64_t titleId, FS_MediaType mediaType) {
+    FS_Archive archive{};
+    if (R_FAILED(openSaveArchive(titleId, mediaType, archive))) {
+        return false;
+    }
+    Handle file = 0;
+    const bool found = R_SUCCEEDED(openSaveFile(archive, FS_OPEN_READ, file));
+    if (found) {
+        FSFILE_Close(file);
+    }
+    FSUSER_CloseArchive(archive);
+    return found;
+}
+
+bool exportExists(std::string_view code) {
+    const FsGuard guard;
+    for (const std::string& candidate : exportPaths(code)) {
+        recoverInterruptedReplace(candidate);
+        if (fileExists(candidate)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 std::string dsGameCodeFromHeader() {
     FS_CardType cardType = CARD_CTR;
     const Result typeResult = FSUSER_GetCardType(&cardType);
     if (R_FAILED(typeResult) || cardType != CARD_TWL) {
-        char resultText[11]{};
-        std::snprintf(resultText, sizeof(resultText), "0x%08lX", static_cast<unsigned long>(typeResult));
         Logger::instance().info(std::string("dsGameCodeFromHeader: not a TWL card (result=")
-            + resultText + ", cardType=" + std::to_string(static_cast<int>(cardType)) + ")");
+            + Hex::resultCode(static_cast<std::uint32_t>(typeResult)) + ", cardType=" + std::to_string(static_cast<int>(cardType)) + ")");
         return {};
     }
     std::array<std::uint8_t, 0x3B4> header{};
@@ -190,37 +281,17 @@ DsCardRead readDsCard(std::string_view expectedCode, bool infrared, Result& resu
 }
 
 bool writeArchive(std::uint64_t titleId, FS_MediaType mediaType, const std::uint8_t* data, std::size_t size) {
-    const std::uint32_t pathData[3] = {
-        static_cast<std::uint32_t>(mediaType),
-        static_cast<std::uint32_t>(titleId),
-        static_cast<std::uint32_t>(titleId >> 32)
-    };
     FS_Archive archive{};
-    Result result = FSUSER_OpenArchive(
-        &archive, ARCHIVE_USER_SAVEDATA,
-        FS_Path{PATH_BINARY, sizeof(pathData), pathData}
-    );
-    if (R_FAILED(result)) {
+    if (R_FAILED(openSaveArchive(titleId, mediaType, archive))) {
         return false;
     }
     Handle file = 0;
-    result = FSUSER_OpenFile(
-        &file, archive, fsMakePath(PATH_ASCII, "/main"),
-        FS_OPEN_WRITE, 0
-    );
-    if (R_FAILED(result)) {
-        result = FSUSER_OpenFile(
-            &file, archive, fsMakePath(PATH_ASCII, "/sav.dat"),
-            FS_OPEN_WRITE, 0
-        );
-    }
-    if (R_FAILED(result)) {
-        FSUSER_CloseArchive(archive);
-        return false;
-    }
+    Result result = openSaveFile(archive, FS_OPEN_WRITE, file);
     std::uint32_t bytesWritten = 0;
-    result = FSFILE_Write(file, &bytesWritten, 0, data, static_cast<std::uint32_t>(size), FS_WRITE_FLUSH);
-    FSFILE_Close(file);
+    if (R_SUCCEEDED(result)) {
+        result = FSFILE_Write(file, &bytesWritten, 0, data, static_cast<std::uint32_t>(size), FS_WRITE_FLUSH);
+        FSFILE_Close(file);
+    }
     if (R_SUCCEEDED(result)) {
         result = FSUSER_ControlArchive(archive, ARCHIVE_ACTION_COMMIT_SAVE_DATA, nullptr, 0, nullptr, 0);
     }
@@ -229,43 +300,40 @@ bool writeArchive(std::uint64_t titleId, FS_MediaType mediaType, const std::uint
 }
 
 bool writeSdFile(const std::string& path, const std::uint8_t* data, std::size_t size) {
-    ::mkdir("sdmc:/3ds", 0777);
-    ::mkdir("sdmc:/3ds/ReBank", 0777);
-    ::mkdir("sdmc:/3ds/ReBank/saves", 0777);
-    const std::string backup = path + ".bak";
-    FILE* backupExists = std::fopen(backup.c_str(), "rb");
-    if (!backupExists) {
-        FILE* src = std::fopen(path.c_str(), "rb");
-        if (src) {
-            FILE* dst = std::fopen(backup.c_str(), "wb");
-            if (dst) {
-                std::array<std::uint8_t, 4096> buffer{};
-                std::size_t read = 0;
-                while ((read = std::fread(buffer.data(), 1, buffer.size(), src)) > 0) {
-                    std::fwrite(buffer.data(), 1, read, dst);
-                }
-                std::fclose(dst);
-            }
-            std::fclose(src);
-        }
-    } else {
-        std::fclose(backupExists);
-    }
-    FILE* file = std::fopen(path.c_str(), "wb");
-    if (!file) {
+    const FsGuard guard;
+    AppPaths::ensureDirectory(ExportDirectory);
+    ensureOriginalBackup(path);
+
+    const std::string staging = path + ".tmp";
+    const std::string previous = path + ".prev";
+    if (!writeWholeFile(staging, data, size) || !fileHasContent(staging, data, size)) {
+        std::remove(staging.c_str());
+        Logger::instance().error("writeSdFile: staging copy of " + path + " could not be written");
         return false;
     }
-    const std::size_t written = std::fwrite(data, 1, size, file);
-    std::fclose(file);
-    return written == size;
+    std::remove(previous.c_str());
+    if (fileExists(path) && std::rename(path.c_str(), previous.c_str()) != 0) {
+        std::remove(staging.c_str());
+        Logger::instance().error("writeSdFile: " + path + " could not be moved aside");
+        return false;
+    }
+    if (std::rename(staging.c_str(), path.c_str()) != 0) {
+        std::rename(previous.c_str(), path.c_str());
+        Logger::instance().error("writeSdFile: new save could not replace " + path);
+        return false;
+    }
+    std::remove(previous.c_str());
+    return true;
 }
 
-bool writeDsCard(CardType cardType, const std::uint8_t* data, std::size_t size, bool infrared,
+bool writeDsCard(CardType cardType, const std::uint8_t* data, std::size_t size,
                  const std::uint8_t* previous, std::size_t previousSize) {
     if (R_FAILED(pxiDevInit())) {
         return false;
     }
     constexpr std::uint32_t SectorSize = 0x10000;
+    constexpr int WriteAttempts = 2;
+    std::vector<std::uint8_t> readback(SectorSize);
     bool ok = true;
     std::size_t writtenSectors = 0;
     for (std::uint32_t offset = 0; offset < size && ok; offset += SectorSize) {
@@ -276,16 +344,22 @@ bool writeDsCard(CardType cardType, const std::uint8_t* data, std::size_t size, 
         if (unchanged) {
             continue;
         }
-        if (R_FAILED(SPIEraseSector(cardType, offset))
-            || R_FAILED(SPIWriteSaveData(cardType, offset, const_cast<std::uint8_t*>(data + offset), chunk))) {
-            ok = false;
-        } else {
-            ++writtenSectors;
+        bool sectorOk = false;
+        for (int attempt = 0; attempt < WriteAttempts && !sectorOk; ++attempt) {
+            sectorOk = R_SUCCEEDED(SPIEraseSector(cardType, offset))
+                && R_SUCCEEDED(SPIWriteSaveData(cardType, offset, const_cast<std::uint8_t*>(data + offset), chunk))
+                && R_SUCCEEDED(SPIReadSaveData(cardType, offset, readback.data(), chunk))
+                && std::memcmp(readback.data(), data + offset, chunk) == 0;
+            if (!sectorOk) {
+                Logger::instance().warning("DS card sector 0x" + std::to_string(offset) + " write attempt "
+                                           + std::to_string(attempt + 1) + " failed verification");
+            }
         }
+        ok = sectorOk;
+        writtenSectors += sectorOk ? 1 : 0;
     }
     pxiDevExit();
-    (void)infrared;
-    Logger::instance().info("DS card save wrote " + std::to_string(writtenSectors) + " sectors");
+    Logger::instance().info("DS card save wrote and verified " + std::to_string(writtenSectors) + " sectors");
     return ok;
 }
 }
