@@ -3,8 +3,17 @@
 #include <algorithm>
 #include <utility>
 
-void RegionClipboard::adopt(std::vector<RegionEntry> entries, GridPoint anchor, RegionOrigin origin) {
+namespace {
+bool awaitingPayload(const RegionEntry& entry) {
+    return entry.summary.occupied() && !entry.payloadKnown && entry.fetchAttempts < RegionClipboard::MaxFetchAttempts;
+}
+}
+
+void RegionClipboard::adopt(std::vector<RegionEntry> entries, GridPoint anchor, RegionOrigin origin,
+                            std::size_t localCapacity) {
+    localCapacity_ = localCapacity;
     entries_ = std::move(entries);
+    placements_.clear();
     origin_ = origin;
     location_ = origin.address;
     anchor_ = anchor;
@@ -18,6 +27,7 @@ void RegionClipboard::retain(std::vector<RegionEntry> remaining) {
 
 void RegionClipboard::clear() {
     entries_.clear();
+    placements_.clear();
     origin_ = RegionOrigin{};
     location_ = StorageAddress{};
     anchor_ = GridPoint{};
@@ -83,42 +93,17 @@ std::size_t RegionClipboard::focusSlot() const {
 }
 
 std::optional<std::size_t> RegionClipboard::nextSlotAwaitingPayload() const {
-    for (const RegionEntry& entry : entries_) {
-        if (entry.summary.species != 0 && !entry.payloadKnown && entry.fetchAttempts < MaxFetchAttempts) {
-            return entry.originSlot;
-        }
-    }
-    return std::nullopt;
+    const auto entry = std::find_if(entries_.begin(), entries_.end(), awaitingPayload);
+    return entry == entries_.end() ? std::nullopt : std::optional(entry->originSlot);
 }
 
 std::size_t RegionClipboard::pendingPayloadCount() const {
-    std::size_t pending = 0;
-    for (const RegionEntry& entry : entries_) {
-        if (entry.summary.species != 0 && !entry.payloadKnown && entry.fetchAttempts < MaxFetchAttempts) {
-            ++pending;
-        }
-    }
-    return pending;
-}
-
-std::size_t RegionClipboard::stalledPayloadCount() const {
-    std::size_t stalled = 0;
-    for (const RegionEntry& entry : entries_) {
-        if (entry.summary.species != 0 && !entry.payloadKnown && entry.fetchAttempts >= MaxFetchAttempts) {
-            ++stalled;
-        }
-    }
-    return stalled;
+    return static_cast<std::size_t>(std::count_if(entries_.begin(), entries_.end(), awaitingPayload));
 }
 
 std::size_t RegionClipboard::occupantCount() const {
-    std::size_t occupants = 0;
-    for (const RegionEntry& entry : entries_) {
-        if (entry.summary.species != 0) {
-            ++occupants;
-        }
-    }
-    return occupants;
+    return static_cast<std::size_t>(std::count_if(entries_.begin(), entries_.end(),
+        [](const RegionEntry& entry) { return entry.summary.occupied(); }));
 }
 
 bool RegionClipboard::deliverPayload(std::size_t originSlot, PokemonPayload payload) {

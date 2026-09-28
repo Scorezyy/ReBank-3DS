@@ -17,6 +17,8 @@ std::uint8_t pokemonFormat(pksm::Generation generation);
 
 pksm::Generation generationFromFormat(std::uint8_t format);
 
+bool canConvert(std::uint8_t sourceFormat, std::uint8_t targetFormat);
+
 std::unique_ptr<pksm::PKX> convertForSave(
     const pksm::PKX& source,
     std::uint8_t sourceFormat,

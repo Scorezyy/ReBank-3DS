@@ -15,11 +15,3 @@ GridPoint stepOf(CursorDirection direction) {
     }
     return GridPoint{0, 0};
 }
-
-bool isVertical(CursorDirection direction) {
-    return direction == CursorDirection::Up || direction == CursorDirection::Down;
-}
-
-bool isHorizontal(CursorDirection direction) {
-    return direction == CursorDirection::Left || direction == CursorDirection::Right;
-}

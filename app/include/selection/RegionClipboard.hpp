@@ -2,11 +2,11 @@
 
 #include "bank/BankTypes.hpp"
 #include "selection/GridGeometry.hpp"
-#include "selection/StorageAddress.hpp"
 
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <utility>
 #include <vector>
 
 struct RegionEntry {
@@ -16,6 +16,11 @@ struct RegionEntry {
     PokemonPayload payload;
     bool payloadKnown = false;
     std::uint8_t fetchAttempts = 0;
+};
+
+struct RegionPlacement {
+    HeldPokemon destination;
+    std::size_t originSlot = 0;
 };
 
 struct RegionOrigin {
@@ -33,9 +38,11 @@ public:
     std::size_t size() const { return entries_.size(); }
     const std::vector<RegionEntry>& entries() const { return entries_; }
 
-    void adopt(std::vector<RegionEntry> entries, GridPoint anchor, RegionOrigin origin);
+    void adopt(std::vector<RegionEntry> entries, GridPoint anchor, RegionOrigin origin, std::size_t localCapacity);
     void retain(std::vector<RegionEntry> remaining);
     void clear();
+    void recordPlacement(RegionPlacement placement) { placements_.push_back(std::move(placement)); }
+    const std::vector<RegionPlacement>& placements() const { return placements_; }
 
     const RegionOrigin& origin() const { return origin_; }
     StorageAddress location() const { return location_; }
@@ -43,7 +50,8 @@ public:
     void moveTo(StorageAddress address, GridPoint anchor);
     void setLocation(StorageAddress address);
 
-    GridGeometry grid() const { return GridGeometry::forPane(location_.pane); }
+    GridGeometry grid() const { return gridFor(location_.pane); }
+    GridGeometry gridFor(StoragePane pane) const { return GridGeometry::forPane(pane, localCapacity_); }
     GridPoint minOffset() const { return minOffset_; }
     GridPoint maxOffset() const { return maxOffset_; }
     GridPoint span() const;
@@ -54,7 +62,6 @@ public:
 
     std::optional<std::size_t> nextSlotAwaitingPayload() const;
     std::size_t pendingPayloadCount() const;
-    std::size_t stalledPayloadCount() const;
     std::size_t occupantCount() const;
     bool deliverPayload(std::size_t originSlot, PokemonPayload payload);
     bool failPayload(std::size_t originSlot);
@@ -63,9 +70,11 @@ private:
     void recomputeExtent();
 
     std::vector<RegionEntry> entries_;
+    std::vector<RegionPlacement> placements_;
     RegionOrigin origin_;
     StorageAddress location_;
     GridPoint anchor_;
     GridPoint minOffset_;
     GridPoint maxOffset_;
+    std::size_t localCapacity_ = BoxSlotCount;
 };

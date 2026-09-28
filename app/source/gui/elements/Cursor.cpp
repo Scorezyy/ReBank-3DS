@@ -5,17 +5,20 @@
 #include <cmath>
 
 namespace Gui {
+namespace {
+constexpr int ArrowSteps = 6;
+
 void drawDownArrow(float cx, float topY, float size, u32 color) {
-    for (int i = 0; i < 6; ++i) {
-        const float w = size * (1.0F - static_cast<float>(i) / 6.0F);
-        C2D_DrawRectSolid(cx - w * 0.5F, topY + i * (size / 6.0F + 0.5F), 0.97F,
-                          w, size / 6.0F + 1.0F, color);
+    const float stepHeight = size / ArrowSteps;
+    for (int step = 0; step < ArrowSteps; ++step) {
+        const float width = size * (1.0F - static_cast<float>(step) / ArrowSteps);
+        C2D_DrawRectSolid(cx - width * 0.5F, topY + step * (stepHeight + 0.5F), 0.97F, width, stepHeight + 1.0F, color);
     }
+}
 }
 
 void drawBouncingCursor(float cx, float baseTopY, float amplitude, float size, u32 color) {
-    const double t = static_cast<double>(svcGetSystemTick()) / SYSCLOCK_ARM11;
-    const float bounce = std::sin(static_cast<float>(t) * 6.0F) * amplitude;
-    drawDownArrow(cx, baseTopY + bounce, size, color);
+    const double seconds = static_cast<double>(svcGetSystemTick()) / SYSCLOCK_ARM11;
+    drawDownArrow(cx, baseTopY + std::sin(static_cast<float>(seconds) * 6.0F) * amplitude, size, color);
 }
 }

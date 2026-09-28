@@ -2,9 +2,13 @@
 
 #include <algorithm>
 
-GridGeometry GridGeometry::forPane(StoragePane pane) {
+GridGeometry GridGeometry::forPane(StoragePane pane, std::size_t localCapacity) {
+    constexpr std::size_t CompactBoxCapacity = 20;
     if (pane == StoragePane::Party) {
         return GridGeometry{2, 3};
+    }
+    if (pane == StoragePane::Local && localCapacity <= CompactBoxCapacity) {
+        return GridGeometry{5, 4};
     }
     return GridGeometry{6, 5};
 }

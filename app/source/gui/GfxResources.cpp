@@ -3,7 +3,32 @@
 
 #include <3ds.h>
 
+#include <optional>
 #include <string>
+
+namespace {
+struct SheetAsset {
+    C2D_SpriteSheet GfxResources::* sheet;
+    const char* path;
+    std::optional<GPU_TEXTURE_FILTER_PARAM> filter;
+};
+
+constexpr SheetAsset SheetAssets[] = {
+    {&GfxResources::pokemonSprites, "romfs:/assets/pkm_spritesheet.t3x", GPU_NEAREST},
+    {&GfxResources::boxBackground, "romfs:/assets/box_bg.t3x", std::nullopt},
+    {&GfxResources::bottomBackground, "romfs:/assets/bottom_bg.t3x", std::nullopt},
+    {&GfxResources::overlayIcons, "romfs:/assets/overlay_icons.t3x", std::nullopt},
+    {&GfxResources::boxNameBarSheet, "romfs:/assets/bar_boxname_with_arrows.t3x", std::nullopt},
+    {&GfxResources::typeBanners, "romfs:/assets/types.t3x", GPU_LINEAR},
+    {&GfxResources::teamBackground, "romfs:/assets/team_bg.t3x", GPU_NEAREST},
+    {&GfxResources::nameDexPlate, "romfs:/assets/name_dex_plate.t3x", std::nullopt},
+    {&GfxResources::infoStripe, "romfs:/assets/info_stripe.t3x", std::nullopt},
+    {&GfxResources::pointSmall, "romfs:/assets/point_small.t3x", std::nullopt},
+    {&GfxResources::genderMaleIcon, "romfs:/assets/icon_male.t3x", std::nullopt},
+    {&GfxResources::genderFemaleIcon, "romfs:/assets/icon_female.t3x", std::nullopt},
+    {&GfxResources::gameSelectorCard, "romfs:/assets/gameselector_card.t3x", std::nullopt},
+};
+}
 
 void GfxResources::load() {
     gfxInitDefault();
@@ -17,131 +42,47 @@ void GfxResources::load() {
     textBuffer = C2D_TextBufNew(16384);
     textBufferTopA = C2D_TextBufNew(4096);
     textBufferTopB = C2D_TextBufNew(4096);
+    loadFont();
+
+    for (const SheetAsset& asset : SheetAssets) {
+        C2D_SpriteSheet& sheet = this->*asset.sheet;
+        sheet = C2D_SpriteSheetLoad(asset.path);
+        if (!sheet) {
+            Logger::instance().error(std::string("Sprite sheet could not be loaded: ") + asset.path);
+            continue;
+        }
+        const C2D_Image image = C2D_SpriteSheetGetImage(sheet, 0);
+        if (asset.filter && image.tex) {
+            C3D_TexSetFilter(image.tex, *asset.filter, *asset.filter);
+        }
+    }
+}
+
+void GfxResources::loadFont() {
     u8 consoleRegion = CFG_REGION_USA;
     const bool regionKnown = R_SUCCEEDED(CFGU_SecureInfoGetRegion(&consoleRegion));
     if (regionKnown) {
         textFont = C2D_FontLoadSystem(static_cast<CFG_Region>(consoleRegion));
     }
-    const CFG_Region fallbackRegions[] = {CFG_REGION_USA, CFG_REGION_EUR, CFG_REGION_JPN};
-    for (const CFG_Region region : fallbackRegions) {
-        if (textFont) {
-            break;
-        }
-        textFont = C2D_FontLoadSystem(region);
-    }
-    Logger::instance().info(textFont
-        ? "System font loaded (console region known=" + std::to_string(regionKnown)
-              + ", region=" + std::to_string(consoleRegion) + ")"
-        : "System font failed to load for every region, falling back to default glyphs");
-    if (textFont) {
-        C2D_FontSetFilter(textFont, GPU_NEAREST, GPU_LINEAR);
-    }
-    pokemonSprites = C2D_SpriteSheetLoad("romfs:/assets/pkm_spritesheet.t3x");
-    if (!pokemonSprites) {
-        Logger::instance().error("Pokemon sprite sheet could not be loaded");
-    } else {
-        const C2D_Image sheetImage = C2D_SpriteSheetGetImage(pokemonSprites, 0);
-        if (sheetImage.tex) {
-            C3D_TexSetFilter(sheetImage.tex, GPU_NEAREST, GPU_NEAREST);
+    for (const CFG_Region region : {CFG_REGION_USA, CFG_REGION_EUR, CFG_REGION_JPN}) {
+        if (!textFont) {
+            textFont = C2D_FontLoadSystem(region);
         }
     }
-    boxBackground = C2D_SpriteSheetLoad("romfs:/assets/box_bg.t3x");
-    if (!boxBackground) {
-        Logger::instance().error("Box background sheet could not be loaded");
+    if (!textFont) {
+        Logger::instance().warning("System font failed to load for every region, falling back to default glyphs");
+        return;
     }
-    bottomBackground = C2D_SpriteSheetLoad("romfs:/assets/bottom_bg.t3x");
-    if (!bottomBackground) {
-        Logger::instance().error("Bottom background sheet could not be loaded");
-    }
-    overlayIcons = C2D_SpriteSheetLoad("romfs:/assets/overlay_icons.t3x");
-    if (!overlayIcons) {
-        Logger::instance().error("Overlay icon sheet could not be loaded");
-    }
-    iconItemSheet = C2D_SpriteSheetLoad("romfs:/assets/icon_item.t3x");
-    Logger::instance().info(iconItemSheet ? "Item icon sheet loaded" : "Item icon sheet load failed");
-    iconShinySheet = C2D_SpriteSheetLoad("romfs:/assets/icon_shiny.t3x");
-    Logger::instance().info(iconShinySheet ? "Shiny icon sheet loaded" : "Shiny icon sheet load failed");
-    boxNameBarSheet = C2D_SpriteSheetLoad("romfs:/assets/bar_boxname_with_arrows.t3x");
-    Logger::instance().info(boxNameBarSheet ? "Box name bar sheet loaded" : "Box name bar sheet load failed");
-    typeBanners = C2D_SpriteSheetLoad("romfs:/assets/types.t3x");
-    Logger::instance().info(typeBanners ? "Type banner sheet loaded" : "Type banner sheet load failed");
-    if (typeBanners) {
-        const C2D_Image typeBannerImage = C2D_SpriteSheetGetImage(typeBanners, 0);
-        if (typeBannerImage.tex) {
-            C3D_TexSetFilter(typeBannerImage.tex, GPU_LINEAR, GPU_LINEAR);
-        }
-    }
-    teamBackground = C2D_SpriteSheetLoad("romfs:/assets/team_bg.t3x");
-    Logger::instance().info(teamBackground ? "Team background sheet loaded" : "Team background sheet load failed");
-    if (teamBackground) {
-        const C2D_Image teamBgImage = C2D_SpriteSheetGetImage(teamBackground, 0);
-        if (teamBgImage.tex) {
-            C3D_TexSetFilter(teamBgImage.tex, GPU_NEAREST, GPU_NEAREST);
-        }
-    }
-    nameDexPlate = C2D_SpriteSheetLoad("romfs:/assets/name_dex_plate.t3x");
-    Logger::instance().info(nameDexPlate ? "Name/dex plate sheet loaded" : "Name/dex plate sheet load failed");
-    infoStripe = C2D_SpriteSheetLoad("romfs:/assets/info_stripe.t3x");
-    Logger::instance().info(infoStripe ? "Info stripe sheet loaded" : "Info stripe sheet load failed");
-    pointSmall = C2D_SpriteSheetLoad("romfs:/assets/point_small.t3x");
-    Logger::instance().info(pointSmall ? "Point small sheet loaded" : "Point small sheet load failed");
-    genderMaleIcon = C2D_SpriteSheetLoad("romfs:/assets/icon_male.t3x");
-    genderFemaleIcon = C2D_SpriteSheetLoad("romfs:/assets/icon_female.t3x");
-    genderlessIcon = C2D_SpriteSheetLoad("romfs:/assets/icon_genderless.t3x");
-    Logger::instance().info(genderMaleIcon && genderFemaleIcon && genderlessIcon
-        ? "Gender icon sheets loaded" : "Gender icon sheet load failed");
-    gameSelectorCard = C2D_SpriteSheetLoad("romfs:/assets/gameselector_card.t3x");
-    Logger::instance().info(gameSelectorCard ? "Game selector card sheet loaded" : "Game selector card sheet load failed");
+    C2D_FontSetFilter(textFont, GPU_NEAREST, GPU_LINEAR);
+    Logger::instance().info("System font loaded (console region known=" + std::to_string(regionKnown)
+                            + ", region=" + std::to_string(consoleRegion) + ")");
 }
 
 GfxResources::~GfxResources() {
-    if (pokemonSprites) {
-        C2D_SpriteSheetFree(pokemonSprites);
-    }
-    if (boxBackground) {
-        C2D_SpriteSheetFree(boxBackground);
-    }
-    if (bottomBackground) {
-        C2D_SpriteSheetFree(bottomBackground);
-    }
-    if (overlayIcons) {
-        C2D_SpriteSheetFree(overlayIcons);
-    }
-    if (iconItemSheet) {
-        C2D_SpriteSheetFree(iconItemSheet);
-    }
-    if (iconShinySheet) {
-        C2D_SpriteSheetFree(iconShinySheet);
-    }
-    if (boxNameBarSheet) {
-        C2D_SpriteSheetFree(boxNameBarSheet);
-    }
-    if (typeBanners) {
-        C2D_SpriteSheetFree(typeBanners);
-    }
-    if (teamBackground) {
-        C2D_SpriteSheetFree(teamBackground);
-    }
-    if (nameDexPlate) {
-        C2D_SpriteSheetFree(nameDexPlate);
-    }
-    if (infoStripe) {
-        C2D_SpriteSheetFree(infoStripe);
-    }
-    if (pointSmall) {
-        C2D_SpriteSheetFree(pointSmall);
-    }
-    if (genderMaleIcon) {
-        C2D_SpriteSheetFree(genderMaleIcon);
-    }
-    if (genderFemaleIcon) {
-        C2D_SpriteSheetFree(genderFemaleIcon);
-    }
-    if (genderlessIcon) {
-        C2D_SpriteSheetFree(genderlessIcon);
-    }
-    if (gameSelectorCard) {
-        C2D_SpriteSheetFree(gameSelectorCard);
+    for (const SheetAsset& asset : SheetAssets) {
+        if (C2D_SpriteSheet sheet = this->*asset.sheet) {
+            C2D_SpriteSheetFree(sheet);
+        }
     }
     if (textFont) {
         C2D_FontFree(textFont);

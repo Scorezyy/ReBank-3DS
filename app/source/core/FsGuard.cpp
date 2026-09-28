@@ -1,15 +1,20 @@
 #include "core/FsGuard.hpp"
 
-LightLock FsGuard::lock_;
-
-void FsGuard::init() {
-    LightLock_Init(&lock_);
+namespace {
+RecursiveLock& fileSystemLock() {
+    static RecursiveLock lock = [] {
+        RecursiveLock created;
+        RecursiveLock_Init(&created);
+        return created;
+    }();
+    return lock;
+}
 }
 
 FsGuard::FsGuard() {
-    LightLock_Lock(&lock_);
+    RecursiveLock_Lock(&fileSystemLock());
 }
 
 FsGuard::~FsGuard() {
-    LightLock_Unlock(&lock_);
+    RecursiveLock_Unlock(&fileSystemLock());
 }

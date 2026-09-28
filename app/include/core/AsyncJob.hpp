@@ -3,12 +3,15 @@
 #include <3ds.h>
 
 #include <atomic>
+#include <cstddef>
 #include <functional>
 #include <utility>
 
 class AsyncJob {
 public:
-    AsyncJob() = default;
+    static constexpr std::size_t DefaultStackSize = 512 * 1024;
+
+    explicit AsyncJob(std::size_t stackSize = DefaultStackSize) : stackSize_(stackSize) {}
     AsyncJob(const AsyncJob&) = delete;
     AsyncJob& operator=(const AsyncJob&) = delete;
     ~AsyncJob() { join(); }
@@ -20,7 +23,7 @@ public:
         join();
         state_.store(State::Running, std::memory_order_release);
         auto* context = new Context{this, std::move(fn)};
-        thread_ = threadCreate(&AsyncJob::trampoline, context, StackSize, Priority, Core, false);
+        thread_ = threadCreate(&AsyncJob::trampoline, context, stackSize_, Priority, Core, false);
         if (!thread_) {
             state_.store(State::Idle, std::memory_order_release);
             delete context;
@@ -33,7 +36,10 @@ public:
         return state_.load(std::memory_order_acquire) == State::Running;
     }
 
-    // Returns true exactly once, when the job has finished.
+    bool idle() const {
+        return state_.load(std::memory_order_acquire) == State::Idle;
+    }
+
     bool poll() {
         if (state_.load(std::memory_order_acquire) != State::Completed) {
             return false;
@@ -65,10 +71,10 @@ private:
         }
     }
 
-    static constexpr std::size_t StackSize = 512 * 1024;
     static constexpr int Priority = 0x30;
     static constexpr int Core = -2;
 
+    std::size_t stackSize_;
     Thread thread_ = nullptr;
     std::atomic<State> state_{State::Idle};
 };

@@ -1,19 +1,12 @@
 #pragma once
 
-#include "save/adapter/SaveAdapter.hpp"
+#include "save/pokemon/PokemonData.hpp"
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
-#include <string>
+#include <utility>
 #include <vector>
-
-enum class HandSource {
-    Local,
-    Cloud,
-    Party
-};
 
 enum class StoragePane {
     Local,
@@ -21,61 +14,103 @@ enum class StoragePane {
     Party
 };
 
-struct SwapOrigin {
-    bool active = false;
-    HandSource source = HandSource::Local;
+struct StorageAddress {
+    StoragePane pane = StoragePane::Local;
+    bool trash = false;
+
+    constexpr bool isCloudBank() const { return pane == StoragePane::Cloud && !trash; }
+    constexpr bool isTrashCan() const { return pane == StoragePane::Cloud && trash; }
+    constexpr bool isInSave() const { return pane != StoragePane::Cloud; }
+
+    friend constexpr bool operator==(StorageAddress, StorageAddress) = default;
+};
+
+struct HeldPokemon {
+    StorageAddress source;
     std::size_t sourceIndex = 0;
     std::size_t sourceLocalBox = 0;
     std::uint16_t sourceCloudBox = 0;
-    bool sourceTrash = false;
     PokemonSummary summary;
     PokemonPayload payload;
 };
 
-struct Hand {
+struct Hand : HeldPokemon {
     bool active = false;
-    HandSource source = HandSource::Local;
-    std::size_t sourceIndex = 0;
-    std::size_t sourceLocalBox = 0;
-    std::uint16_t sourceCloudBox = 0;
-    bool sourceTrash = false;
-    PokemonSummary summary;
-    PokemonPayload payload;
     bool payloadKnown = false;
-    SwapOrigin swapOrigin;
-};
+    std::vector<HeldPokemon> swapHistory;
 
-struct LocalBoxDraft {
-    std::array<PokemonSummary, 30> summaries{};
-    std::array<PokemonPayload, 30> payloads{};
-};
+    void take(HeldPokemon pokemon) {
+        static_cast<HeldPokemon&>(*this) = std::move(pokemon);
+        swapHistory.clear();
+        active = true;
+        payloadKnown = payload.known();
+    }
 
-struct PartyDraft {
-    std::array<PokemonSummary, 6> summaries{};
-    std::array<PokemonPayload, 6> payloads{};
+    void swapWith(HeldPokemon occupant) {
+        swapHistory.push_back(*this);
+        static_cast<HeldPokemon&>(*this) = std::move(occupant);
+        payloadKnown = payload.known();
+    }
 };
 
 struct CloudBoxDraft {
-    std::array<PokemonSummary, 30> summaries{};
-    std::array<PokemonPayload, 30> pending{};
-    std::array<PokemonSummary, 30> baseline{};
-    std::array<PokemonPayload, 30> payloads{};
+    std::array<PokemonSummary, BoxSlotCount> summaries{};
+    std::array<PokemonPayload, BoxSlotCount> pending{};
+    std::array<PokemonSummary, BoxSlotCount> baseline{};
+    std::array<PokemonPayload, BoxSlotCount> payloads{};
+
+    static CloudBoxDraft fromServer(const std::array<PokemonSummary, BoxSlotCount>& pokemon,
+                                    const std::array<PokemonPayload, BoxSlotCount>& serverPayloads) {
+        CloudBoxDraft draft;
+        draft.baseline = pokemon;
+        draft.summaries = pokemon;
+        draft.payloads = serverPayloads;
+        return draft;
+    }
+
+    bool slotChanged(std::size_t slot) const {
+        return !sameIdentity(summaries[slot], baseline[slot])
+            || (pending[slot].known() && pending[slot].data != payloads[slot].data);
+    }
+
+    void acceptPending() {
+        for (std::size_t slot = 0; slot < BoxSlotCount; ++slot) {
+            if (pending[slot].known()) {
+                payloads[slot] = std::move(pending[slot]);
+            } else if (slotChanged(slot)) {
+                payloads[slot] = {};
+            }
+        }
+        baseline = summaries;
+        pending = {};
+    }
+
+    void revert() {
+        summaries = baseline;
+        pending = {};
+    }
 };
 
-struct CommitSkippedItem {
-    std::string nickname;
-    std::string location;
-    std::string reason;
-};
+struct CloudView {
+    std::array<PokemonSummary, BoxSlotCount> summaries{};
+    std::array<PokemonPayload, BoxSlotCount> pending{};
+    std::array<PokemonPayload, BoxSlotCount> cached{};
+    std::array<bool, BoxSlotCount> prefetchFailed{};
+    bool awaitingLoad = false;
 
-struct CommitResult {
-    bool success = false;
-    std::string message;
-    std::string problemPokemon;
-    std::string problemLocation;
-    std::string problemReason;
-    std::size_t uploads = 0;
-    std::size_t downloads = 0;
-    std::size_t deletes = 0;
-    std::vector<CommitSkippedItem> skipped;
+    void show(const CloudBoxDraft& draft) {
+        summaries = draft.summaries;
+        pending = draft.pending;
+        cached = draft.payloads;
+        prefetchFailed = {};
+        awaitingLoad = false;
+    }
+
+    void clear(bool awaitLoad) {
+        summaries.fill({});
+        pending = {};
+        cached = {};
+        prefetchFailed = {};
+        awaitingLoad = awaitLoad;
+    }
 };

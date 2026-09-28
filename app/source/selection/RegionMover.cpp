@@ -27,7 +27,7 @@ std::optional<StoragePane> RegionMover::neighbourPane(StorageAddress from, Curso
 
 std::optional<RegionMover::Landing> RegionMover::enterPane(const RegionClipboard& region, StoragePane pane,
                                                            GridPoint desired, CursorDirection direction) {
-    const GridGeometry grid = GridGeometry::forPane(pane);
+    const GridGeometry grid = region.gridFor(pane);
     const GridPoint span = region.span();
     if (span.row > grid.rows() || span.column > grid.columns()) {
         return std::nullopt;

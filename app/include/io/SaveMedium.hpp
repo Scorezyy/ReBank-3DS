@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -30,6 +31,9 @@ inline constexpr std::array TitleMappings{
     TitleMapping{"ultra-moon", 0x00040000001B5100ULL}
 };
 
+std::optional<std::uint64_t> titleIdFor(std::string_view code);
+std::optional<std::string_view> codeFor(std::uint64_t titleId);
+
 std::shared_ptr<std::uint8_t[]> readFile(const std::string& path, std::size_t& size);
 std::shared_ptr<std::uint8_t[]> readArchive(
     std::uint64_t titleId,
@@ -43,6 +47,8 @@ std::shared_ptr<std::uint8_t[]> readExport(
     std::string& path
 );
 std::string dsGameCodeFromHeader();
+bool archiveHasSave(std::uint64_t titleId, FS_MediaType mediaType);
+bool exportExists(std::string_view code);
 
 std::uint64_t cartridgeTitleId();
 
@@ -61,7 +67,6 @@ bool writeDsCard(
     CardType cardType,
     const std::uint8_t* data,
     std::size_t size,
-    bool infrared,
     const std::uint8_t* previous,
     std::size_t previousSize
 );

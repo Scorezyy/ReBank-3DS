@@ -1,6 +1,6 @@
 #pragma once
 
-#include "save/adapter/SaveAdapter.hpp"
+#include "save/pokemon/PokemonData.hpp"
 
 #include <citro2d.h>
 

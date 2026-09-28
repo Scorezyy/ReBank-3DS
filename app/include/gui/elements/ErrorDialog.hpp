@@ -1,18 +1,13 @@
 #pragma once
 
+#include "core/ErrorNotice.hpp"
 #include "gui/UiRenderer.hpp"
 
-#include <string>
+#include <string_view>
 
-class ErrorDialog {
-public:
-    void show(std::string title, std::string message);
-    void dismiss() { visible_ = false; }
-    bool visible() const { return visible_; }
-    void render(UiRenderer& ui) const;
+namespace Gui {
+inline constexpr UiRect ErrorDialogOkButton{92.0F, 190.0F, 136.0F, 34.0F};
 
-private:
-    bool visible_ = false;
-    std::string title_;
-    std::string message_;
-};
+void drawErrorDialog(UiRenderer& ui, const ErrorNotice& notice, std::string_view fallbackMessage,
+                     std::string_view okLabel);
+}

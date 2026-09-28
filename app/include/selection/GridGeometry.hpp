@@ -20,7 +20,7 @@ constexpr bool operator!=(GridPoint left, GridPoint right) {
 
 class GridGeometry {
 public:
-    static GridGeometry forPane(StoragePane pane);
+    static GridGeometry forPane(StoragePane pane, std::size_t localCapacity = BoxSlotCount);
 
     int columns() const { return columns_; }
     int rows() const { return rows_; }

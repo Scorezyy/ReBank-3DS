@@ -3,117 +3,628 @@
 namespace {
 using Translation = std::array<std::string_view, static_cast<std::size_t>(TextId::Count)>;
 
-constexpr Translation English{
-    "Your Pokemon. One secure home.", "Login", "Register", "Username", "Email", "Password",
-    "Forgot password?", "Continue", "Back", "Create account", "Reset password",
-    "Please wait...", "Checking updates...", "Signing in...", "Searching save files...",
-    "Loading game icons...", "Loading save file...", "Searching Pokemon...", "Loading bank data...",
-    "Initializing...", "Downloading and verifying new versions securely...",
-    "Checking server and session...", "Checking cartridge and installed games...",
-    "Reading original game icons...", "Opening local save file...", "Reading box and Pokemon...",
-    "Connecting to your bank...", "Progress",
-    "Autologin detected...", "Logging you in automatically...", "Welcome back, ",
-    "Trash Can", "Delete these Pokemon?", "Yes", "No",
-    "Finding save games...", "No compatible save game found.", "Checking cartridge slot...", "Reading save...",
-    "No compatible save game", "Insert a cartridge or create a save first.",
-    "No cartridge inserted", "Insert a game cartridge to load it here.",
-    "Unknown Trainer", "ID No. ", "Play time: ", "Pokedex: ",
-    "Cartridge removed", "The game cartridge was removed. Returning to the game selection."
-};
+constexpr std::size_t at(TextId id) {
+    return static_cast<std::size_t>(id);
+}
 
-constexpr Translation German{
-    "Deine Pokémon. in einem sicheren Zuhause.", "Anmelden", "Registrieren", "Benutzername", "E-Mail", "Passwort",
-    "Passwort vergessen?", "Weiter", "Zurück", "Konto erstellen", "Passwort zurücksetzen",
-    "Bitte warten...", "Updates prüfen...", "Anmelden...", "Spielstände suchen...",
-    "Spielbilder laden...", "Spielstand laden...", "Pokémon suchen...", "Bankdaten laden...",
-    "Initialisieren...", "Neue Version prüfen...",
-    "Server & Sitzung prüfen...", "Spiele prüfen...",
-    "Spielbilder lesen...", "Spielstand öffnen...", "Boxen & Pokémon lesen...",
-    "Mit Bank verbinden...", "Fortschritt",
-    "Automatischer Login erkannt...", "Du wirst automatisch angemeldet...", "Willkommen zurück, ",
-    "Papierkorb", "Pokémon löschen?", "Ja", "Nein",
-    "Spielstände suchen...", "Kein passender Spielstand gefunden.", "Modulschacht prüfen...", "Spielstand wird gelesen...",
-    "Kein passender Spielstand", "Lege ein Modul ein oder erstelle zuerst einen Spielstand.",
-    "Kein Modul eingelegt", "Lege ein Spielmodul ein, um es hier zu laden.",
-    "Unbekannter Trainer", "ID-Nr. ", "Spielzeit: ", "Pokedex: ",
-    "Modul entfernt", "Das Spielmodul wurde entfernt. Du wirst zur Spielauswahl zurückgebracht."
-};
+constexpr Translation makeEnglish() {
+    Translation text{};
+    text[at(TextId::Tagline)] = "Your Pokemon. One secure home.";
+    text[at(TextId::Login)] = "Login";
+    text[at(TextId::Register)] = "Register";
+    text[at(TextId::Username)] = "Username";
+    text[at(TextId::Email)] = "Email";
+    text[at(TextId::Password)] = "Password";
+    text[at(TextId::ForgotPassword)] = "Forgot password?";
+    text[at(TextId::Submit)] = "Continue";
+    text[at(TextId::Back)] = "Back";
+    text[at(TextId::CreateAccount)] = "Create account";
+    text[at(TextId::ResetPassword)] = "Reset password";
+    text[at(TextId::LoadingWait)] = "Please wait...";
+    text[at(TextId::LoadingCheckingUpdates)] = "Checking updates...";
+    text[at(TextId::LoadingSigningIn)] = "Signing in...";
+    text[at(TextId::LoadingSearchingGames)] = "Searching save files...";
+    text[at(TextId::LoadingReadingIcons)] = "Loading game icons...";
+    text[at(TextId::LoadingReadingSave)] = "Loading save file...";
+    text[at(TextId::LoadingSearchingPokemon)] = "Searching Pokemon...";
+    text[at(TextId::LoadingBankData)] = "Loading bank data...";
+    text[at(TextId::LoadingDetailInitializing)] = "Initializing...";
+    text[at(TextId::LoadingDetailCheckingUpdates)] = "Downloading and verifying new versions securely...";
+    text[at(TextId::LoadingDetailSigningIn)] = "Checking server and session...";
+    text[at(TextId::LoadingDetailSearchingGames)] = "Checking cartridge and installed games...";
+    text[at(TextId::LoadingDetailReadingIcons)] = "Reading original game icons...";
+    text[at(TextId::LoadingDetailReadingSave)] = "Opening local save file...";
+    text[at(TextId::LoadingDetailSearchingPokemon)] = "Reading box and Pokemon...";
+    text[at(TextId::LoadingDetailLoadingBank)] = "Connecting to your bank...";
+    text[at(TextId::LoadingProgressLabel)] = "Progress";
+    text[at(TextId::LoadingAutoLoginDetected)] = "Autologin detected...";
+    text[at(TextId::LoadingDetailAutoLoginDetected)] = "Logging you in automatically...";
+    text[at(TextId::LoadingWelcomeBackPrefix)] = "Welcome back, ";
+    text[at(TextId::TrashCan)] = "Trash Can";
+    text[at(TextId::TrashConfirmMessage)] = "Delete these Pokemon?";
+    text[at(TextId::Yes)] = "Yes";
+    text[at(TextId::No)] = "No";
+    text[at(TextId::StatusFindingSaveGames)] = "Finding save games...";
+    text[at(TextId::StatusNoCompatibleSaveGame)] = "No compatible save game found.";
+    text[at(TextId::StatusCheckingCartridgeSlot)] = "Checking cartridge slot...";
+    text[at(TextId::StatusReadingSave)] = "Reading save...";
+    text[at(TextId::NoCompatibleSaveGameTitle)] = "No compatible save game";
+    text[at(TextId::InsertCartridgeOrCreateSave)] = "Insert a cartridge or create a save first.";
+    text[at(TextId::NoCartridgeInserted)] = "No cartridge inserted";
+    text[at(TextId::InsertCartridgeToLoad)] = "Insert a game cartridge to load it here.";
+    text[at(TextId::UnknownTrainer)] = "Unknown Trainer";
+    text[at(TextId::IdNoPrefix)] = "ID No. ";
+    text[at(TextId::PlayTimePrefix)] = "Play time: ";
+    text[at(TextId::PokedexPrefix)] = "Pokedex: ";
+    text[at(TextId::CartridgeRemovedTitle)] = "Cartridge removed";
+    text[at(TextId::CartridgeRemovedMessage)] = "The game cartridge was removed. Returning to the game selection.";
+    text[at(TextId::SlotEmpty)] = "This slot is empty.";
+    text[at(TextId::TeamCannotBeEmpty)] = "Your team can't be empty.";
+    text[at(TextId::PokemonPickedUp)] = "{0} picked up.";
+    text[at(TextId::PokemonPlaced)] = "{0} placed.";
+    text[at(TextId::PokemonSwapped)] = "{0} swapped.";
+    text[at(TextId::SignInAgain)] = "Please sign in again.";
+    text[at(TextId::StillFetching)] = "Still fetching {0}...";
+    text[at(TextId::GenerationIncompatible)] = "Gen {0} cannot enter Gen {1}.";
+    text[at(TextId::BankBoxLoading)] = "This bank box is still loading.";
+    text[at(TextId::SlotUnavailable)] = "This game's boxes only have {0} slots.";
+    text[at(TextId::FetchingOccupant)] = "Fetching occupant...";
+    text[at(TextId::ReturnedToSlot)] = "Returned to slot {0}.";
+    text[at(TextId::ChangesDiscarded)] = "Pending changes discarded.";
+    text[at(TextId::CannotPickUp)] = "Cannot pick up: {0}";
+    text[at(TextId::PickupFailedTitle)] = "PICKUP FAILED";
+    text[at(TextId::CannotSwap)] = "Cannot swap: {0}";
+    text[at(TextId::SwapFailedTitle)] = "SWAP FAILED";
+    text[at(TextId::UnknownPokemon)] = "Unknown Pokemon";
+    text[at(TextId::PayloadUnreadable)] = "The Pokemon data could not be read.";
+    text[at(TextId::SwapCancelledBoxChanged)] = "Box changed, swap cancelled.";
+    text[at(TextId::SwapCancelled)] = "Swap cancelled.";
+    text[at(TextId::FinishAreaFirst)] = "Finish or cancel the area first (B).";
+    text[at(TextId::DropFirst)] = "Drop the Pokemon first.";
+    text[at(TextId::NothingToCommit)] = "Nothing to commit.";
+    text[at(TextId::BoxNameHint)] = "Box name";
+    text[at(TextId::DefaultBankName)] = "Bank {0}";
+    text[at(TextId::ModeSingle)] = "Single selection mode.";
+    text[at(TextId::ModeRow)] = "Row selection mode.";
+    text[at(TextId::ModeArea)] = "Area selection mode.";
+    text[at(TextId::MarkArea)] = "Mark the area, then press A.";
+    text[at(TextId::SelectionCancelled)] = "Selection cancelled.";
+    text[at(TextId::NothingToSelect)] = "Nothing to select here.";
+    text[at(TextId::RowPickedUp)] = "Row picked up.";
+    text[at(TextId::AreaPickedUp)] = "Area picked up.";
+    text[at(TextId::PlacedAll)] = "Placed.";
+    text[at(TextId::PlacedSome)] = "Placed what fit - {0}.";
+    text[at(TextId::PlacedNone)] = "Nothing placed - {0}.";
+    text[at(TextId::PlaceReasonFetching)] = "fetching {0}";
+    text[at(TextId::PlaceReasonUnavailable)] = "{0} unavailable from the server";
+    text[at(TextId::PlaceReasonOccupied)] = "{0} spot(s) occupied";
+    text[at(TextId::PlaceReasonWrongFormat)] = "{0} can't enter this save";
+    text[at(TextId::CommitRunning)] = "Committing changes...";
+    text[at(TextId::CommitStartFailed)] = "Could not start the commit.";
+    text[at(TextId::CommitSummary)] = "Uploaded {0}, downloaded {1}, moved {2}, removed {3}.";
+    text[at(TextId::CommitStoppedTitle)] = "COMMIT STOPPED";
+    text[at(TextId::CommitAttentionOne)] = "1 POKEMON NEEDS ATTENTION";
+    text[at(TextId::CommitAttentionMany)] = "{0} POKEMON NEED ATTENTION";
+    text[at(TextId::YourChanges)] = "Your changes";
+    text[at(TextId::CommitStopCloudMove)] = "A cloud move failed ({0}). The commit stopped before your save was touched. Nothing was lost.";
+    text[at(TextId::CommitStopSave)] = "Your save could not be written ({0}), so nothing in it was changed. Nothing was lost.";
+    text[at(TextId::LocationBox)] = "Box {0} | Slot {1}";
+    text[at(TextId::LocationParty)] = "Team slot {0}";
+    text[at(TextId::LocationBank)] = "Bank {0} | Slot {1}";
+    text[at(TextId::IssueDataNotLoaded)] = "Its data was not loaded yet, so it stayed where it was. Try again.";
+    text[at(TextId::IssueOriginUnconfirmed)] = "Its origin could not be confirmed, so nothing was changed for it.";
+    text[at(TextId::IssueNotInTrash)] = "It would have been removed without going through the trash, so it stayed where it was.";
+    text[at(TextId::IssueLinkedToHeldBack)] = "It is linked to a Pokemon that could not be moved safely, so it stayed where it was.";
+    text[at(TextId::IssueNoParkingSlot)] = "There is no free box slot to park it during the swap, so it stayed where it was.";
+    text[at(TextId::IssueCloudMoveFailed)] = "The cloud did not confirm this move ({0}).";
+    text[at(TextId::IssueWriteFailed)] = "It could not be written into this save, so nothing was changed for it.";
+    text[at(TextId::IssueRemoveFailed)] = "It could not be removed from this save, so nothing was changed for it.";
+    text[at(TextId::IssueCloudRefused)] = "The cloud refused it: {0} It stayed in your save.";
+    text[at(TextId::IssueUploadUnconfirmed)] = "The connection dropped during the upload. It stayed in your save; check {0} for a second copy.";
+    text[at(TextId::IssueUploadNotStored)] = "The upload did not go through. It stayed in your save.";
+    text[at(TextId::IssueCloudSlotDifferent)] = "The cloud slot holds a different Pokemon, so it stayed in your save.";
+    text[at(TextId::IssueUploadUndone)] = "The final save step failed, so its upload was undone. It stayed in your save.";
+    text[at(TextId::IssueUploadNotUndone)] = "The final save step failed and its cloud copy could not be removed. It is now in your save and in {0}.";
+    text[at(TextId::IssueSwapCancelled)] = "Its swap partner could not be uploaded, so the swap was cancelled and it stayed in the cloud.";
+    text[at(TextId::IssuePlacedElsewhere)] = "Its target slot stayed occupied, so it was placed here instead.";
+    text[at(TextId::IssueReturnedToOrigin)] = "Its target slot stayed occupied, so it went back to where it was.";
+    text[at(TextId::IssueOverwriteUnconfirmed)] = "An upload into its cloud slot could not be confirmed, so it may still be in the cloud. Check for a second copy.";
+    text[at(TextId::IssueDownloadNotRemoved)] = "It was saved in your game but could not be removed from the cloud, so it now exists twice.";
+    text[at(TextId::IssueCloudRemoveFailed)] = "It could not be removed from the cloud and is still there.";
+    text[at(TextId::PhasePreparing)] = "Preparing...";
+    text[at(TextId::PhaseMovingCloud)] = "Moving in cloud...";
+    text[at(TextId::PhaseSavingLocal)] = "Writing save...";
+    text[at(TextId::PhaseUploading)] = "Uploading cloud...";
+    text[at(TextId::PhaseFinalizing)] = "Finishing save...";
+    text[at(TextId::PhaseRemovingCloud)] = "Removing cloud...";
+    text[at(TextId::BankLoading)] = "Loading";
+    text[at(TextId::InfoLevel)] = "Lv.";
+    text[at(TextId::InfoTrainer)] = "OT:";
+    text[at(TextId::InfoNickname)] = "Nickname:";
+    text[at(TextId::InfoItem)] = "Item:";
+    text[at(TextId::InfoAbility)] = "Ability:";
+    text[at(TextId::InfoNature)] = "Nature:";
+    text[at(TextId::InfoLanguage)] = "Lang:";
+    text[at(TextId::InfoType)] = "Type";
+    text[at(TextId::InfoOrigin)] = "Origin:";
+    text[at(TextId::InfoMove)] = "Move:";
+    text[at(TextId::EmptyCloudSlot)] = "Empty cloud slot";
+    text[at(TextId::EmptyPartySlot)] = "Empty party slot";
+    text[at(TextId::EmptySlot)] = "Empty slot";
+    text[at(TextId::StateFetching)] = "FETCHING";
+    text[at(TextId::StateHolding)] = "HOLDING";
+    text[at(TextId::StateReady)] = "READY";
+    text[at(TextId::StatePending)] = "PENDING";
+    text[at(TextId::ModeLabelRow)] = "ROW";
+    text[at(TextId::ModeLabelMulti)] = "MULTI";
+    text[at(TextId::ModeLabelSingle)] = "SINGLE";
+    text[at(TextId::LocalBoxLabel)] = "BOX {0}";
+    text[at(TextId::TeamLabel)] = "TEAM";
+    text[at(TextId::HintDrop)] = "Drop";
+    text[at(TextId::HintPick)] = "Pick";
+    text[at(TextId::HintReturn)] = "Return";
+    text[at(TextId::HintSave)] = "Save";
+    text[at(TextId::UnexpectedError)] = "An unexpected error occurred. Check rebank.log for details.";
+    text[at(TextId::Ok)] = "OK";
+    text[at(TextId::CartridgeLabel)] = "CARTRIDGE";
+    text[at(TextId::DigitalLabel)] = "DIGITAL";
+    text[at(TextId::ChooseTitle)] = "Choose the Pokemon title to use";
+    text[at(TextId::Logout)] = "Logout";
+    text[at(TextId::StatusWaitingForLoader)] = "Finishing the current check, then the game opens...";
+    text[at(TextId::InvalidUsernameTitle)] = "INVALID USERNAME";
+    text[at(TextId::InvalidUsernameMessage)] = "Username must be 3-32 letters, numbers, _ or -.";
+    text[at(TextId::InvalidEmailTitle)] = "INVALID EMAIL";
+    text[at(TextId::InvalidEmailMessage)] = "Please enter a valid email address.";
+    text[at(TextId::InvalidPasswordTitle)] = "INVALID PASSWORD";
+    text[at(TextId::InvalidPasswordMessage)] = "Password must contain at least 10 characters.";
+    text[at(TextId::AutoLoginToggle)] = "Auto-Login (Y)";
+    text[at(TextId::AutoLoginEnabled)] = "Auto-login enabled.";
+    text[at(TextId::AutoLoginDisabled)] = "Auto-login disabled.";
+    text[at(TextId::RestoringSession)] = "Restoring session...";
+    text[at(TextId::Connecting)] = "Connecting...";
+    text[at(TextId::AuthStartFailed)] = "Could not start the login process.";
+    text[at(TextId::CheckingForUpdates)] = "Checking for updates...";
+    text[at(TextId::UpdateStartFailed)] = "Update check could not start.";
+    text[at(TextId::LoggedOut)] = "Logged out.";
+    text[at(TextId::SignedOutTitle)] = "SIGNED OUT";
+    text[at(TextId::SignedOutMessage)] = "Another device signed in to this account. Please sign in again.";
+    text[at(TextId::LoginFailedTitle)] = "LOGIN FAILED";
+    text[at(TextId::RegistrationFailedTitle)] = "REGISTRATION FAILED";
+    text[at(TextId::ResetFailedTitle)] = "RESET FAILED";
+    text[at(TextId::SessionRestoreFailedTitle)] = "SESSION RESTORE FAILED";
+    text[at(TextId::RequestFailedTitle)] = "REQUEST FAILED";
+    text[at(TextId::ServerUnreachable)] = "Could not reach the ReBank server. Check your connection and try again.";
+    return text;
+}
 
-constexpr Translation French{
-    "Vos Pokemon. Un espace securise.", "Connexion", "Inscription", "Utilisateur", "E-mail", "Mot de passe",
-    "Mot de passe oublie ?", "Continuer", "Retour", "Creer un compte", "Reinitialiser",
-    "Veuillez patienter...", "Verification des mises a jour...", "Connexion en cours...",
-    "Recherche des sauvegardes...", "Chargement des icones...", "Chargement de la sauvegarde...",
-    "Recherche de Pokemon...", "Chargement de la banque...", "Initialisation...",
-    "Telechargement et verification securisee des nouvelles versions...",
-    "Verification du serveur et de la session...", "Verification de la cartouche et des jeux installes...",
-    "Lecture des icones originales...", "Ouverture de la sauvegarde locale...",
-    "Lecture de la boite et des Pokemon...", "Connexion a votre banque...", "Progression",
-    "Connexion automatique detectee...", "Connexion automatique en cours...", "Content de te revoir, ",
-    "Corbeille", "Supprimer ces Pokemon ?", "Oui", "Non",
-    "Recherche des sauvegardes...", "Aucune sauvegarde compatible trouvee.", "Verification du lecteur de cartouche...", "Lecture de la sauvegarde...",
-    "Aucune sauvegarde compatible", "Insere une cartouche ou cree d'abord une sauvegarde.",
-    "Aucune cartouche inseree", "Insere une cartouche de jeu pour la charger ici.",
-    "Dresseur inconnu", "N Dresseur ", "Temps de jeu : ", "Pokedex : ",
-    "Cartouche retiree", "La cartouche de jeu a ete retiree. Retour a la selection des jeux."
-};
+constexpr Translation English = makeEnglish();
 
-constexpr Translation Spanish{
-    "Tus Pokemon. Un hogar seguro.", "Iniciar sesion", "Registrarse", "Usuario", "Correo", "Contrasena",
-    "Olvidaste la contrasena?", "Continuar", "Volver", "Crear cuenta", "Restablecer",
-    "Por favor espera...", "Buscando actualizaciones...", "Iniciando sesion...",
-    "Buscando partidas guardadas...", "Cargando iconos...", "Cargando partida...",
-    "Buscando Pokemon...", "Cargando datos del banco...", "Inicializando...",
-    "Descargando y verificando nuevas versiones de forma segura...",
-    "Verificando servidor y sesion...", "Verificando cartucho y juegos instalados...",
-    "Leyendo iconos originales...", "Abriendo partida local...", "Leyendo caja y Pokemon...",
-    "Conectando con tu banco...", "Progreso",
-    "Inicio de sesion automatico detectado...", "Iniciando sesion automaticamente...", "Bienvenido de nuevo, ",
-    "Papelera", "Eliminar estos Pokemon?", "Si", "No",
-    "Buscando partidas guardadas...", "No se encontro ninguna partida compatible.", "Verificando ranura del cartucho...", "Leyendo partida...",
-    "Ninguna partida compatible", "Inserta un cartucho o crea primero una partida.",
-    "Ningun cartucho insertado", "Inserta un cartucho de juego para cargarlo aqui.",
-    "Entrenador desconocido", "N.º entrenador ", "Tiempo de juego: ", "Pokedex: ",
-    "Cartucho retirado", "Se retiro el cartucho del juego. Volviendo a la seleccion de juegos."
-};
+constexpr Translation makeGerman() {
+    Translation text{};
+    text[at(TextId::Tagline)] = "Deine Pokémon. Ein sicheres Zuhause.";
+    text[at(TextId::Login)] = "Anmelden";
+    text[at(TextId::Register)] = "Registrieren";
+    text[at(TextId::Username)] = "Benutzername";
+    text[at(TextId::Email)] = "E-Mail";
+    text[at(TextId::Password)] = "Passwort";
+    text[at(TextId::ForgotPassword)] = "Passwort vergessen?";
+    text[at(TextId::Submit)] = "Weiter";
+    text[at(TextId::Back)] = "Zurück";
+    text[at(TextId::CreateAccount)] = "Konto erstellen";
+    text[at(TextId::ResetPassword)] = "Passwort zurücksetzen";
+    text[at(TextId::LoadingWait)] = "Bitte warten...";
+    text[at(TextId::LoadingCheckingUpdates)] = "Updates prüfen...";
+    text[at(TextId::LoadingSigningIn)] = "Anmelden...";
+    text[at(TextId::LoadingSearchingGames)] = "Spielstände suchen...";
+    text[at(TextId::LoadingReadingIcons)] = "Spielbilder laden...";
+    text[at(TextId::LoadingReadingSave)] = "Spielstand laden...";
+    text[at(TextId::LoadingSearchingPokemon)] = "Pokémon suchen...";
+    text[at(TextId::LoadingBankData)] = "Bankdaten laden...";
+    text[at(TextId::LoadingDetailInitializing)] = "Initialisieren...";
+    text[at(TextId::LoadingDetailCheckingUpdates)] = "Neue Version prüfen...";
+    text[at(TextId::LoadingDetailSigningIn)] = "Server & Sitzung prüfen...";
+    text[at(TextId::LoadingDetailSearchingGames)] = "Spiele prüfen...";
+    text[at(TextId::LoadingDetailReadingIcons)] = "Spielbilder lesen...";
+    text[at(TextId::LoadingDetailReadingSave)] = "Spielstand öffnen...";
+    text[at(TextId::LoadingDetailSearchingPokemon)] = "Boxen & Pokémon lesen...";
+    text[at(TextId::LoadingDetailLoadingBank)] = "Mit Bank verbinden...";
+    text[at(TextId::LoadingProgressLabel)] = "Fortschritt";
+    text[at(TextId::LoadingAutoLoginDetected)] = "Automatischer Login erkannt...";
+    text[at(TextId::LoadingDetailAutoLoginDetected)] = "Du wirst automatisch angemeldet...";
+    text[at(TextId::LoadingWelcomeBackPrefix)] = "Willkommen zurück, ";
+    text[at(TextId::TrashCan)] = "Papierkorb";
+    text[at(TextId::TrashConfirmMessage)] = "Pokémon löschen?";
+    text[at(TextId::Yes)] = "Ja";
+    text[at(TextId::No)] = "Nein";
+    text[at(TextId::StatusFindingSaveGames)] = "Spielstände suchen...";
+    text[at(TextId::StatusNoCompatibleSaveGame)] = "Kein passender Spielstand gefunden.";
+    text[at(TextId::StatusCheckingCartridgeSlot)] = "Modulschacht prüfen...";
+    text[at(TextId::StatusReadingSave)] = "Spielstand wird gelesen...";
+    text[at(TextId::NoCompatibleSaveGameTitle)] = "Kein passender Spielstand";
+    text[at(TextId::InsertCartridgeOrCreateSave)] = "Lege ein Modul ein oder erstelle zuerst einen Spielstand.";
+    text[at(TextId::NoCartridgeInserted)] = "Kein Modul eingelegt";
+    text[at(TextId::InsertCartridgeToLoad)] = "Lege ein Spielmodul ein, um es hier zu laden.";
+    text[at(TextId::UnknownTrainer)] = "Unbekannter Trainer";
+    text[at(TextId::IdNoPrefix)] = "ID-Nr. ";
+    text[at(TextId::PlayTimePrefix)] = "Spielzeit: ";
+    text[at(TextId::PokedexPrefix)] = "Pokedex: ";
+    text[at(TextId::CartridgeRemovedTitle)] = "Modul entfernt";
+    text[at(TextId::CartridgeRemovedMessage)] = "Das Spielmodul wurde entfernt. Du wirst zur Spielauswahl zurückgebracht.";
+    text[at(TextId::SlotEmpty)] = "Dieser Platz ist leer.";
+    text[at(TextId::TeamCannotBeEmpty)] = "Dein Team darf nicht leer sein.";
+    text[at(TextId::PokemonPickedUp)] = "{0} aufgenommen.";
+    text[at(TextId::PokemonPlaced)] = "{0} abgelegt.";
+    text[at(TextId::PokemonSwapped)] = "{0} getauscht.";
+    text[at(TextId::SignInAgain)] = "Bitte melde dich erneut an.";
+    text[at(TextId::StillFetching)] = "{0} wird noch geladen...";
+    text[at(TextId::GenerationIncompatible)] = "Gen {0} passt nicht in Gen {1}.";
+    text[at(TextId::BankBoxLoading)] = "Diese Bank-Box lädt noch.";
+    text[at(TextId::SlotUnavailable)] = "Boxen in diesem Spiel haben nur {0} Plätze.";
+    text[at(TextId::FetchingOccupant)] = "Pokémon auf dem Platz wird geladen...";
+    text[at(TextId::ReturnedToSlot)] = "Zurück auf Platz {0}.";
+    text[at(TextId::ChangesDiscarded)] = "Offene Änderungen verworfen.";
+    text[at(TextId::CannotPickUp)] = "Aufnehmen nicht möglich: {0}";
+    text[at(TextId::PickupFailedTitle)] = "AUFNEHMEN FEHLGESCHLAGEN";
+    text[at(TextId::CannotSwap)] = "Tauschen nicht möglich: {0}";
+    text[at(TextId::SwapFailedTitle)] = "TAUSCH FEHLGESCHLAGEN";
+    text[at(TextId::UnknownPokemon)] = "Unbekanntes Pokémon";
+    text[at(TextId::PayloadUnreadable)] = "Die Pokémon-Daten konnten nicht gelesen werden.";
+    text[at(TextId::SwapCancelledBoxChanged)] = "Box gewechselt, Tausch abgebrochen.";
+    text[at(TextId::SwapCancelled)] = "Tausch abgebrochen.";
+    text[at(TextId::FinishAreaFirst)] = "Schließe den Bereich erst ab oder brich ab (B).";
+    text[at(TextId::DropFirst)] = "Leg das Pokémon zuerst ab.";
+    text[at(TextId::NothingToCommit)] = "Keine Änderungen zum Speichern.";
+    text[at(TextId::BoxNameHint)] = "Boxname";
+    text[at(TextId::DefaultBankName)] = "Bank {0}";
+    text[at(TextId::ModeSingle)] = "Einzelauswahl.";
+    text[at(TextId::ModeRow)] = "Reihenauswahl.";
+    text[at(TextId::ModeArea)] = "Bereichsauswahl.";
+    text[at(TextId::MarkArea)] = "Markiere den Bereich und drücke A.";
+    text[at(TextId::SelectionCancelled)] = "Auswahl abgebrochen.";
+    text[at(TextId::NothingToSelect)] = "Hier gibt es nichts auszuwählen.";
+    text[at(TextId::RowPickedUp)] = "Reihe aufgenommen.";
+    text[at(TextId::AreaPickedUp)] = "Bereich aufgenommen.";
+    text[at(TextId::PlacedAll)] = "Abgelegt.";
+    text[at(TextId::PlacedSome)] = "Passendes abgelegt - {0}.";
+    text[at(TextId::PlacedNone)] = "Nichts abgelegt - {0}.";
+    text[at(TextId::PlaceReasonFetching)] = "{0} werden geladen";
+    text[at(TextId::PlaceReasonUnavailable)] = "{0} vom Server nicht verfügbar";
+    text[at(TextId::PlaceReasonOccupied)] = "{0} Platz/Plätze belegt";
+    text[at(TextId::PlaceReasonWrongFormat)] = "{0} passen nicht in diesen Spielstand";
+    text[at(TextId::CommitRunning)] = "Änderungen werden gespeichert...";
+    text[at(TextId::CommitStartFailed)] = "Speichern konnte nicht gestartet werden.";
+    text[at(TextId::CommitSummary)] = "{0} hochgeladen, {1} heruntergeladen, {2} verschoben, {3} entfernt.";
+    text[at(TextId::CommitStoppedTitle)] = "SPEICHERN GESTOPPT";
+    text[at(TextId::CommitAttentionOne)] = "1 POKÉMON PRÜFEN";
+    text[at(TextId::CommitAttentionMany)] = "{0} POKÉMON PRÜFEN";
+    text[at(TextId::YourChanges)] = "Deine Änderungen";
+    text[at(TextId::CommitStopCloudMove)] = "Ein Verschieben in der Cloud ist fehlgeschlagen ({0}). Es wurde gestoppt, bevor dein Spielstand verändert wurde. Nichts ging verloren.";
+    text[at(TextId::CommitStopSave)] = "Dein Spielstand konnte nicht geschrieben werden ({0}), daher wurde nichts verändert. Nichts ging verloren.";
+    text[at(TextId::LocationBox)] = "Box {0} | Platz {1}";
+    text[at(TextId::LocationParty)] = "Team-Platz {0}";
+    text[at(TextId::LocationBank)] = "Bank {0} | Platz {1}";
+    text[at(TextId::IssueDataNotLoaded)] = "Seine Daten waren noch nicht geladen, daher blieb es, wo es war. Versuch es erneut.";
+    text[at(TextId::IssueOriginUnconfirmed)] = "Seine Herkunft ließ sich nicht bestätigen, daher wurde nichts daran geändert.";
+    text[at(TextId::IssueNotInTrash)] = "Es wäre ohne Mülleimer entfernt worden, daher blieb es, wo es war.";
+    text[at(TextId::IssueLinkedToHeldBack)] = "Es hängt an einem Pokémon, das nicht sicher bewegt werden konnte, daher blieb es, wo es war.";
+    text[at(TextId::IssueNoParkingSlot)] = "Es gibt keinen freien Box-Platz zum Zwischenparken, daher blieb es, wo es war.";
+    text[at(TextId::IssueCloudMoveFailed)] = "Die Cloud hat das Verschieben nicht bestätigt ({0}).";
+    text[at(TextId::IssueWriteFailed)] = "Es konnte nicht in diesen Spielstand geschrieben werden, daher wurde nichts daran geändert.";
+    text[at(TextId::IssueRemoveFailed)] = "Es konnte nicht aus diesem Spielstand entfernt werden, daher wurde nichts daran geändert.";
+    text[at(TextId::IssueCloudRefused)] = "Die Cloud hat es abgelehnt: {0} Es blieb in deinem Spielstand.";
+    text[at(TextId::IssueUploadUnconfirmed)] = "Die Verbindung brach beim Hochladen ab. Es blieb in deinem Spielstand; prüfe {0} auf eine zweite Kopie.";
+    text[at(TextId::IssueUploadNotStored)] = "Das Hochladen hat nicht geklappt. Es blieb in deinem Spielstand.";
+    text[at(TextId::IssueCloudSlotDifferent)] = "Im Cloud-Platz liegt ein anderes Pokémon, daher blieb es in deinem Spielstand.";
+    text[at(TextId::IssueUploadUndone)] = "Der letzte Speicherschritt schlug fehl, daher wurde das Hochladen rückgängig gemacht. Es blieb in deinem Spielstand.";
+    text[at(TextId::IssueUploadNotUndone)] = "Der letzte Speicherschritt schlug fehl und die Cloud-Kopie ließ sich nicht entfernen. Es liegt jetzt in deinem Spielstand und in {0}.";
+    text[at(TextId::IssueSwapCancelled)] = "Sein Tauschpartner konnte nicht hochgeladen werden, daher wurde der Tausch abgebrochen und es blieb in der Cloud.";
+    text[at(TextId::IssuePlacedElsewhere)] = "Sein Zielplatz blieb belegt, daher wurde es stattdessen hier abgelegt.";
+    text[at(TextId::IssueReturnedToOrigin)] = "Sein Zielplatz blieb belegt, daher kam es an seinen alten Platz zurück.";
+    text[at(TextId::IssueOverwriteUnconfirmed)] = "Ein Hochladen in seinen Cloud-Platz ließ sich nicht bestätigen, es liegt eventuell noch in der Cloud. Prüfe auf eine zweite Kopie.";
+    text[at(TextId::IssueDownloadNotRemoved)] = "Es wurde in deinem Spiel gespeichert, konnte aber nicht aus der Cloud entfernt werden. Es existiert jetzt doppelt.";
+    text[at(TextId::IssueCloudRemoveFailed)] = "Es konnte nicht aus der Cloud entfernt werden und ist noch dort.";
+    text[at(TextId::PhasePreparing)] = "Vorbereiten...";
+    text[at(TextId::PhaseMovingCloud)] = "Cloud wird sortiert...";
+    text[at(TextId::PhaseSavingLocal)] = "Spielstand wird geschrieben...";
+    text[at(TextId::PhaseUploading)] = "Hochladen...";
+    text[at(TextId::PhaseFinalizing)] = "Spielstand wird abgeschlossen...";
+    text[at(TextId::PhaseRemovingCloud)] = "Cloud wird aufgeräumt...";
+    text[at(TextId::BankLoading)] = "Lädt";
+    text[at(TextId::InfoLevel)] = "Lv.";
+    text[at(TextId::InfoTrainer)] = "OT:";
+    text[at(TextId::InfoNickname)] = "Spitzname:";
+    text[at(TextId::InfoItem)] = "Item:";
+    text[at(TextId::InfoAbility)] = "Fähigkeit:";
+    text[at(TextId::InfoNature)] = "Wesen:";
+    text[at(TextId::InfoLanguage)] = "Sprache:";
+    text[at(TextId::InfoType)] = "Typ";
+    text[at(TextId::InfoOrigin)] = "Herkunft:";
+    text[at(TextId::InfoMove)] = "Attacke:";
+    text[at(TextId::EmptyCloudSlot)] = "Leerer Cloud-Platz";
+    text[at(TextId::EmptyPartySlot)] = "Leerer Team-Platz";
+    text[at(TextId::EmptySlot)] = "Leerer Platz";
+    text[at(TextId::StateFetching)] = "LÄDT";
+    text[at(TextId::StateHolding)] = "HÄLT";
+    text[at(TextId::StateReady)] = "BEREIT";
+    text[at(TextId::StatePending)] = "OFFEN";
+    text[at(TextId::ModeLabelRow)] = "REIHE";
+    text[at(TextId::ModeLabelMulti)] = "MULTI";
+    text[at(TextId::ModeLabelSingle)] = "EINZELN";
+    text[at(TextId::LocalBoxLabel)] = "BOX {0}";
+    text[at(TextId::TeamLabel)] = "TEAM";
+    text[at(TextId::HintDrop)] = "Ablegen";
+    text[at(TextId::HintPick)] = "Nehmen";
+    text[at(TextId::HintReturn)] = "Zurück";
+    text[at(TextId::HintSave)] = "Speichern";
+    text[at(TextId::UnexpectedError)] = "Ein unerwarteter Fehler ist aufgetreten. Details stehen in rebank.log.";
+    text[at(TextId::Ok)] = "OK";
+    text[at(TextId::CartridgeLabel)] = "MODUL";
+    text[at(TextId::DigitalLabel)] = "DIGITAL";
+    text[at(TextId::ChooseTitle)] = "Wähle das Pokémon-Spiel aus";
+    text[at(TextId::Logout)] = "Abmelden";
+    text[at(TextId::StatusWaitingForLoader)] = "Laufende Prüfung wird beendet, danach öffnet das Spiel...";
+    text[at(TextId::InvalidUsernameTitle)] = "UNGÜLTIGER BENUTZERNAME";
+    text[at(TextId::InvalidUsernameMessage)] = "Der Benutzername braucht 3-32 Buchstaben, Ziffern, _ oder -.";
+    text[at(TextId::InvalidEmailTitle)] = "UNGÜLTIGE E-MAIL";
+    text[at(TextId::InvalidEmailMessage)] = "Bitte gib eine gültige E-Mail-Adresse ein.";
+    text[at(TextId::InvalidPasswordTitle)] = "UNGÜLTIGES PASSWORT";
+    text[at(TextId::InvalidPasswordMessage)] = "Das Passwort braucht mindestens 10 Zeichen.";
+    text[at(TextId::AutoLoginToggle)] = "Auto-Login (Y)";
+    text[at(TextId::AutoLoginEnabled)] = "Auto-Login aktiviert.";
+    text[at(TextId::AutoLoginDisabled)] = "Auto-Login deaktiviert.";
+    text[at(TextId::RestoringSession)] = "Sitzung wird wiederhergestellt...";
+    text[at(TextId::Connecting)] = "Verbinde...";
+    text[at(TextId::AuthStartFailed)] = "Die Anmeldung konnte nicht gestartet werden.";
+    text[at(TextId::CheckingForUpdates)] = "Suche nach Updates...";
+    text[at(TextId::UpdateStartFailed)] = "Die Update-Prüfung konnte nicht starten.";
+    text[at(TextId::LoggedOut)] = "Abgemeldet.";
+    text[at(TextId::SignedOutTitle)] = "ABGEMELDET";
+    text[at(TextId::SignedOutMessage)] = "Ein anderes Gerät hat sich mit diesem Konto angemeldet. Bitte melde dich erneut an.";
+    text[at(TextId::LoginFailedTitle)] = "ANMELDUNG FEHLGESCHLAGEN";
+    text[at(TextId::RegistrationFailedTitle)] = "REGISTRIERUNG FEHLGESCHLAGEN";
+    text[at(TextId::ResetFailedTitle)] = "ZURÜCKSETZEN FEHLGESCHLAGEN";
+    text[at(TextId::SessionRestoreFailedTitle)] = "SITZUNG FEHLGESCHLAGEN";
+    text[at(TextId::RequestFailedTitle)] = "ANFRAGE FEHLGESCHLAGEN";
+    text[at(TextId::ServerUnreachable)] = "Der ReBank-Server ist nicht erreichbar. Prüfe deine Verbindung und versuch es erneut.";
+    return text;
+}
 
-constexpr Translation Italian{
-    "I tuoi Pokemon. Una casa sicura.", "Accedi", "Registrati", "Username", "E-mail", "Password",
-    "Password dimenticata?", "Continua", "Indietro", "Crea account", "Reimposta password",
-    "Attendere prego...", "Controllo aggiornamenti...", "Accesso in corso...",
-    "Ricerca salvataggi...", "Caricamento icone...", "Caricamento salvataggio...",
-    "Ricerca Pokemon...", "Caricamento dati banca...", "Inizializzazione...",
-    "Download e verifica sicura delle nuove versioni...",
-    "Verifica server e sessione...", "Verifica cartuccia e giochi installati...",
-    "Lettura icone originali...", "Apertura salvataggio locale...", "Lettura box e Pokemon...",
-    "Connessione alla tua banca...", "Progresso",
-    "Login automatico rilevato...", "Accesso automatico in corso...", "Bentornato, ",
-    "Cestino", "Eliminare questi Pokemon?", "Si", "No",
-    "Ricerca salvataggi...", "Nessun salvataggio compatibile trovato.", "Controllo slot cartuccia...", "Lettura salvataggio...",
-    "Nessun salvataggio compatibile", "Inserisci una cartuccia o crea prima un salvataggio.",
-    "Nessuna cartuccia inserita", "Inserisci una cartuccia di gioco per caricarla qui.",
-    "Allenatore sconosciuto", "N. Allenatore ", "Tempo di gioco: ", "Pokedex: ",
-    "Cartuccia rimossa", "La cartuccia di gioco e stata rimossa. Ritorno alla selezione dei giochi."
-};
+constexpr Translation German = makeGerman();
 
-constexpr Translation Portuguese{
-    "Seus Pokemon. Um lar seguro.", "Entrar", "Registrar", "Usuario", "E-mail", "Senha",
-    "Esqueceu a senha?", "Continuar", "Voltar", "Criar conta", "Redefinir senha",
-    "Por favor aguarde...", "Verificando atualizacoes...", "Entrando...",
-    "Procurando jogos salvos...", "Carregando icones...", "Carregando save...",
-    "Procurando Pokemon...", "Carregando dados do banco...", "Inicializando...",
-    "Baixando e verificando novas versoes com seguranca...",
-    "Verificando servidor e sessao...", "Verificando cartucho e jogos instalados...",
-    "Lendo icones originais...", "Abrindo save local...", "Lendo caixa e Pokemon...",
-    "Conectando ao seu banco...", "Progresso",
-    "Login automatico detectado...", "Entrando automaticamente...", "Bem-vindo de volta, ",
-    "Lixeira", "Excluir estes Pokemon?", "Sim", "Nao",
-    "Procurando jogos salvos...", "Nenhum save compativel encontrado.", "Verificando slot do cartucho...", "Lendo save...",
-    "Nenhum save compativel", "Insira um cartucho ou crie um save primeiro.",
-    "Nenhum cartucho inserido", "Insira um cartucho de jogo para carrega-lo aqui.",
-    "Treinador desconhecido", "N.º Treinador ", "Tempo de jogo: ", "Pokedex: ",
-    "Cartucho removido", "O cartucho do jogo foi removido. Voltando para a selecao de jogos."
-};
+constexpr Translation makeFrench() {
+    Translation text{};
+    text[at(TextId::Tagline)] = "Vos Pokemon. Un espace securise.";
+    text[at(TextId::Login)] = "Connexion";
+    text[at(TextId::Register)] = "Inscription";
+    text[at(TextId::Username)] = "Utilisateur";
+    text[at(TextId::Email)] = "E-mail";
+    text[at(TextId::Password)] = "Mot de passe";
+    text[at(TextId::ForgotPassword)] = "Mot de passe oublie ?";
+    text[at(TextId::Submit)] = "Continuer";
+    text[at(TextId::Back)] = "Retour";
+    text[at(TextId::CreateAccount)] = "Creer un compte";
+    text[at(TextId::ResetPassword)] = "Reinitialiser";
+    text[at(TextId::LoadingWait)] = "Veuillez patienter...";
+    text[at(TextId::LoadingCheckingUpdates)] = "Verification des mises a jour...";
+    text[at(TextId::LoadingSigningIn)] = "Connexion en cours...";
+    text[at(TextId::LoadingSearchingGames)] = "Recherche des sauvegardes...";
+    text[at(TextId::LoadingReadingIcons)] = "Chargement des icones...";
+    text[at(TextId::LoadingReadingSave)] = "Chargement de la sauvegarde...";
+    text[at(TextId::LoadingSearchingPokemon)] = "Recherche de Pokemon...";
+    text[at(TextId::LoadingBankData)] = "Chargement de la banque...";
+    text[at(TextId::LoadingDetailInitializing)] = "Initialisation...";
+    text[at(TextId::LoadingDetailCheckingUpdates)] = "Telechargement et verification securisee des nouvelles versions...";
+    text[at(TextId::LoadingDetailSigningIn)] = "Verification du serveur et de la session...";
+    text[at(TextId::LoadingDetailSearchingGames)] = "Verification de la cartouche et des jeux installes...";
+    text[at(TextId::LoadingDetailReadingIcons)] = "Lecture des icones originales...";
+    text[at(TextId::LoadingDetailReadingSave)] = "Ouverture de la sauvegarde locale...";
+    text[at(TextId::LoadingDetailSearchingPokemon)] = "Lecture de la boite et des Pokemon...";
+    text[at(TextId::LoadingDetailLoadingBank)] = "Connexion a votre banque...";
+    text[at(TextId::LoadingProgressLabel)] = "Progression";
+    text[at(TextId::LoadingAutoLoginDetected)] = "Connexion automatique detectee...";
+    text[at(TextId::LoadingDetailAutoLoginDetected)] = "Connexion automatique en cours...";
+    text[at(TextId::LoadingWelcomeBackPrefix)] = "Content de te revoir, ";
+    text[at(TextId::TrashCan)] = "Corbeille";
+    text[at(TextId::TrashConfirmMessage)] = "Supprimer ces Pokemon ?";
+    text[at(TextId::Yes)] = "Oui";
+    text[at(TextId::No)] = "Non";
+    text[at(TextId::StatusFindingSaveGames)] = "Recherche des sauvegardes...";
+    text[at(TextId::StatusNoCompatibleSaveGame)] = "Aucune sauvegarde compatible trouvee.";
+    text[at(TextId::StatusCheckingCartridgeSlot)] = "Verification du lecteur de cartouche...";
+    text[at(TextId::StatusReadingSave)] = "Lecture de la sauvegarde...";
+    text[at(TextId::NoCompatibleSaveGameTitle)] = "Aucune sauvegarde compatible";
+    text[at(TextId::InsertCartridgeOrCreateSave)] = "Insere une cartouche ou cree d'abord une sauvegarde.";
+    text[at(TextId::NoCartridgeInserted)] = "Aucune cartouche inseree";
+    text[at(TextId::InsertCartridgeToLoad)] = "Insere une cartouche de jeu pour la charger ici.";
+    text[at(TextId::UnknownTrainer)] = "Dresseur inconnu";
+    text[at(TextId::IdNoPrefix)] = "N Dresseur ";
+    text[at(TextId::PlayTimePrefix)] = "Temps de jeu : ";
+    text[at(TextId::PokedexPrefix)] = "Pokedex : ";
+    text[at(TextId::CartridgeRemovedTitle)] = "Cartouche retiree";
+    text[at(TextId::CartridgeRemovedMessage)] = "La cartouche de jeu a ete retiree. Retour a la selection des jeux.";
+    return text;
+}
+
+constexpr Translation French = makeFrench();
+
+constexpr Translation makeSpanish() {
+    Translation text{};
+    text[at(TextId::Tagline)] = "Tus Pokemon. Un hogar seguro.";
+    text[at(TextId::Login)] = "Iniciar sesion";
+    text[at(TextId::Register)] = "Registrarse";
+    text[at(TextId::Username)] = "Usuario";
+    text[at(TextId::Email)] = "Correo";
+    text[at(TextId::Password)] = "Contrasena";
+    text[at(TextId::ForgotPassword)] = "Olvidaste la contrasena?";
+    text[at(TextId::Submit)] = "Continuar";
+    text[at(TextId::Back)] = "Volver";
+    text[at(TextId::CreateAccount)] = "Crear cuenta";
+    text[at(TextId::ResetPassword)] = "Restablecer";
+    text[at(TextId::LoadingWait)] = "Por favor espera...";
+    text[at(TextId::LoadingCheckingUpdates)] = "Buscando actualizaciones...";
+    text[at(TextId::LoadingSigningIn)] = "Iniciando sesion...";
+    text[at(TextId::LoadingSearchingGames)] = "Buscando partidas guardadas...";
+    text[at(TextId::LoadingReadingIcons)] = "Cargando iconos...";
+    text[at(TextId::LoadingReadingSave)] = "Cargando partida...";
+    text[at(TextId::LoadingSearchingPokemon)] = "Buscando Pokemon...";
+    text[at(TextId::LoadingBankData)] = "Cargando datos del banco...";
+    text[at(TextId::LoadingDetailInitializing)] = "Inicializando...";
+    text[at(TextId::LoadingDetailCheckingUpdates)] = "Descargando y verificando nuevas versiones de forma segura...";
+    text[at(TextId::LoadingDetailSigningIn)] = "Verificando servidor y sesion...";
+    text[at(TextId::LoadingDetailSearchingGames)] = "Verificando cartucho y juegos instalados...";
+    text[at(TextId::LoadingDetailReadingIcons)] = "Leyendo iconos originales...";
+    text[at(TextId::LoadingDetailReadingSave)] = "Abriendo partida local...";
+    text[at(TextId::LoadingDetailSearchingPokemon)] = "Leyendo caja y Pokemon...";
+    text[at(TextId::LoadingDetailLoadingBank)] = "Conectando con tu banco...";
+    text[at(TextId::LoadingProgressLabel)] = "Progreso";
+    text[at(TextId::LoadingAutoLoginDetected)] = "Inicio de sesion automatico detectado...";
+    text[at(TextId::LoadingDetailAutoLoginDetected)] = "Iniciando sesion automaticamente...";
+    text[at(TextId::LoadingWelcomeBackPrefix)] = "Bienvenido de nuevo, ";
+    text[at(TextId::TrashCan)] = "Papelera";
+    text[at(TextId::TrashConfirmMessage)] = "Eliminar estos Pokemon?";
+    text[at(TextId::Yes)] = "Si";
+    text[at(TextId::No)] = "No";
+    text[at(TextId::StatusFindingSaveGames)] = "Buscando partidas guardadas...";
+    text[at(TextId::StatusNoCompatibleSaveGame)] = "No se encontro ninguna partida compatible.";
+    text[at(TextId::StatusCheckingCartridgeSlot)] = "Verificando ranura del cartucho...";
+    text[at(TextId::StatusReadingSave)] = "Leyendo partida...";
+    text[at(TextId::NoCompatibleSaveGameTitle)] = "Ninguna partida compatible";
+    text[at(TextId::InsertCartridgeOrCreateSave)] = "Inserta un cartucho o crea primero una partida.";
+    text[at(TextId::NoCartridgeInserted)] = "Ningun cartucho insertado";
+    text[at(TextId::InsertCartridgeToLoad)] = "Inserta un cartucho de juego para cargarlo aqui.";
+    text[at(TextId::UnknownTrainer)] = "Entrenador desconocido";
+    text[at(TextId::IdNoPrefix)] = "N.º entrenador ";
+    text[at(TextId::PlayTimePrefix)] = "Tiempo de juego: ";
+    text[at(TextId::PokedexPrefix)] = "Pokedex: ";
+    text[at(TextId::CartridgeRemovedTitle)] = "Cartucho retirado";
+    text[at(TextId::CartridgeRemovedMessage)] = "Se retiro el cartucho del juego. Volviendo a la seleccion de juegos.";
+    return text;
+}
+
+constexpr Translation Spanish = makeSpanish();
+
+constexpr Translation makeItalian() {
+    Translation text{};
+    text[at(TextId::Tagline)] = "I tuoi Pokemon. Una casa sicura.";
+    text[at(TextId::Login)] = "Accedi";
+    text[at(TextId::Register)] = "Registrati";
+    text[at(TextId::Username)] = "Username";
+    text[at(TextId::Email)] = "E-mail";
+    text[at(TextId::Password)] = "Password";
+    text[at(TextId::ForgotPassword)] = "Password dimenticata?";
+    text[at(TextId::Submit)] = "Continua";
+    text[at(TextId::Back)] = "Indietro";
+    text[at(TextId::CreateAccount)] = "Crea account";
+    text[at(TextId::ResetPassword)] = "Reimposta password";
+    text[at(TextId::LoadingWait)] = "Attendere prego...";
+    text[at(TextId::LoadingCheckingUpdates)] = "Controllo aggiornamenti...";
+    text[at(TextId::LoadingSigningIn)] = "Accesso in corso...";
+    text[at(TextId::LoadingSearchingGames)] = "Ricerca salvataggi...";
+    text[at(TextId::LoadingReadingIcons)] = "Caricamento icone...";
+    text[at(TextId::LoadingReadingSave)] = "Caricamento salvataggio...";
+    text[at(TextId::LoadingSearchingPokemon)] = "Ricerca Pokemon...";
+    text[at(TextId::LoadingBankData)] = "Caricamento dati banca...";
+    text[at(TextId::LoadingDetailInitializing)] = "Inizializzazione...";
+    text[at(TextId::LoadingDetailCheckingUpdates)] = "Download e verifica sicura delle nuove versioni...";
+    text[at(TextId::LoadingDetailSigningIn)] = "Verifica server e sessione...";
+    text[at(TextId::LoadingDetailSearchingGames)] = "Verifica cartuccia e giochi installati...";
+    text[at(TextId::LoadingDetailReadingIcons)] = "Lettura icone originali...";
+    text[at(TextId::LoadingDetailReadingSave)] = "Apertura salvataggio locale...";
+    text[at(TextId::LoadingDetailSearchingPokemon)] = "Lettura box e Pokemon...";
+    text[at(TextId::LoadingDetailLoadingBank)] = "Connessione alla tua banca...";
+    text[at(TextId::LoadingProgressLabel)] = "Progresso";
+    text[at(TextId::LoadingAutoLoginDetected)] = "Login automatico rilevato...";
+    text[at(TextId::LoadingDetailAutoLoginDetected)] = "Accesso automatico in corso...";
+    text[at(TextId::LoadingWelcomeBackPrefix)] = "Bentornato, ";
+    text[at(TextId::TrashCan)] = "Cestino";
+    text[at(TextId::TrashConfirmMessage)] = "Eliminare questi Pokemon?";
+    text[at(TextId::Yes)] = "Si";
+    text[at(TextId::No)] = "No";
+    text[at(TextId::StatusFindingSaveGames)] = "Ricerca salvataggi...";
+    text[at(TextId::StatusNoCompatibleSaveGame)] = "Nessun salvataggio compatibile trovato.";
+    text[at(TextId::StatusCheckingCartridgeSlot)] = "Controllo slot cartuccia...";
+    text[at(TextId::StatusReadingSave)] = "Lettura salvataggio...";
+    text[at(TextId::NoCompatibleSaveGameTitle)] = "Nessun salvataggio compatibile";
+    text[at(TextId::InsertCartridgeOrCreateSave)] = "Inserisci una cartuccia o crea prima un salvataggio.";
+    text[at(TextId::NoCartridgeInserted)] = "Nessuna cartuccia inserita";
+    text[at(TextId::InsertCartridgeToLoad)] = "Inserisci una cartuccia di gioco per caricarla qui.";
+    text[at(TextId::UnknownTrainer)] = "Allenatore sconosciuto";
+    text[at(TextId::IdNoPrefix)] = "N. Allenatore ";
+    text[at(TextId::PlayTimePrefix)] = "Tempo di gioco: ";
+    text[at(TextId::PokedexPrefix)] = "Pokedex: ";
+    text[at(TextId::CartridgeRemovedTitle)] = "Cartuccia rimossa";
+    text[at(TextId::CartridgeRemovedMessage)] = "La cartuccia di gioco e stata rimossa. Ritorno alla selezione dei giochi.";
+    return text;
+}
+
+constexpr Translation Italian = makeItalian();
+
+constexpr Translation makePortuguese() {
+    Translation text{};
+    text[at(TextId::Tagline)] = "Seus Pokemon. Um lar seguro.";
+    text[at(TextId::Login)] = "Entrar";
+    text[at(TextId::Register)] = "Registrar";
+    text[at(TextId::Username)] = "Usuario";
+    text[at(TextId::Email)] = "E-mail";
+    text[at(TextId::Password)] = "Senha";
+    text[at(TextId::ForgotPassword)] = "Esqueceu a senha?";
+    text[at(TextId::Submit)] = "Continuar";
+    text[at(TextId::Back)] = "Voltar";
+    text[at(TextId::CreateAccount)] = "Criar conta";
+    text[at(TextId::ResetPassword)] = "Redefinir senha";
+    text[at(TextId::LoadingWait)] = "Por favor aguarde...";
+    text[at(TextId::LoadingCheckingUpdates)] = "Verificando atualizacoes...";
+    text[at(TextId::LoadingSigningIn)] = "Entrando...";
+    text[at(TextId::LoadingSearchingGames)] = "Procurando jogos salvos...";
+    text[at(TextId::LoadingReadingIcons)] = "Carregando icones...";
+    text[at(TextId::LoadingReadingSave)] = "Carregando save...";
+    text[at(TextId::LoadingSearchingPokemon)] = "Procurando Pokemon...";
+    text[at(TextId::LoadingBankData)] = "Carregando dados do banco...";
+    text[at(TextId::LoadingDetailInitializing)] = "Inicializando...";
+    text[at(TextId::LoadingDetailCheckingUpdates)] = "Baixando e verificando novas versoes com seguranca...";
+    text[at(TextId::LoadingDetailSigningIn)] = "Verificando servidor e sessao...";
+    text[at(TextId::LoadingDetailSearchingGames)] = "Verificando cartucho e jogos instalados...";
+    text[at(TextId::LoadingDetailReadingIcons)] = "Lendo icones originais...";
+    text[at(TextId::LoadingDetailReadingSave)] = "Abrindo save local...";
+    text[at(TextId::LoadingDetailSearchingPokemon)] = "Lendo caixa e Pokemon...";
+    text[at(TextId::LoadingDetailLoadingBank)] = "Conectando ao seu banco...";
+    text[at(TextId::LoadingProgressLabel)] = "Progresso";
+    text[at(TextId::LoadingAutoLoginDetected)] = "Login automatico detectado...";
+    text[at(TextId::LoadingDetailAutoLoginDetected)] = "Entrando automaticamente...";
+    text[at(TextId::LoadingWelcomeBackPrefix)] = "Bem-vindo de volta, ";
+    text[at(TextId::TrashCan)] = "Lixeira";
+    text[at(TextId::TrashConfirmMessage)] = "Excluir estes Pokemon?";
+    text[at(TextId::Yes)] = "Sim";
+    text[at(TextId::No)] = "Nao";
+    text[at(TextId::StatusFindingSaveGames)] = "Procurando jogos salvos...";
+    text[at(TextId::StatusNoCompatibleSaveGame)] = "Nenhum save compativel encontrado.";
+    text[at(TextId::StatusCheckingCartridgeSlot)] = "Verificando slot do cartucho...";
+    text[at(TextId::StatusReadingSave)] = "Lendo save...";
+    text[at(TextId::NoCompatibleSaveGameTitle)] = "Nenhum save compativel";
+    text[at(TextId::InsertCartridgeOrCreateSave)] = "Insira um cartucho ou crie um save primeiro.";
+    text[at(TextId::NoCartridgeInserted)] = "Nenhum cartucho inserido";
+    text[at(TextId::InsertCartridgeToLoad)] = "Insira um cartucho de jogo para carrega-lo aqui.";
+    text[at(TextId::UnknownTrainer)] = "Treinador desconhecido";
+    text[at(TextId::IdNoPrefix)] = "N.º Treinador ";
+    text[at(TextId::PlayTimePrefix)] = "Tempo de jogo: ";
+    text[at(TextId::PokedexPrefix)] = "Pokedex: ";
+    text[at(TextId::CartridgeRemovedTitle)] = "Cartucho removido";
+    text[at(TextId::CartridgeRemovedMessage)] = "O cartucho do jogo foi removido. Voltando para a selecao de jogos.";
+    return text;
+}
+
+constexpr Translation Portuguese = makePortuguese();
+
+constexpr bool complete(const Translation& translation) {
+    for (const std::string_view text : translation) {
+        if (text.empty()) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static_assert(complete(English), "every TextId needs an English text");
 }
 
 Localization::Localization() : translation_(&English) {
@@ -144,5 +655,26 @@ Localization::Localization() : translation_(&English) {
 }
 
 std::string_view Localization::get(TextId id) const {
-    return (*translation_)[static_cast<std::size_t>(id)];
+    const std::string_view text = (*translation_)[at(id)];
+    return text.empty() ? English[at(id)] : text;
+}
+
+std::string Localization::format(TextId id, std::initializer_list<std::string_view> arguments) const {
+    const std::string_view pattern = get(id);
+    std::string text;
+    text.reserve(pattern.size() + 16);
+    for (std::size_t index = 0; index < pattern.size(); ++index) {
+        const bool placeholder = pattern[index] == '{' && index + 2 < pattern.size()
+            && pattern[index + 1] >= '0' && pattern[index + 1] <= '9' && pattern[index + 2] == '}';
+        if (!placeholder) {
+            text.push_back(pattern[index]);
+            continue;
+        }
+        const auto argument = static_cast<std::size_t>(pattern[index + 1] - '0');
+        if (argument < arguments.size()) {
+            text.append(*(arguments.begin() + argument));
+        }
+        index += 2;
+    }
+    return text;
 }
