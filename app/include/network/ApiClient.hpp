@@ -56,6 +56,24 @@ struct UploadResult {
     std::vector<UploadRejection> rejected;
 };
 
+enum class ClaimState : std::uint8_t {
+    Claimed,
+    Changed,
+    Locked,
+    Empty
+};
+
+struct ClaimRequest {
+    CloudSlot slot;
+    std::vector<std::uint8_t> payload;
+};
+
+struct ClaimResult {
+    RequestOutcome outcome = RequestOutcome::Unknown;
+    std::string message;
+    std::vector<ClaimState> states;
+};
+
 struct MoveResult {
     RequestOutcome outcome = RequestOutcome::Unknown;
     std::string message;
@@ -136,6 +154,7 @@ public:
     DeleteResult deleteCloudPokemon(CloudSlot slot, const std::string& accessToken);
     DeleteResult deleteCloudPokemonBatch(const std::vector<CloudSlot>& slots, const std::string& accessToken);
     MoveResult moveCloudPokemon(CloudSlot from, CloudSlot to, const std::string& accessToken);
+    ClaimResult claimCloudPokemon(const std::vector<ClaimRequest>& requests, const std::string& accessToken);
     BoxListResult listCloudBox(std::uint16_t boxPosition, const std::string& accessToken);
     RenameBoxResult renameBox(std::uint16_t boxPosition, const std::string& name, const std::string& accessToken);
     BoxNamesResult listBoxNames(const std::string& accessToken);

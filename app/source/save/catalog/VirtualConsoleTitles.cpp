@@ -2,6 +2,7 @@
 
 #include "core/AppPaths.hpp"
 #include "core/FsGuard.hpp"
+#include "io/SaveMedium.hpp"
 
 #include <3ds.h>
 
@@ -137,15 +138,22 @@ void resetInstalledCache() {
 }
 
 std::optional<std::uint64_t> resolveInstalledTitleId(std::string_view code) {
+    std::vector<std::uint64_t> candidates;
+    if (const auto configured = configuredTitleId(code); configured && isInstalled(*configured)) {
+        candidates.push_back(*configured);
+    }
     for (const KnownTitle& title : KnownTitles) {
         if (title.code == code && isInstalled(title.titleId)) {
-            return title.titleId;
+            candidates.push_back(title.titleId);
         }
     }
-    if (const auto configured = configuredTitleId(code); configured && isInstalled(*configured)) {
-        return configured;
+    if (candidates.empty()) {
+        return std::nullopt;
     }
-    return std::nullopt;
+    const auto withSave = std::find_if(candidates.begin(), candidates.end(), [](std::uint64_t titleId) {
+        return SaveMedium::archiveHasSave(titleId, MEDIATYPE_SD);
+    });
+    return withSave != candidates.end() ? *withSave : candidates.front();
 }
 
 }

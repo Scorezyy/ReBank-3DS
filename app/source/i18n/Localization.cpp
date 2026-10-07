@@ -123,6 +123,8 @@ constexpr Translation makeEnglish() {
     text[at(TextId::IssueUploadUnconfirmed)] = "The connection dropped during the upload. It stayed in your save; check {0} for a second copy.";
     text[at(TextId::IssueUploadNotStored)] = "The upload did not go through. It stayed in your save.";
     text[at(TextId::IssueCloudSlotDifferent)] = "The cloud slot holds a different Pokemon, so it stayed in your save.";
+    text[at(TextId::IssueCloudSlotTrading)] = "This Pokemon is offered in a trade right now, so it stayed in the cloud.";
+    text[at(TextId::IssueCloudClaimFailed)] = "The cloud could not confirm this Pokemon, so nothing was moved.";
     text[at(TextId::IssueUploadUndone)] = "The final save step failed, so its upload was undone. It stayed in your save.";
     text[at(TextId::IssueUploadNotUndone)] = "The final save step failed and its cloud copy could not be removed. It is now in your save and in {0}.";
     text[at(TextId::IssueSwapCancelled)] = "Its swap partner could not be uploaded, so the swap was cancelled and it stayed in the cloud.";
@@ -315,6 +317,8 @@ constexpr Translation makeGerman() {
     text[at(TextId::IssueUploadUnconfirmed)] = "Die Verbindung brach beim Hochladen ab. Es blieb in deinem Spielstand; prüfe {0} auf eine zweite Kopie.";
     text[at(TextId::IssueUploadNotStored)] = "Das Hochladen hat nicht geklappt. Es blieb in deinem Spielstand.";
     text[at(TextId::IssueCloudSlotDifferent)] = "Im Cloud-Platz liegt ein anderes Pokémon, daher blieb es in deinem Spielstand.";
+    text[at(TextId::IssueCloudSlotTrading)] = "Dieses Pokémon wird gerade zum Tausch angeboten und blieb deshalb in der Cloud.";
+    text[at(TextId::IssueCloudClaimFailed)] = "Die Cloud konnte dieses Pokémon nicht bestätigen, daher wurde nichts verschoben.";
     text[at(TextId::IssueUploadUndone)] = "Der letzte Speicherschritt schlug fehl, daher wurde das Hochladen rückgängig gemacht. Es blieb in deinem Spielstand.";
     text[at(TextId::IssueUploadNotUndone)] = "Der letzte Speicherschritt schlug fehl und die Cloud-Kopie ließ sich nicht entfernen. Es liegt jetzt in deinem Spielstand und in {0}.";
     text[at(TextId::IssueSwapCancelled)] = "Sein Tauschpartner konnte nicht hochgeladen werden, daher wurde der Tausch abgebrochen und es blieb in der Cloud.";

@@ -34,6 +34,23 @@ struct UploadBatchResult {
     std::vector<CloudRejection> rejected;
 };
 
+enum class CloudClaim : std::uint8_t {
+    Claimed,
+    Changed,
+    Locked
+};
+
+struct ClaimBatchResult {
+    RemoteOutcome outcome = RemoteOutcome::Unknown;
+    std::string message;
+    std::vector<CloudClaim> claims;
+};
+
+struct ClaimItem {
+    SlotRef slot;
+    PokemonPayload payload;
+};
+
 struct UploadItem {
     SlotRef destination;
     PokemonSummary summary;
@@ -48,6 +65,7 @@ public:
     virtual UploadBatchResult uploadBatch(const std::vector<UploadItem>& items) = 0;
     virtual std::optional<std::array<PokemonPayload, BoxSlotCount>> readCloudBox(std::uint16_t boxKey) = 0;
     virtual RemoteResult deleteCloud(const std::vector<SlotRef>& slots) = 0;
+    virtual ClaimBatchResult claimCloud(const std::vector<ClaimItem>& items) = 0;
     virtual bool writeLocal(const SlotRef& slot, const PokemonPayload& payload) = 0;
     virtual bool clearLocal(const SlotRef& slot) = 0;
     virtual bool persistLocal(std::string& error, bool finalWrite) = 0;
@@ -85,6 +103,7 @@ private:
     };
 
     bool runCloudMoves();
+    void claimCloudSources();
     LayoutOutcome applyLayout(const LocalLayout& target, bool finalWrite);
     LocalLayout firstSaveTarget() const;
     bool runFirstSave();

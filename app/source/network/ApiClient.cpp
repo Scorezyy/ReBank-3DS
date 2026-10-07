@@ -3,6 +3,7 @@
 #include "BuildConfig.hpp"
 #include "core/Base64.hpp"
 #include "core/Hex.hpp"
+#include "core/Hmac.hpp"
 #include "core/Logger.hpp"
 #include "core/RequestSigning.hpp"
 #include "core/ServerConfig.hpp"
@@ -243,7 +244,9 @@ std::optional<std::size_t> parseBoxEntry(json_t* entry, PokemonSummary& summary,
     summary.gameCode = Json::string(entry, "gameCode");
     summary.format = Json::integer<std::uint8_t>(entry, "format", 0);
     summary.shiny = Json::flag(entry, "shiny");
-    summary.heldItem = Json::integer<std::uint16_t>(entry, "heldItem", 0);
+    summary.heldItem = PokemonTransfer::generationFromFormat(summary.format) == pksm::Generation::ONE
+        ? std::uint16_t{0}
+        : Json::integer<std::uint16_t>(entry, "heldItem", 0);
     payload = Base64::decode(Json::string(entry, "payloadBase64"));
     enrichFromPayload(summary, payload);
     return static_cast<std::size_t>(slot - 1);
@@ -427,6 +430,46 @@ DeleteResult ApiClient::deleteCloudPokemonBatch(const std::vector<CloudSlot>& sl
     Json::Document body = Json::Document::object();
     body.set("slots", entries);
     return deleteResult(request(Method::Post, "/v1/pokemon/delete", body.dump(), accessToken), true);
+}
+
+ClaimResult ApiClient::claimCloudPokemon(const std::vector<ClaimRequest>& requests, const std::string& accessToken) {
+    if (accessToken.empty()) {
+        return {RequestOutcome::Refused, NotSignedIn, {}};
+    }
+    if (requests.empty()) {
+        return {RequestOutcome::Succeeded, "Nothing to claim.", {}};
+    }
+    json_t* entries = json_array();
+    for (const ClaimRequest& claim : requests) {
+        json_t* entry = slotJson(claim.slot);
+        const std::string digest = Hex::encode(Hmac::sha256(claim.payload));
+        json_object_set_new(entry, "sha256", json_string(digest.c_str()));
+        json_array_append_new(entries, entry);
+    }
+    Json::Document body = Json::Document::object();
+    body.set("slots", entries);
+
+    const HttpResult response = request(Method::Post, "/v1/pokemon/claim", body.dump(), accessToken);
+    if (!response.success) {
+        return {response.failureOutcome(), response.message, {}};
+    }
+    const Envelope envelope = parseEnvelope(response.status, response.body, "Claim rejected.");
+    if (!envelope.ok()) {
+        return {refusalOutcome(response.status, envelope.document), envelope.error, {}};
+    }
+    json_t* slots = envelope.document.field("slots");
+    if (json_array_size(slots) != requests.size()) {
+        return {RequestOutcome::Unknown, InvalidResponse, {}};
+    }
+    ClaimResult result{RequestOutcome::Succeeded, "Claimed.", {}};
+    for (std::size_t index = 0; index < requests.size(); ++index) {
+        const std::string status = Json::string(json_array_get(slots, index), "status");
+        result.states.push_back(status == "claimed" ? ClaimState::Claimed
+                                : status == "locked" ? ClaimState::Locked
+                                : status == "empty"  ? ClaimState::Empty
+                                                     : ClaimState::Changed);
+    }
+    return result;
 }
 
 MoveResult ApiClient::moveCloudPokemon(CloudSlot from, CloudSlot to, const std::string& accessToken) {

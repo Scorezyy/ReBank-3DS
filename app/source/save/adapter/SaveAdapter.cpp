@@ -8,6 +8,7 @@
 #include <3ds.h>
 #include <pkx/PKX.hpp>
 #include <sav/Sav.hpp>
+#include <sav/Sav1.hpp>
 #include <sav/SavDP.hpp>
 #include <sav/SavPT.hpp>
 #include <sav/SavHGSS.hpp>
@@ -165,6 +166,9 @@ bool SaveAdapter::parseSave(const GameDescriptor& game, const std::shared_ptr<st
             } else if (game.code == "black2" || game.code == "white2") {
                 save_ = std::make_unique<pksm::SavB2W2>(data);
             }
+        }
+        if (!save_ && game.format == PokemonFormat::Generation1 && (size == 0x8000 || size == 0x8010)) {
+            save_ = std::make_unique<pksm::Sav1>(data, static_cast<std::uint32_t>(size));
         }
         if (!save_) {
             save_ = pksm::Sav::getSave(data, size);

@@ -29,6 +29,8 @@ TextId issueText(IssueReason reason) {
         case IssueReason::OverwriteUnconfirmed: return TextId::IssueOverwriteUnconfirmed;
         case IssueReason::DownloadNotRemoved: return TextId::IssueDownloadNotRemoved;
         case IssueReason::CloudRemoveFailed: return TextId::IssueCloudRemoveFailed;
+        case IssueReason::CloudSlotTrading: return TextId::IssueCloudSlotTrading;
+        case IssueReason::CloudClaimFailed: return TextId::IssueCloudClaimFailed;
     }
     return TextId::IssueLinkedToHeldBack;
 }

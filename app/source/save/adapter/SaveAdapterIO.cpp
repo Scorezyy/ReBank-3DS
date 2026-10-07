@@ -22,7 +22,7 @@ PokemonSummary summarize(const pksm::PKX& pkm, const std::string& gameCode, std:
         pkm.alternativeForm(),
         pkm.level(),
         pkm.shiny(),
-        pkm.heldItem(),
+        pkm.generation() == pksm::Generation::ONE ? std::uint16_t{0} : pkm.heldItem(),
         pkm.nickname(),
         pkm.otName(),
         gameCode,

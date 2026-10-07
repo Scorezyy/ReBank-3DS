@@ -64,7 +64,9 @@ enum class IssueReason : std::uint8_t {
     ReturnedToOrigin,
     OverwriteUnconfirmed,
     DownloadNotRemoved,
-    CloudRemoveFailed
+    CloudRemoveFailed,
+    CloudSlotTrading,
+    CloudClaimFailed
 };
 
 const char* describeReason(IssueReason reason);

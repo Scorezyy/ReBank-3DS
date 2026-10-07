@@ -411,6 +411,8 @@ const char* describeReason(IssueReason reason) {
         case IssueReason::UploadUnconfirmed: return "upload outcome unknown; it stayed in the save, check the cloud for a copy";
         case IssueReason::UploadNotStored: return "the upload did not go through; it stayed in the save";
         case IssueReason::CloudSlotDifferent: return "the cloud slot holds a different Pokemon; it stayed in the save";
+        case IssueReason::CloudSlotTrading: return "the cloud Pokemon is offered in a trade; it stayed in the cloud";
+        case IssueReason::CloudClaimFailed: return "the cloud could not confirm the Pokemon; nothing was moved";
         case IssueReason::UploadUndone: return "final save failed; upload undone, it stayed in the save";
         case IssueReason::UploadNotUndone: return "final save failed and the cloud copy could not be removed; it exists twice";
         case IssueReason::SwapCancelled: return "swap partner could not be uploaded; swap cancelled";

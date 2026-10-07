@@ -4,7 +4,7 @@
 #include <string_view>
 
 namespace BuildConfig {
-inline constexpr std::string_view Version = "0.2.8";
+inline constexpr std::string_view Version = "0.2.9";
 inline constexpr std::string_view Channel = "BETA";
 inline constexpr std::string_view Author = "Jxstn";
 #ifdef REBANK_UPDATE_KEY_MODULUS
