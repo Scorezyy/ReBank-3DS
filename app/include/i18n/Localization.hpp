@@ -123,6 +123,8 @@ enum class TextId : std::size_t {
     IssueUploadUnconfirmed,
     IssueUploadNotStored,
     IssueCloudSlotDifferent,
+    IssueCloudSlotTrading,
+    IssueCloudClaimFailed,
     IssueUploadUndone,
     IssueUploadNotUndone,
     IssueSwapCancelled,

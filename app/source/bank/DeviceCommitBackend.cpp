@@ -75,6 +75,22 @@ RemoteResult DeviceCommitBackend::deleteCloud(const std::vector<SlotRef>& slots)
     return {RemoteOutcome::Done, "Deleted."};
 }
 
+ClaimBatchResult DeviceCommitBackend::claimCloud(const std::vector<ClaimItem>& items) {
+    std::vector<ClaimRequest> requests;
+    requests.reserve(items.size());
+    for (const ClaimItem& item : items) {
+        requests.push_back({cloudSlot(item.slot), item.payload.data});
+    }
+    const ClaimResult claimed = api_.claimCloudPokemon(requests, accessToken_);
+    ClaimBatchResult result{toRemote(claimed.outcome), claimed.message, {}};
+    for (const ClaimState state : claimed.states) {
+        result.claims.push_back(state == ClaimState::Claimed ? CloudClaim::Claimed
+                                : state == ClaimState::Locked ? CloudClaim::Locked
+                                                              : CloudClaim::Changed);
+    }
+    return result;
+}
+
 bool DeviceCommitBackend::writeLocal(const SlotRef& slot, const PokemonPayload& payload) {
     return slot.kind == SlotKind::Party ? save_.writePartyPokemon(slot.slot, payload)
                                         : save_.writePokemon(slot.box, slot.slot, payload);

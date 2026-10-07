@@ -64,7 +64,11 @@ CommitResult CommitExecutor::run() {
         result_.success = result_.issues.empty();
         return result_;
     }
-    if (!runCloudMoves() || !runFirstSave()) {
+    if (!runCloudMoves()) {
+        return result_;
+    }
+    claimCloudSources();
+    if (!runFirstSave()) {
         return result_;
     }
     runUploads();
@@ -134,6 +138,44 @@ CommitExecutor::LayoutOutcome CommitExecutor::applyLayout(const LocalLayout& tar
         current_[slot] = occupant;
     }
     return {true, std::nullopt, false};
+}
+
+void CommitExecutor::claimCloudSources() {
+    std::vector<std::size_t> sources;
+    std::vector<ClaimItem> items;
+    for (std::size_t index = 0; index < plan_.transfers.size(); ++index) {
+        const PlannedTransfer& transfer = plan_.transfers[index];
+        const bool leavesCloud = transfer.kind == TransferKind::Download || transfer.kind == TransferKind::CloudDelete;
+        if (!leavesCloud || !active(index) || !transfer.cloudSlotAfterMoves) {
+            continue;
+        }
+        sources.push_back(index);
+        items.push_back({*transfer.cloudSlotAfterMoves, transfer.payload});
+    }
+    for (std::size_t start = 0; start < sources.size(); start += BatchSize) {
+        const std::size_t end = std::min(sources.size(), start + BatchSize);
+        const ClaimBatchResult claimed = backend_.claimCloud(
+            std::vector<ClaimItem>(items.begin() + static_cast<std::ptrdiff_t>(start),
+                                   items.begin() + static_cast<std::ptrdiff_t>(end)));
+        for (std::size_t offset = 0; start + offset < end; ++offset) {
+            const std::size_t index = sources[start + offset];
+            if (!active(index)) {
+                continue;
+            }
+            if (claimed.outcome != RemoteOutcome::Done || offset >= claimed.claims.size()) {
+                dropGroup(index, IssueReason::CloudClaimFailed);
+                continue;
+            }
+            if (claimed.claims[offset] == CloudClaim::Locked) {
+                dropGroup(index, IssueReason::CloudSlotTrading);
+            } else if (claimed.claims[offset] == CloudClaim::Changed) {
+                dropGroup(index, IssueReason::CloudSlotDifferent);
+            }
+        }
+        if (claimed.outcome != RemoteOutcome::Done) {
+            backend_.log("commit: cloud claim failed: " + claimed.message);
+        }
+    }
 }
 
 LocalLayout CommitExecutor::firstSaveTarget() const {

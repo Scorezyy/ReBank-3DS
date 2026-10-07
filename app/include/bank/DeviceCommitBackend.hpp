@@ -16,6 +16,7 @@ public:
     UploadBatchResult uploadBatch(const std::vector<UploadItem>& items) override;
     std::optional<std::array<PokemonPayload, BoxSlotCount>> readCloudBox(std::uint16_t boxKey) override;
     RemoteResult deleteCloud(const std::vector<SlotRef>& slots) override;
+    ClaimBatchResult claimCloud(const std::vector<ClaimItem>& items) override;
     bool writeLocal(const SlotRef& slot, const PokemonPayload& payload) override;
     bool clearLocal(const SlotRef& slot) override;
     bool persistLocal(std::string& error, bool finalWrite) override;
