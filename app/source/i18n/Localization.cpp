@@ -23,6 +23,7 @@ constexpr Translation makeEnglish() {
     text[at(TextId::LoadingWait)] = "Please wait...";
     text[at(TextId::LoadingCheckingUpdates)] = "Checking updates...";
     text[at(TextId::LoadingSigningIn)] = "Signing in...";
+    text[at(TextId::LoadingScanningLibrary)] = "Scanning game library...";
     text[at(TextId::LoadingSearchingGames)] = "Searching save files...";
     text[at(TextId::LoadingReadingIcons)] = "Loading game icons...";
     text[at(TextId::LoadingReadingSave)] = "Loading save file...";
@@ -31,6 +32,7 @@ constexpr Translation makeEnglish() {
     text[at(TextId::LoadingDetailInitializing)] = "Initializing...";
     text[at(TextId::LoadingDetailCheckingUpdates)] = "Downloading and verifying new versions securely...";
     text[at(TextId::LoadingDetailSigningIn)] = "Checking server and session...";
+    text[at(TextId::LoadingDetailScanningLibrary)] = "First scan of the SD card, later starts are faster.";
     text[at(TextId::LoadingDetailSearchingGames)] = "Checking cartridge and installed games...";
     text[at(TextId::LoadingDetailReadingIcons)] = "Reading original game icons...";
     text[at(TextId::LoadingDetailReadingSave)] = "Opening local save file...";
@@ -217,6 +219,7 @@ constexpr Translation makeGerman() {
     text[at(TextId::LoadingWait)] = "Bitte warten...";
     text[at(TextId::LoadingCheckingUpdates)] = "Updates prüfen...";
     text[at(TextId::LoadingSigningIn)] = "Anmelden...";
+    text[at(TextId::LoadingScanningLibrary)] = "Spielbibliothek scannen...";
     text[at(TextId::LoadingSearchingGames)] = "Spielstände suchen...";
     text[at(TextId::LoadingReadingIcons)] = "Spielbilder laden...";
     text[at(TextId::LoadingReadingSave)] = "Spielstand laden...";
@@ -225,6 +228,7 @@ constexpr Translation makeGerman() {
     text[at(TextId::LoadingDetailInitializing)] = "Initialisieren...";
     text[at(TextId::LoadingDetailCheckingUpdates)] = "Neue Version prüfen...";
     text[at(TextId::LoadingDetailSigningIn)] = "Server & Sitzung prüfen...";
+    text[at(TextId::LoadingDetailScanningLibrary)] = "Erster Scan der SD-Karte, danach geht es schneller.";
     text[at(TextId::LoadingDetailSearchingGames)] = "Spiele prüfen...";
     text[at(TextId::LoadingDetailReadingIcons)] = "Spielbilder lesen...";
     text[at(TextId::LoadingDetailReadingSave)] = "Spielstand öffnen...";

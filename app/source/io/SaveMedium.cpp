@@ -3,6 +3,7 @@
 #include "core/FsGuard.hpp"
 #include "core/Hex.hpp"
 #include "core/Logger.hpp"
+#include "save/catalog/RomGameCodes.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -38,11 +39,6 @@ Result openSaveFile(FS_Archive archive, u32 flags, Handle& file) {
         }
     }
     return result;
-}
-
-bool fileExists(const std::string& path) {
-    struct stat info{};
-    return ::stat(path.c_str(), &info) == 0;
 }
 
 bool writeWholeFile(const std::string& path, const std::uint8_t* data, std::size_t size) {
@@ -93,6 +89,11 @@ void recoverInterruptedReplace(const std::string& path) {
         }
     }
 }
+}
+
+bool fileExists(const std::string& path) {
+    struct stat info{};
+    return ::stat(path.c_str(), &info) == 0;
 }
 
 std::shared_ptr<std::uint8_t[]> readFile(const std::string& path, std::size_t& size) {
@@ -215,19 +216,11 @@ std::string dsGameCodeFromHeader() {
         return {};
     }
     const std::string title(reinterpret_cast<const char*>(header.data()), 12);
-    const std::string prefix(reinterpret_cast<const char*>(header.data() + 0x0C), 3);
-    static constexpr std::array mappings{
-        std::pair{"ADA", "diamond"}, std::pair{"APA", "pearl"},
-        std::pair{"CPU", "platinum"}, std::pair{"IPK", "heartgold"},
-        std::pair{"IPG", "soulsilver"}, std::pair{"IRB", "black"},
-        std::pair{"IRA", "white"}, std::pair{"IRE", "black2"},
-        std::pair{"IRD", "white2"}
-    };
-    const auto match = std::find_if(mappings.begin(), mappings.end(),
-        [&](const auto& mapping) { return prefix == mapping.first; });
-    Logger::instance().info("dsGameCodeFromHeader: title=\"" + title + "\" prefix=\"" + prefix
-        + "\" matched=" + (match == mappings.end() ? "none" : match->second));
-    return match == mappings.end() ? std::string{} : std::string(match->second);
+    const std::string gameCode(reinterpret_cast<const char*>(header.data() + 0x0C), 4);
+    const auto match = RomGameCodes::catalogCode(GamePlatform::NintendoDs, gameCode);
+    Logger::instance().info("dsGameCodeFromHeader: title=\"" + title + "\" gameCode=\"" + gameCode
+        + "\" matched=" + std::string(match.value_or("none")));
+    return match ? std::string(*match) : std::string{};
 }
 
 std::uint64_t cartridgeTitleId() {

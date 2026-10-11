@@ -2,6 +2,7 @@
 #include "core/Logger.hpp"
 #include "save/catalog/GameCatalog.hpp"
 #include "save/catalog/VirtualConsoleTitles.hpp"
+#include "io/RomLibrary.hpp"
 #include "io/SaveMedium.hpp"
 
 #include <3ds.h>
@@ -137,6 +138,14 @@ void SaveLoadService::begin(Operation operation) {
     launch([this, operation]() { work(operation); });
 }
 
+void SaveLoadService::beginDiscovery(bool rebuildLibrary) {
+    if (busy()) {
+        return;
+    }
+    rebuildLibrary_ = rebuildLibrary;
+    begin(Operation::DiscoverGames);
+}
+
 bool SaveLoadService::beginFor(std::size_t index, Operation operation) {
     catalogIndex = index;
     begin(operation);
@@ -234,8 +243,18 @@ void SaveLoadService::readDiscoveredIcons() {
     Logger::instance().info("Icon scan finished");
 }
 
+void SaveLoadService::loadRomLibrary() {
+    if (rebuildLibrary_ || !RomLibrary::libraryCached()) {
+        setPhase(Phase::ScanningLibrary);
+    }
+    RomLibrary::load(rebuildLibrary_);
+    rebuildLibrary_ = false;
+    setPhase(Phase::SearchingGames);
+}
+
 void SaveLoadService::discoverGames() {
     VirtualConsoleTitles::resetInstalledCache();
+    loadRomLibrary();
     const std::size_t cartridgeCatalogIndex = addCartridgeGame();
     setProgress(15);
     addStorageGames(cartridgeCatalogIndex);

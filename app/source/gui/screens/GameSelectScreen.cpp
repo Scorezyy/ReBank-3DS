@@ -76,7 +76,7 @@ void GameSelectScreen::update(const InputFrame& input) {
         return;
     }
     if (input.pressed(KEY_X)) {
-        refresh();
+        refresh(true);
         return;
     }
     if (games_.empty()) {
@@ -93,9 +93,9 @@ void GameSelectScreen::update(const InputFrame& input) {
     }
 }
 
-void GameSelectScreen::refresh() {
+void GameSelectScreen::refresh(bool rebuildLibrary) {
     app_.status_ = text(TextId::StatusFindingSaveGames);
-    app_.saveLoadService_.begin(SaveLoadService::Operation::DiscoverGames);
+    app_.saveLoadService_.beginDiscovery(rebuildLibrary);
 }
 
 void GameSelectScreen::select(std::size_t index, int direction) {

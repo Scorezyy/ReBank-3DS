@@ -33,6 +33,7 @@ enum class SaveOperation {
 
 enum class SavePhase {
     Idle,
+    ScanningLibrary,
     SearchingGames,
     ReadingIcons,
     ReadingSave,
@@ -58,6 +59,7 @@ public:
         : BackgroundOperation("SaveLoadService"), saveAdapter_(saveAdapter) {}
 
     void begin(Operation operation);
+    void beginDiscovery(bool rebuildLibrary);
     bool beginSummary(std::size_t catalogIndex, bool cartridge);
     bool beginOpen(std::size_t catalogIndex, SaveAdapter::SourcePreference preference);
     Operation poll() { return takeCompleted(); }
@@ -80,6 +82,7 @@ private:
     std::size_t addCartridgeGame();
     void addStorageGames(std::size_t cartridgeCatalogIndex);
     void readDiscoveredIcons();
+    void loadRomLibrary();
     void discoverGames();
     void rescanCartridge();
     void fetchSummary();
@@ -87,4 +90,5 @@ private:
 
     SaveAdapter& saveAdapter_;
     std::vector<DiscoveredGame> digitalCache_;
+    bool rebuildLibrary_ = false;
 };
