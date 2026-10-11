@@ -23,6 +23,8 @@ LoadingScreen::StageText LoadingScreen::textFor(Stage stage, bool autoLogin) {
             return autoLogin
                 ? StageText{TextId::LoadingAutoLoginDetected, TextId::LoadingDetailAutoLoginDetected, false}
                 : StageText{TextId::LoadingSigningIn, TextId::LoadingDetailSigningIn, false};
+        case Stage::ScanningLibrary:
+            return {TextId::LoadingScanningLibrary, TextId::LoadingDetailScanningLibrary, false};
         case Stage::SearchingGames:
             return {TextId::LoadingSearchingGames, TextId::LoadingDetailSearchingGames, true};
         case Stage::ReadingIcons:
@@ -52,6 +54,8 @@ LoadingScreen::Stage LoadingScreen::currentStage() const {
         return Stage::WelcomeBack;
     }
     switch (app_.saveLoadService_.phase()) {
+        case SaveLoadService::Phase::ScanningLibrary:
+            return Stage::ScanningLibrary;
         case SaveLoadService::Phase::SearchingGames:
             return Stage::SearchingGames;
         case SaveLoadService::Phase::ReadingIcons:
@@ -67,7 +71,7 @@ LoadingScreen::Stage LoadingScreen::currentStage() const {
 }
 
 int LoadingScreen::serviceProgress(Stage stage) const {
-    const bool saveStage = stage >= Stage::SearchingGames && stage <= Stage::SearchingPokemon;
+    const bool saveStage = stage >= Stage::ScanningLibrary && stage <= Stage::SearchingPokemon;
     return std::clamp(saveStage ? app_.saveLoadService_.progress() : app_.loadService_.progress(), 0, 100);
 }
 

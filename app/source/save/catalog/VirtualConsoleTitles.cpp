@@ -1,16 +1,13 @@
 #include "save/catalog/VirtualConsoleTitles.hpp"
 
-#include "core/AppPaths.hpp"
-#include "core/FsGuard.hpp"
+#include "core/KeyValueConfig.hpp"
 #include "io/SaveMedium.hpp"
 
 #include <3ds.h>
 
 #include <algorithm>
 #include <array>
-#include <cstdio>
 #include <cstdlib>
-#include <string>
 #include <vector>
 
 namespace {
@@ -94,40 +91,9 @@ bool isInstalled(std::uint64_t titleId) {
     return std::find(titles.begin(), titles.end(), titleId) != titles.end();
 }
 
-std::string_view trimmed(std::string_view text) {
-    while (!text.empty() && (text.front() == ' ' || text.front() == '\t')) {
-        text.remove_prefix(1);
-    }
-    while (!text.empty() && (text.back() == ' ' || text.back() == '\t'
-        || text.back() == '\r' || text.back() == '\n')) {
-        text.remove_suffix(1);
-    }
-    return text;
-}
-
 std::optional<std::uint64_t> configuredTitleId(std::string_view code) {
-    const FsGuard guard;
-    FILE* file = std::fopen(AppPaths::file("vc_titles.cfg").c_str(), "r");
-    if (!file) {
-        return std::nullopt;
-    }
-    std::optional<std::uint64_t> found;
-    char line[128];
-    while (std::fgets(line, sizeof(line), file)) {
-        const std::string_view text(line);
-        const auto separator = text.find('=');
-        if (separator == std::string_view::npos) {
-            continue;
-        }
-        if (trimmed(text.substr(0, separator)) != code) {
-            continue;
-        }
-        const std::string value(trimmed(text.substr(separator + 1)));
-        found = std::strtoull(value.c_str(), nullptr, 16);
-        break;
-    }
-    std::fclose(file);
-    return found;
+    const auto value = KeyValueConfig::lookup("vc_titles.cfg", code);
+    return value ? std::optional(std::strtoull(value->c_str(), nullptr, 16)) : std::nullopt;
 }
 }
 

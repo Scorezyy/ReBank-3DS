@@ -2,6 +2,7 @@
 #include "core/Logger.hpp"
 #include "save/catalog/VirtualConsoleTitles.hpp"
 #include "save/pokemon/PokemonTransfer.hpp"
+#include "io/RomLibrary.hpp"
 #include "io/SaveMedium.hpp"
 #include "spi.hpp"
 
@@ -82,7 +83,7 @@ std::shared_ptr<std::uint8_t[]> SaveAdapter::locateSave(const GameDescriptor& ga
         data = locate3dsCartridgeSave(game, size, result, allowCartridge, allowStorage);
     } else if (game.platform == GamePlatform::VirtualConsole) {
         data = allowStorage ? locateVirtualConsoleSave(game, size, result) : nullptr;
-    } else if (allowCartridge) {
+    } else if (allowCartridge && game.platform == GamePlatform::NintendoDs) {
         data = locateNintendoDsCartridgeSave(game, size, result);
     }
     if (data || !allowStorage) {
@@ -95,7 +96,20 @@ std::shared_ptr<std::uint8_t[]> SaveAdapter::locateSave(const GameDescriptor& ga
         source_->sdPath = path;
         return exported;
     }
-    return nullptr;
+    return RomLibrary::supports(game.platform) ? locateRomSave(game, size) : nullptr;
+}
+
+std::shared_ptr<std::uint8_t[]> SaveAdapter::locateRomSave(const GameDescriptor& game, std::size_t& size) {
+    const auto rom = RomLibrary::find(game.code);
+    if (!rom) {
+        return nullptr;
+    }
+    auto data = SaveMedium::readFile(rom->savePath, size);
+    if (data) {
+        source_->kind = Source::Kind::SdFile;
+        source_->sdPath = rom->savePath;
+    }
+    return data;
 }
 
 std::shared_ptr<std::uint8_t[]> SaveAdapter::locate3dsCartridgeSave(const GameDescriptor& game, std::size_t& size,
@@ -204,7 +218,8 @@ bool SaveAdapter::storageSaveExists(const GameDescriptor& game) {
     } else if (game.platform == GamePlatform::VirtualConsole) {
         titleId = VirtualConsoleTitles::resolveInstalledTitleId(game.code);
     }
-    return (titleId && SaveMedium::archiveHasSave(*titleId, MEDIATYPE_SD)) || SaveMedium::exportExists(game.code);
+    return (titleId && SaveMedium::archiveHasSave(*titleId, MEDIATYPE_SD)) || SaveMedium::exportExists(game.code)
+        || (RomLibrary::supports(game.platform) && RomLibrary::find(game.code));
 }
 
 SaveSummary SaveAdapter::summary() const {

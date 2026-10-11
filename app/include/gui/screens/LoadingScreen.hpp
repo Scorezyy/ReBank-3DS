@@ -18,6 +18,7 @@ private:
     enum class Stage {
         CheckingUpdates,
         SigningIn,
+        ScanningLibrary,
         SearchingGames,
         ReadingIcons,
         ReadingSave,

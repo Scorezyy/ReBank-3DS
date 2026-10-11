@@ -313,7 +313,7 @@ void App::pollBankLoad() {
             cloudBoxNamesCache_ = std::move(loadService_.pendingBoxNames);
             loadService_.pendingBoxNames.clear();
             status_ = localization_.get(TextId::StatusFindingSaveGames);
-            gameSelectScreen_.refresh();
+            gameSelectScreen_.refresh(false);
             return;
         case LoadService::Operation::CloudBox:
             bankScreen_.onCloudBoxLoaded();

@@ -19,7 +19,7 @@ public:
     void renderTop(float eyeOffset) override;
     void render() override;
 
-    void refresh();
+    void refresh(bool rebuildLibrary);
     void populateFromDiscovered(std::vector<DiscoveredGame>& discovered);
     void applySummary(std::size_t catalogIndex, bool cartridge, const SaveSummary& summary);
     void reset();

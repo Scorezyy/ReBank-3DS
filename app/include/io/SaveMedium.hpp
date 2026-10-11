@@ -34,6 +34,7 @@ inline constexpr std::array TitleMappings{
 std::optional<std::uint64_t> titleIdFor(std::string_view code);
 std::optional<std::string_view> codeFor(std::uint64_t titleId);
 
+bool fileExists(const std::string& path);
 std::shared_ptr<std::uint8_t[]> readFile(const std::string& path, std::size_t& size);
 std::shared_ptr<std::uint8_t[]> readArchive(
     std::uint64_t titleId,

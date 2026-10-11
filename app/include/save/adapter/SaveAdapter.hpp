@@ -68,6 +68,7 @@ private:
                                                                 Result& result);
     std::shared_ptr<std::uint8_t[]> locateNintendoDsCartridgeSave(const GameDescriptor& game, std::size_t& size,
                                                                      Result& result);
+    std::shared_ptr<std::uint8_t[]> locateRomSave(const GameDescriptor& game, std::size_t& size);
     bool parseSave(const GameDescriptor& game, const std::shared_ptr<std::uint8_t[]>& data,
                     std::size_t size, std::string& error);
     bool validBox(std::size_t box) const;
