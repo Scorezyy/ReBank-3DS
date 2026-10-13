@@ -618,12 +618,47 @@ ClientUpdate ApiClient::latestClientUpdate() {
 
 FileDownloadResult ApiClient::downloadClientUpdate(const std::string& tag, const std::string& assetName,
                                                    const std::string& destination, std::uint32_t expectedSize) {
-    if (!initialized_ || !validUpdateText(tag, true)
-        || (assetName != CiaAssetName && assetName != ThreeDsxAssetName)
-        || expectedSize == 0 || expectedSize > MaximumUpdateSize) {
+    if (!validUpdateText(tag, true) || (assetName != CiaAssetName && assetName != ThreeDsxAssetName)) {
         return {false, "The update download request is invalid.", 0};
     }
-    const std::string url = ServerConfig::baseUrl() + "/v1/client/update/" + tag + "/" + assetName;
+    return downloadFile(ServerConfig::baseUrl() + "/v1/client/update/" + tag + "/" + assetName, destination, expectedSize, nullptr);
+}
+
+PluginRelease ApiClient::latestPluginRelease() {
+    PluginRelease release;
+    const HttpResult response = request(Method::Get, "/v1/livebox/plugin/update");
+    if (!response.success) {
+        release.message = response.message;
+        return release;
+    }
+    const Json::Document root = Json::Document::parse(response.body);
+    std::optional<UpdateAsset> file = root.isObject() ? parseUpdateAsset(root.root()) : std::nullopt;
+    release.tag = root.string("tag");
+    release.version = root.string("version");
+    if (response.status != 200 || !file || file->signature.empty() || !validUpdateText(release.tag, true)
+        || !validUpdateText(release.version, false)) {
+        release.message = "The server returned invalid plugin information.";
+        return release;
+    }
+    release.file = std::move(*file);
+    release.success = true;
+    release.message = "Plugin information loaded.";
+    return release;
+}
+
+FileDownloadResult ApiClient::downloadPluginRelease(const std::string& tag, const std::string& destination,
+                                                    std::uint32_t expectedSize, std::atomic<std::uint32_t>& received) {
+    if (!validUpdateText(tag, true)) {
+        return {false, "The plugin download request is invalid.", 0};
+    }
+    return downloadFile(ServerConfig::baseUrl() + "/v1/livebox/plugin/update/" + tag, destination, expectedSize, &received);
+}
+
+FileDownloadResult ApiClient::downloadFile(const std::string& url, const std::string& destination, std::uint32_t expectedSize,
+                                           std::atomic<std::uint32_t>* progress) {
+    if (!initialized_ || expectedSize == 0 || expectedSize > MaximumUpdateSize) {
+        return {false, "The update download request is invalid.", 0};
+    }
     httpcContext context{};
     std::string openError;
     Result result = openTrustedContext(context, HTTPC_METHOD_GET, url, openError);
@@ -664,6 +699,9 @@ FileDownloadResult ApiClient::downloadClientUpdate(const std::string& tag, const
             break;
         }
         total += received;
+        if (progress) {
+            progress->store(total);
+        }
     } while (static_cast<u32>(result) == HTTPC_RESULTCODE_DOWNLOADPENDING);
     const bool closed = std::fclose(file) == 0;
     httpcCloseContext(&context);

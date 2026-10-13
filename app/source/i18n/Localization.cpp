@@ -198,6 +198,33 @@ constexpr Translation makeEnglish() {
     text[at(TextId::SessionRestoreFailedTitle)] = "SESSION RESTORE FAILED";
     text[at(TextId::RequestFailedTitle)] = "REQUEST FAILED";
     text[at(TextId::ServerUnreachable)] = "Could not reach the ReBank server. Check your connection and try again.";
+    text[at(TextId::PluginButton)] = "Plugin";
+    text[at(TextId::PluginTitle)] = "ReBank LiveBox";
+    text[at(TextId::PluginInfoConnects)] = "Links Pokemon X and Y to ReBank";
+    text[at(TextId::PluginInfoAccount)] = "while you are playing.";
+    text[at(TextId::PluginInfoTransfer)] = "- Move Pokemon between your game and the bank";
+    text[at(TextId::PluginInfoOnline)] = "- Trade, battle and meet friends online again";
+    text[at(TextId::PluginInfoServices)] = "- Mystery Gift, GTS and Wonder Trade are back";
+    text[at(TextId::PluginInfoSafe)] = "Goes on your SD card. Your saves stay untouched.";
+    text[at(TextId::PluginInstallQuestion)] = "Install?";
+    text[at(TextId::PluginYes)] = "Yes";
+    text[at(TextId::PluginNo)] = "No";
+    text[at(TextId::PluginConnecting)] = "Connecting...";
+    text[at(TextId::PluginDownloading)] = "Downloading plugin...";
+    text[at(TextId::PluginInstalling)] = "Installing...";
+    text[at(TextId::PluginPleaseWait)] = "Please wait";
+    text[at(TextId::PluginKeepPowerOn)] = "Do not turn off your console.";
+    text[at(TextId::PluginInstalledTitle)] = "Plugin installed!";
+    text[at(TextId::PluginInstalledVersion)] = "Version {0}";
+    text[at(TextId::PluginNextEnable)] = "Now turn on \"Plugin Loader\" in the Rosalina menu";
+    text[at(TextId::PluginNextKeys)] = "(hold L + Down + Select)";
+    text[at(TextId::PluginNextStart)] = "and start Pokemon X or Y.";
+    text[at(TextId::PluginLoaderEnabled)] = "The Plugin Loader has been turned on for you.";
+    text[at(TextId::PluginNextJustStart)] = "Just start Pokemon X or Y now.";
+    text[at(TextId::PluginFailedTitle)] = "Installation failed";
+    text[at(TextId::PluginFailedUnreachable)] = "The download did not work. Check your internet.";
+    text[at(TextId::PluginFailedRejected)] = "The file was damaged and has not been installed.";
+    text[at(TextId::PluginFailedStorage)] = "The SD card could not be written.";
     return text;
 }
 
@@ -394,6 +421,33 @@ constexpr Translation makeGerman() {
     text[at(TextId::SessionRestoreFailedTitle)] = "SITZUNG FEHLGESCHLAGEN";
     text[at(TextId::RequestFailedTitle)] = "ANFRAGE FEHLGESCHLAGEN";
     text[at(TextId::ServerUnreachable)] = "Der ReBank-Server ist nicht erreichbar. Prüfe deine Verbindung und versuch es erneut.";
+    text[at(TextId::PluginButton)] = "Plugin";
+    text[at(TextId::PluginTitle)] = "ReBank LiveBox";
+    text[at(TextId::PluginInfoConnects)] = "Verbindet Pokémon X und Y mit ReBank,";
+    text[at(TextId::PluginInfoAccount)] = "während du spielst.";
+    text[at(TextId::PluginInfoTransfer)] = "- Pokémon zwischen Spiel und Bank verschieben";
+    text[at(TextId::PluginInfoOnline)] = "- Wieder online tauschen, kämpfen, Freunde treffen";
+    text[at(TextId::PluginInfoServices)] = "- Geheimgeschehen, GTS und Wundertausch gehen wieder";
+    text[at(TextId::PluginInfoSafe)] = "Kommt auf die SD-Karte. Spielstände bleiben unberührt.";
+    text[at(TextId::PluginInstallQuestion)] = "Installieren?";
+    text[at(TextId::PluginYes)] = "Ja";
+    text[at(TextId::PluginNo)] = "Nein";
+    text[at(TextId::PluginConnecting)] = "Verbinde...";
+    text[at(TextId::PluginDownloading)] = "Plugin wird geladen...";
+    text[at(TextId::PluginInstalling)] = "Wird installiert...";
+    text[at(TextId::PluginPleaseWait)] = "Bitte warten";
+    text[at(TextId::PluginKeepPowerOn)] = "Schalte die Konsole nicht aus.";
+    text[at(TextId::PluginInstalledTitle)] = "Plugin installiert!";
+    text[at(TextId::PluginInstalledVersion)] = "Version {0}";
+    text[at(TextId::PluginNextEnable)] = "Schalte jetzt im Rosalina-Menü den \"Plugin Loader\" ein";
+    text[at(TextId::PluginNextKeys)] = "(L + Unten + Select gedrückt halten)";
+    text[at(TextId::PluginNextStart)] = "und starte Pokémon X oder Y.";
+    text[at(TextId::PluginLoaderEnabled)] = "Der Plugin Loader wurde für dich eingeschaltet.";
+    text[at(TextId::PluginNextJustStart)] = "Starte jetzt einfach Pokémon X oder Y.";
+    text[at(TextId::PluginFailedTitle)] = "Installation fehlgeschlagen";
+    text[at(TextId::PluginFailedUnreachable)] = "Der Download hat nicht geklappt. Prüfe dein Internet.";
+    text[at(TextId::PluginFailedRejected)] = "Die Datei war beschädigt und wurde nicht installiert.";
+    text[at(TextId::PluginFailedStorage)] = "Die SD-Karte konnte nicht beschrieben werden.";
     return text;
 }
 

@@ -130,6 +130,14 @@ struct ClientUpdate {
     UpdateAsset threeDsx;
 };
 
+struct PluginRelease {
+    bool success = false;
+    std::string message;
+    std::string tag;
+    std::string version;
+    UpdateAsset file;
+};
+
 struct FileDownloadResult {
     bool success = false;
     std::string message;
@@ -162,6 +170,9 @@ public:
     ClientUpdate latestClientUpdate();
     FileDownloadResult downloadClientUpdate(const std::string& tag, const std::string& assetName,
                                             const std::string& destination, std::uint32_t expectedSize);
+    PluginRelease latestPluginRelease();
+    FileDownloadResult downloadPluginRelease(const std::string& tag, const std::string& destination,
+                                             std::uint32_t expectedSize, std::atomic<std::uint32_t>& received);
 
     bool consumeSessionRejected();
 
@@ -189,6 +200,8 @@ private:
                        std::uint64_t timeoutNanoseconds = DefaultTimeoutNanoseconds);
     HttpResult requestOnce(Method method, const std::string& path, const std::string& body,
                            const std::string& accessToken, std::uint64_t timeoutNanoseconds);
+    FileDownloadResult downloadFile(const std::string& url, const std::string& destination, std::uint32_t expectedSize,
+                                    std::atomic<std::uint32_t>* progress);
     void syncClock();
     std::uint64_t signedTimestampSeconds();
 

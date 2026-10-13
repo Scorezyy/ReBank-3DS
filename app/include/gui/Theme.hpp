@@ -38,4 +38,5 @@ inline constexpr float HeldRegionSpriteDepth = 0.95F;
 inline constexpr UiRect SubmitButton{24.0F, 195.0F, 272.0F, 38.0F};
 inline constexpr UiRect BackButton{8.0F, 8.0F, 70.0F, 32.0F};
 inline constexpr UiRect LogoutButton{2.0F, 199.0F, 66.0F, 32.0F};
+inline constexpr UiRect PluginButton{2.0F, 167.0F, 66.0F, 30.0F};
 }

@@ -40,6 +40,12 @@ void drawMissingIcon(float centerX, float centerY, float size, float z) {
     C2D_DrawRectSolid(centerX - size * 0.25F, centerY - 2.0F, z + 0.04F, size * 0.5F, 4.0F, Ink);
 }
 
+void drawDownloadSymbol(float centerX, float centerY, u32 color) {
+    C2D_DrawRectSolid(centerX - 1.5F, centerY - 7.0F, 0.2F, 3.0F, 7.0F, color);
+    C2D_DrawTriangle(centerX - 5.0F, centerY - 1.0F, color, centerX + 5.0F, centerY - 1.0F, color, centerX, centerY + 4.0F, color, 0.2F);
+    C2D_DrawRectSolid(centerX - 6.0F, centerY + 6.0F, 0.2F, 12.0F, 2.0F, color);
+}
+
 std::size_t previousIndex(std::size_t index, std::size_t count) {
     return index == 0 ? count - 1 : index - 1;
 }
@@ -71,6 +77,10 @@ void GameSelectScreen::update(const InputFrame& input) {
         return;
     }
     requestNextSummary();
+    if (input.tapped(PluginButton)) {
+        app_.pluginScreen_.open();
+        return;
+    }
     if (input.tapped(LogoutButton)) {
         app_.logout();
         return;
@@ -308,6 +318,9 @@ void GameSelectScreen::renderTop(float eyeOffset) {
 
 void GameSelectScreen::render() {
     ui().drawCentered(text(TextId::ChooseTitle), 160.0F, 18.0F, 0.62F, Ink);
+    drawPill(4.0F, 170.0F, 60.0F, 26.0F, 0.1F, Surface);
+    drawDownloadSymbol(16.0F, 183.0F, Brand);
+    ui().drawCentered(text(TextId::PluginButton), 43.0F, 176.0F, 0.38F, Brand);
     drawPill(4.0F, 202.0F, 60.0F, 26.0F, 0.1F, Surface);
     ui().drawCentered(text(TextId::Logout), 34.0F, 208.0F, 0.38F, Error);
     if (games_.empty()) {
