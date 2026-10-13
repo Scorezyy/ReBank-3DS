@@ -2,19 +2,16 @@
 
 #include "BuildConfig.hpp"
 #include "core/AppPaths.hpp"
-#include "core/Base64.hpp"
 #include "core/Hex.hpp"
 #include "core/Logger.hpp"
-#include "core/RsaSignature.hpp"
+#include "update/SignedFile.hpp"
 
 #include <3ds.h>
-#include <utils/crypto.hpp>
 
 #include <algorithm>
 #include <array>
 #include <cstdio>
 #include <optional>
-#include <span>
 #include <string_view>
 #include <vector>
 
@@ -51,29 +48,6 @@ bool isNewerVersion(std::string_view available) {
     return parseVersion(BuildConfig::Version, currentParts)
         && parseVersion(available, availableParts)
         && availableParts > currentParts;
-}
-
-std::optional<std::array<u8, 32>> hashFile(const std::string& path, std::uint32_t expectedSize) {
-    FILE* file = std::fopen(path.c_str(), "rb");
-    if (!file) {
-        return std::nullopt;
-    }
-    pksm::crypto::SHA256 sha256;
-    std::vector<u8> buffer(ChunkSize);
-    std::uint32_t total = 0;
-    while (const std::size_t read = std::fread(buffer.data(), 1, buffer.size(), file)) {
-        if (total + read > expectedSize) {
-            std::fclose(file);
-            return std::nullopt;
-        }
-        sha256.update(std::span<const u8>(buffer.data(), read));
-        total += static_cast<std::uint32_t>(read);
-    }
-    const bool complete = !std::ferror(file) && std::fclose(file) == 0 && total == expectedSize;
-    if (!complete) {
-        return std::nullopt;
-    }
-    return sha256.finish();
 }
 
 std::string hex(Result result) {
@@ -172,14 +146,13 @@ UpdateInstallResult UpdateInstaller::run(ApiClient& api, const std::string& exec
     if (!download.success) {
         return {false, false, download.message};
     }
-    const std::optional<std::array<u8, 32>> digest = hashFile(temporaryPath, asset.size);
-    if (!digest || Hex::encode(*digest) != asset.sha256) {
+    const SignedFile::Verdict verdict = SignedFile::verify(temporaryPath, asset);
+    if (verdict == SignedFile::Verdict::Corrupt) {
         std::remove(temporaryPath.c_str());
         Logger::instance().error("Update SHA-256 verification failed");
         return {false, false, "Update verification failed."};
     }
-    const std::vector<std::uint8_t> signature = Base64::decode(asset.signature);
-    if (!RsaSignature::verifyPkcs1Sha256(BuildConfig::UpdateKeyModulus, *digest, signature)) {
+    if (verdict == SignedFile::Verdict::Unsigned) {
         std::remove(temporaryPath.c_str());
         Logger::instance().error(BuildConfig::UpdateKeyModulus.empty()
             ? "Update refused: this build has no update signing key"

@@ -15,6 +15,7 @@
 #include "gui/screens/LoadingScreen.hpp"
 #include "gui/screens/LoginScreen.hpp"
 #include "gui/screens/LogsScreen.hpp"
+#include "gui/screens/PluginScreen.hpp"
 #include "gui/screens/RegisterScreen.hpp"
 #include "gui/screens/ResetPasswordScreen.hpp"
 #include "gui/screens/WelcomeScreen.hpp"
@@ -49,6 +50,7 @@ private:
     friend class LogsScreen;
     friend class BankScreen;
     friend class LoadingScreen;
+    friend class PluginScreen;
 
     void update(const InputFrame& input);
     void pollBackgroundWork();
@@ -116,6 +118,7 @@ private:
     ResetPasswordScreen resetPasswordScreen_{*this};
     GameSelectScreen gameSelectScreen_{*this};
     BankScreen bankScreen_{*this};
+    PluginScreen pluginScreen_{*this};
     LogsScreen logsScreen_{*this};
     LoadingScreen loadingScreen_{*this};
 };

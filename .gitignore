@@ -28,3 +28,8 @@ deployments/
 graphify-out/
 architecture.html
 ReBank-Architektur.html
+ReBank-3DS-LivePlugin/codebin/
+ReBank-3DS-LivePlugin/build-*/
+ReBank-3DS-LivePlugin/re/
+*.3gx
+ReBank-3DS-LivePlugin/*.elf

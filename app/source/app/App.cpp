@@ -72,6 +72,8 @@ Screen& App::activeScreen() {
             return gameSelectScreen_;
         case ScreenId::Bank:
             return bankScreen_;
+        case ScreenId::Plugin:
+            return pluginScreen_;
         case ScreenId::Logs:
             break;
     }
@@ -93,7 +95,7 @@ void App::update(const InputFrame& input) {
     if (isLoading()) {
         return;
     }
-    if (input.pressed(KEY_SELECT) && screen_ != ScreenId::Bank) {
+    if (input.pressed(KEY_SELECT) && screen_ != ScreenId::Bank && screen_ != ScreenId::Plugin) {
         if (screen_ == ScreenId::Logs) {
             screen_ = previousScreen_;
         } else {

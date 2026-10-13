@@ -40,6 +40,7 @@ AccessControlInfo:
     - hid:USER
     - http:C
     - ndm:u
+    - plg:ldr
     - ptm:u
     - pxi:dev
     - ssl:C
