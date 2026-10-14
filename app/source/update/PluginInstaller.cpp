@@ -1,7 +1,6 @@
 #include "update/PluginInstaller.hpp"
 
 #include "core/Logger.hpp"
-#include "update/PluginLoader.hpp"
 #include "update/SignedFile.hpp"
 
 #include <dirent.h>
@@ -21,6 +20,7 @@ constexpr std::string_view PluginFile = "ReBank-LivePlugin.3gx";
 constexpr std::string_view DownloadFile = "sdmc:/luma/plugins/ReBank-LivePlugin.download";
 constexpr std::string_view BackupSuffix = "_backup";
 constexpr int BackupAttempts = 99;
+constexpr int DownloadAttempts = 3;
 constexpr std::array<std::string_view, 2> GameFolders = {"0004000000055D00", "0004000000055E00"};
 
 void ensureFolder(const std::string& path) {
@@ -117,7 +117,15 @@ PluginInstallResult PluginInstaller::run(ApiClient& api, PluginInstallProgress& 
     ensureFolder(std::string(LumaFolder));
     ensureFolder(std::string(PluginFolder));
     const std::string download(DownloadFile);
-    const FileDownloadResult downloaded = api.downloadPluginRelease(release.tag, download, release.file.size, progress.received);
+    FileDownloadResult downloaded{};
+    for (int attempt = 1; attempt <= DownloadAttempts; ++attempt) {
+        progress.received.store(0);
+        downloaded = api.downloadPluginRelease(release.tag, download, release.file.size, progress.received);
+        if (downloaded.success) {
+            break;
+        }
+        Logger::instance().warning("Plugin install: attempt " + std::to_string(attempt) + " failed: " + downloaded.message);
+    }
     if (!downloaded.success) {
         Logger::instance().warning("Plugin install: " + downloaded.message);
         return {PluginInstallOutcome::Unreachable, release.version};

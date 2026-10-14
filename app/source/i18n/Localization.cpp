@@ -221,6 +221,9 @@ constexpr Translation makeEnglish() {
     text[at(TextId::PluginNextStart)] = "and start Pokemon X or Y.";
     text[at(TextId::PluginLoaderEnabled)] = "The Plugin Loader has been turned on for you.";
     text[at(TextId::PluginNextJustStart)] = "Just start Pokemon X or Y now.";
+    text[at(TextId::PluginLumaTooOld)] = "Your Luma3DS has no Plugin Loader yet.";
+    text[at(TextId::PluginLumaUpdate)] = "Please update Luma3DS to v13 or newer,";
+    text[at(TextId::PluginLumaThenStart)] = "then start Pokemon X or Y.";
     text[at(TextId::PluginFailedTitle)] = "Installation failed";
     text[at(TextId::PluginFailedUnreachable)] = "The download did not work. Check your internet.";
     text[at(TextId::PluginFailedRejected)] = "The file was damaged and has not been installed.";
@@ -444,6 +447,9 @@ constexpr Translation makeGerman() {
     text[at(TextId::PluginNextStart)] = "und starte Pokémon X oder Y.";
     text[at(TextId::PluginLoaderEnabled)] = "Der Plugin Loader wurde für dich eingeschaltet.";
     text[at(TextId::PluginNextJustStart)] = "Starte jetzt einfach Pokémon X oder Y.";
+    text[at(TextId::PluginLumaTooOld)] = "Dein Luma3DS hat noch keinen Plugin Loader.";
+    text[at(TextId::PluginLumaUpdate)] = "Bitte aktualisiere Luma3DS auf v13 oder neuer,";
+    text[at(TextId::PluginLumaThenStart)] = "danach Pokémon X oder Y starten.";
     text[at(TextId::PluginFailedTitle)] = "Installation fehlgeschlagen";
     text[at(TextId::PluginFailedUnreachable)] = "Der Download hat nicht geklappt. Prüfe dein Internet.";
     text[at(TextId::PluginFailedRejected)] = "Die Datei war beschädigt und wurde nicht installiert.";

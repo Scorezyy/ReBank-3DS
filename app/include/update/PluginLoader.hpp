@@ -1,5 +1,7 @@
 #pragma once
 
+enum class PluginLoaderState { Enabled, Manual, Missing };
+
 namespace PluginLoader {
-bool enable();
+PluginLoaderState enable();
 }

@@ -702,12 +702,17 @@ FileDownloadResult ApiClient::downloadFile(const std::string& url, const std::st
         if (progress) {
             progress->store(total);
         }
+        if (total == expectedSize) {
+            result = 0;
+            break;
+        }
     } while (static_cast<u32>(result) == HTTPC_RESULTCODE_DOWNLOADPENDING);
     const bool closed = std::fclose(file) == 0;
     httpcCloseContext(&context);
     if (R_FAILED(result) || !closed || total != expectedSize) {
         std::remove(destination.c_str());
-        return {false, "The update download was incomplete.", total};
+        return {false, "The update download was incomplete (" + resultCode(result) + ", " + std::to_string(total) + "/"
+                    + std::to_string(expectedSize) + " bytes" + (closed ? "" : ", file not closed") + ").", total};
     }
     return {true, "Update downloaded.", total};
 }
