@@ -21,6 +21,7 @@ constexpr std::array<TextId, 6> Description = {TextId::PluginInfoConnects, TextI
     TextId::PluginInfoOnline, TextId::PluginInfoServices, TextId::PluginInfoSafe};
 constexpr std::array<TextId, 3> NextSteps = {TextId::PluginNextEnable, TextId::PluginNextKeys, TextId::PluginNextStart};
 constexpr std::array<TextId, 2> ReadySteps = {TextId::PluginLoaderEnabled, TextId::PluginNextJustStart};
+constexpr std::array<TextId, 3> UpdateLumaSteps = {TextId::PluginLumaTooOld, TextId::PluginLumaUpdate, TextId::PluginLumaThenStart};
 
 double secondsNow() {
     return static_cast<double>(svcGetSystemTick()) / SYSCLOCK_ARM11;
@@ -138,7 +139,14 @@ void PluginScreen::drawResult(float eyeOffset) {
     ui().drawCentered(text(TextId::PluginInstalledTitle), 200.0F + eyeOffset, 86.0F, 0.74F, Ink);
     ui().drawCentered(format(TextId::PluginInstalledVersion, {result_.version}), 200.0F, 114.0F, 0.42F, Muted);
     float y = 142.0F;
-    if (result_.loaderEnabled) {
+    if (result_.loader == PluginLoaderState::Missing) {
+        for (const TextId step : UpdateLumaSteps) {
+            ui().drawCentered(text(step), 200.0F, y, 0.46F, Error);
+            y += 22.0F;
+        }
+        return;
+    }
+    if (result_.loader == PluginLoaderState::Enabled) {
         for (const TextId step : ReadySteps) {
             ui().drawCentered(text(step), 200.0F, y, 0.46F, Ink);
             y += 22.0F;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "network/ApiClient.hpp"
+#include "update/PluginLoader.hpp"
 
 #include <atomic>
 #include <cstdint>
@@ -16,7 +17,7 @@ enum class PluginInstallOutcome { Installed, Unreachable, Rejected, StorageFaile
 struct PluginInstallResult {
     PluginInstallOutcome outcome = PluginInstallOutcome::Unreachable;
     std::string version;
-    bool loaderEnabled = false;
+    PluginLoaderState loader = PluginLoaderState::Manual;
 };
 
 namespace PluginInstaller {
