@@ -21,7 +21,7 @@ constexpr std::string_view DownloadFile = "sdmc:/luma/plugins/ReBank-LivePlugin.
 constexpr std::string_view BackupSuffix = "_backup";
 constexpr int BackupAttempts = 99;
 constexpr int DownloadAttempts = 3;
-constexpr std::array<std::string_view, 2> GameFolders = {"0004000000055D00", "0004000000055E00"};
+constexpr std::array<std::string_view, 4> GameFolders = {"0004000000055D00", "0004000000055E00", "000400000011C400", "000400000011C500"};
 
 void ensureFolder(const std::string& path) {
     mkdir(path.c_str(), 0777);
