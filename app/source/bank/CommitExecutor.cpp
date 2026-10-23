@@ -124,7 +124,10 @@ CommitExecutor::LayoutOutcome CommitExecutor::applyLayout(const LocalLayout& tar
         if (before == occupant) {
             continue;
         }
-        const bool ok = occupant ? backend_.writeLocal(slot, plan_.transfers[*occupant].payload)
+        const auto receivedPayload = occupant ? received_.find(*occupant) : received_.end();
+        const PokemonPayload* written = !occupant ? nullptr
+            : receivedPayload != received_.end() ? &receivedPayload->second : &plan_.transfers[*occupant].payload;
+        const bool ok = occupant ? backend_.writeLocal(slot, *written)
                                  : backend_.clearLocal(slot);
         if (!ok) {
             return {false, occupant ? occupant : before, occupant.has_value()};
@@ -165,6 +168,10 @@ void CommitExecutor::claimCloudSources() {
             if (claimed.outcome != RemoteOutcome::Done || offset >= claimed.claims.size()) {
                 dropGroup(index, IssueReason::CloudClaimFailed);
                 continue;
+            }
+            if (offset < claimed.received.size() && claimed.received[offset] && claimed.claims[offset] == CloudClaim::Claimed) {
+                received_[index] = *claimed.received[offset];
+                backend_.log("commit: event Pokemon created for this trainer at " + describeSlot(*plan_.transfers[index].cloudSlotAfterMoves));
             }
             if (claimed.claims[offset] == CloudClaim::Locked) {
                 dropGroup(index, IssueReason::CloudSlotTrading);

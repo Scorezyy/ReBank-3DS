@@ -81,8 +81,18 @@ ClaimBatchResult DeviceCommitBackend::claimCloud(const std::vector<ClaimItem>& i
     for (const ClaimItem& item : items) {
         requests.push_back({cloudSlot(item.slot), item.payload.data});
     }
-    const ClaimResult claimed = api_.claimCloudPokemon(requests, accessToken_);
-    ClaimBatchResult result{toRemote(claimed.outcome), claimed.message, {}};
+    std::optional<ClaimTrainer> trainer;
+    if (const std::optional<SaveTrainer> owner = save_.trainer()) {
+        trainer = ClaimTrainer{owner->format, owner->name, owner->gender, owner->tid, owner->sid, owner->language,
+                               owner->country, owner->region, owner->consoleRegion};
+    }
+    const ClaimResult claimed = api_.claimCloudPokemon(requests, accessToken_, trainer);
+    ClaimBatchResult result{toRemote(claimed.outcome), claimed.message, {}, {}};
+    for (std::size_t index = 0; index < claimed.received.size() && index < items.size(); ++index) {
+        result.received.push_back(claimed.received[index].empty()
+            ? std::nullopt
+            : std::optional<PokemonPayload>(PokemonPayload{items[index].payload.format, claimed.received[index]}));
+    }
     for (const ClaimState state : claimed.states) {
         result.claims.push_back(state == ClaimState::Claimed ? CloudClaim::Claimed
                                 : state == ClaimState::Locked ? CloudClaim::Locked

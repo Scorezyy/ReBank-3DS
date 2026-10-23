@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <optional>
 #include <set>
 #include <string>
@@ -44,6 +45,7 @@ struct ClaimBatchResult {
     RemoteOutcome outcome = RemoteOutcome::Unknown;
     std::string message;
     std::vector<CloudClaim> claims;
+    std::vector<std::optional<PokemonPayload>> received;
 };
 
 struct ClaimItem {
@@ -131,6 +133,7 @@ private:
     CommitResult result_;
     LocalLayout current_;
     std::vector<UploadState> uploads_;
+    std::map<std::size_t, PokemonPayload> received_;
     std::vector<bool> cancelledDownloads_;
     std::set<std::size_t> droppedGroups_;
     std::string saveError_;
