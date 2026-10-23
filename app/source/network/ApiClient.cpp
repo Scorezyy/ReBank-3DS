@@ -432,7 +432,8 @@ DeleteResult ApiClient::deleteCloudPokemonBatch(const std::vector<CloudSlot>& sl
     return deleteResult(request(Method::Post, "/v1/pokemon/delete", body.dump(), accessToken), true);
 }
 
-ClaimResult ApiClient::claimCloudPokemon(const std::vector<ClaimRequest>& requests, const std::string& accessToken) {
+ClaimResult ApiClient::claimCloudPokemon(const std::vector<ClaimRequest>& requests, const std::string& accessToken,
+                                         const std::optional<ClaimTrainer>& trainer) {
     if (accessToken.empty()) {
         return {RequestOutcome::Refused, NotSignedIn, {}};
     }
@@ -448,6 +449,19 @@ ClaimResult ApiClient::claimCloudPokemon(const std::vector<ClaimRequest>& reques
     }
     Json::Document body = Json::Document::object();
     body.set("slots", entries);
+    if (trainer) {
+        json_t* owner = json_object();
+        json_object_set_new(owner, "format", json_integer(trainer->format));
+        json_object_set_new(owner, "name", json_string(trainer->name.c_str()));
+        json_object_set_new(owner, "gender", json_integer(trainer->gender));
+        json_object_set_new(owner, "tid", json_integer(trainer->tid));
+        json_object_set_new(owner, "sid", json_integer(trainer->sid));
+        json_object_set_new(owner, "language", json_integer(trainer->language));
+        json_object_set_new(owner, "country", json_integer(trainer->country));
+        json_object_set_new(owner, "region", json_integer(trainer->region));
+        json_object_set_new(owner, "consoleRegion", json_integer(trainer->consoleRegion));
+        body.set("trainer", owner);
+    }
 
     const HttpResult response = request(Method::Post, "/v1/pokemon/claim", body.dump(), accessToken);
     if (!response.success) {
@@ -463,7 +477,10 @@ ClaimResult ApiClient::claimCloudPokemon(const std::vector<ClaimRequest>& reques
     }
     ClaimResult result{RequestOutcome::Succeeded, "Claimed.", {}};
     for (std::size_t index = 0; index < requests.size(); ++index) {
-        const std::string status = Json::string(json_array_get(slots, index), "status");
+        json_t* slot = json_array_get(slots, index);
+        const std::string status = Json::string(slot, "status");
+        const std::string received = Json::string(slot, "payloadBase64");
+        result.received.push_back(received.empty() ? std::vector<std::uint8_t>{} : Base64::decode(received));
         result.states.push_back(status == "claimed" ? ClaimState::Claimed
                                 : status == "locked" ? ClaimState::Locked
                                 : status == "empty"  ? ClaimState::Empty
@@ -717,12 +734,14 @@ FileDownloadResult ApiClient::downloadFile(const std::string& url, const std::st
     return {true, "Update downloaded.", total};
 }
 
-void ApiClient::syncClock() {
+void ApiClient::syncClock(bool force) {
     constexpr std::uint64_t RetryIntervalMs = 30'000;
+    constexpr std::uint64_t ResyncIntervalMs = 60'000;
     const std::uint64_t now = osGetTime();
     LightLock_Lock(&clockLock_);
-    const bool skip = clockDeltaMs_.has_value()
-        || (lastClockSyncAttemptMs_ != 0 && now - lastClockSyncAttemptMs_ < RetryIntervalMs);
+    const std::uint64_t interval = clockDeltaMs_.has_value() ? ResyncIntervalMs : RetryIntervalMs;
+    const bool skip = !force && lastClockSyncAttemptMs_ != 0 && now >= lastClockSyncAttemptMs_
+        && now - lastClockSyncAttemptMs_ < interval;
     if (!skip) {
         lastClockSyncAttemptMs_ = now;
     }
@@ -764,8 +783,16 @@ ApiClient::HttpResult ApiClient::request(Method method, const std::string& path,
                                          const std::string& accessToken, std::uint64_t timeoutNanoseconds) {
     constexpr int MaximumAttempts = 3;
     constexpr std::uint32_t MaximumWaitSeconds = 20;
+    bool clockRetried = false;
     for (int attempt = 1;; ++attempt) {
         HttpResult result = requestOnce(method, path, body, accessToken, timeoutNanoseconds);
+        if (result.success && result.status == 401 && !clockRetried && path != "/v1/time"
+            && result.body.find("signature has expired") != std::string::npos) {
+            clockRetried = true;
+            Logger::instance().warning("Request signature expired for " + path + ", resyncing the clock and retrying");
+            syncClock(true);
+            continue;
+        }
         if (!result.success || result.status != 429 || attempt >= MaximumAttempts) {
             return result;
         }

@@ -234,6 +234,28 @@ SaveSummary SaveAdapter::summary() const {
     };
 }
 
+std::optional<SaveTrainer> SaveAdapter::trainer() const {
+    if (!save_) {
+        return std::nullopt;
+    }
+    SaveTrainer trainer;
+    trainer.format = saveFormat();
+    trainer.name = save_->otName();
+    trainer.gender = save_->gender() == pksm::Gender::Female ? 1 : 0;
+    trainer.tid = save_->TID();
+    trainer.sid = save_->SID();
+    trainer.language = static_cast<std::uint8_t>(save_->language());
+    if (trainer.format >= 6) {
+        trainer.country = save_->country();
+        trainer.region = save_->subRegion();
+        trainer.consoleRegion = save_->consoleRegion();
+    }
+    if (trainer.name.empty() || trainer.language == 0) {
+        return std::nullopt;
+    }
+    return trainer;
+}
+
 std::string SaveAdapter::boxName(std::size_t box) const {
     return save_ && box < boxCount() ? save_->boxName(static_cast<std::uint8_t>(box)) : std::string{};
 }

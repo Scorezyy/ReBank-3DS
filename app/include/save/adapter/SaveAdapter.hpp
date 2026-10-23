@@ -18,6 +18,18 @@ class PKX;
 class Sav;
 }
 
+struct SaveTrainer {
+    std::uint8_t format = 0;
+    std::string name;
+    std::uint8_t gender = 0;
+    std::uint16_t tid = 0;
+    std::uint16_t sid = 0;
+    std::uint8_t language = 0;
+    std::uint8_t country = 0;
+    std::uint8_t region = 0;
+    std::uint8_t consoleRegion = 0;
+};
+
 struct SaveSummary {
     std::string trainerName;
     std::uint32_t trainerId = 0;
@@ -40,6 +52,7 @@ public:
     bool isCartridge() const;
     static bool storageSaveExists(const GameDescriptor& game);
     SaveSummary summary() const;
+    std::optional<SaveTrainer> trainer() const;
     BoxSlots readBox(std::size_t box) const;
     bool slotOccupied(std::size_t box, std::size_t slot) const;
     std::string boxName(std::size_t box) const;

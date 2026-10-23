@@ -68,10 +68,23 @@ struct ClaimRequest {
     std::vector<std::uint8_t> payload;
 };
 
+struct ClaimTrainer {
+    std::uint8_t format = 0;
+    std::string name;
+    std::uint8_t gender = 0;
+    std::uint16_t tid = 0;
+    std::uint16_t sid = 0;
+    std::uint8_t language = 0;
+    std::uint8_t country = 0;
+    std::uint8_t region = 0;
+    std::uint8_t consoleRegion = 0;
+};
+
 struct ClaimResult {
     RequestOutcome outcome = RequestOutcome::Unknown;
     std::string message;
     std::vector<ClaimState> states;
+    std::vector<std::vector<std::uint8_t>> received;
 };
 
 struct MoveResult {
@@ -162,7 +175,8 @@ public:
     DeleteResult deleteCloudPokemon(CloudSlot slot, const std::string& accessToken);
     DeleteResult deleteCloudPokemonBatch(const std::vector<CloudSlot>& slots, const std::string& accessToken);
     MoveResult moveCloudPokemon(CloudSlot from, CloudSlot to, const std::string& accessToken);
-    ClaimResult claimCloudPokemon(const std::vector<ClaimRequest>& requests, const std::string& accessToken);
+    ClaimResult claimCloudPokemon(const std::vector<ClaimRequest>& requests, const std::string& accessToken,
+                                  const std::optional<ClaimTrainer>& trainer = std::nullopt);
     BoxListResult listCloudBox(std::uint16_t boxPosition, const std::string& accessToken);
     RenameBoxResult renameBox(std::uint16_t boxPosition, const std::string& name, const std::string& accessToken);
     BoxNamesResult listBoxNames(const std::string& accessToken);
@@ -202,7 +216,7 @@ private:
                            const std::string& accessToken, std::uint64_t timeoutNanoseconds);
     FileDownloadResult downloadFile(const std::string& url, const std::string& destination, std::uint32_t expectedSize,
                                     std::atomic<std::uint32_t>* progress);
-    void syncClock();
+    void syncClock(bool force = false);
     std::uint64_t signedTimestampSeconds();
 
     bool initialized_ = false;
