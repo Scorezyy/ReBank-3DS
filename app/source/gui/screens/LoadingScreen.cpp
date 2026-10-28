@@ -46,7 +46,7 @@ LoadingScreen::StageText LoadingScreen::textFor(Stage stage, bool autoLogin) {
 }
 
 LoadingScreen::Stage LoadingScreen::currentStage() const {
-    if (app_.updateTask_.running() || app_.updateExitAt_ != 0) {
+    if (app_.updateTask_.running() || app_.updateNoticeUntil_ != 0) {
         return Stage::CheckingUpdates;
     }
     if (app_.authController_.isRunning()) {
@@ -118,6 +118,8 @@ std::string LoadingScreen::headline() const {
                 break;
             case UpdateStage::Installed:
                 return std::string(text(TextId::UpdateInstalled));
+            case UpdateStage::Failed:
+                return std::string(text(TextId::UpdateFailed));
             default:
                 return format(TextId::UpdateFound, {"v" + app_.updateProgress_.version});
         }
@@ -134,8 +136,13 @@ void LoadingScreen::renderTop(float eyeOffset) {
     }
     const bool installed = shownStage_ == Stage::CheckingUpdates
         && app_.updateProgress_.stage.load() == UpdateStage::Installed;
+    const bool failed = shownStage_ == Stage::CheckingUpdates
+        && app_.updateProgress_.stage.load() == UpdateStage::Failed;
     if (installed) {
         ui().drawCheckMark(200.0F + eyeOffset, 148.0F, 20.0F);
+    } else if (failed) {
+        C2D_DrawCircleSolid(200.0F + eyeOffset, 148.0F, 0.3F, 20.0F, Surface);
+        ui().drawCentered("!", 200.0F + eyeOffset, 133.0F, 0.9F, WarmBrandDark);
     } else {
         ui().drawSpinner(200.0F + eyeOffset, 148.0F, 16.0F, Surface);
     }
@@ -150,6 +157,13 @@ void LoadingScreen::renderUpdate() {
         const float cycle = std::fmod(static_cast<float>(secondsNow()) * 0.65F, 1.0F);
         ui().drawPill(Bar, 0.2F, TrackColor);
         ui().drawPill({Bar.x + cycle * (Bar.width - 60.0F), Bar.y, 60.0F, Bar.height}, 0.3F, WarmBrand);
+        return;
+    }
+    if (stage == UpdateStage::Failed) {
+        ui().drawCentered(text(TextId::UpdateFailed), 160.0F, 70.0F, 0.66F, Error);
+        ui().drawCentered(text(app_.updateKeptCia_ ? TextId::UpdateManualFbi : TextId::UpdateManualQr), 160.0F, 108.0F,
+                          0.46F, WarmInk);
+        ui().drawCentered(text(TextId::UpdateContinueSoon), 160.0F, 150.0F, 0.42F, WarmMuted);
         return;
     }
     if (stage == UpdateStage::Installed) {

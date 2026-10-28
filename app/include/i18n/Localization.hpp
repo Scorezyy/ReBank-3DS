@@ -235,6 +235,10 @@ enum class TextId : std::size_t {
     UpdateInstalled,
     UpdateRestartCia,
     UpdateRestartHomebrew,
+    UpdateFailed,
+    UpdateManualFbi,
+    UpdateManualQr,
+    UpdateContinueSoon,
     Count
 };
 

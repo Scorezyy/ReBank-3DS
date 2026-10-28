@@ -86,8 +86,11 @@ void App::update(const InputFrame& input) {
         return;
     }
     pollBackgroundWork();
-    if (updateExitAt_ != 0) {
-        running_ = svcGetSystemTick() < updateExitAt_;
+    if (updateNoticeUntil_ != 0) {
+        if (svcGetSystemTick() >= updateNoticeUntil_) {
+            updateNoticeUntil_ = 0;
+            running_ = updateProgress_.stage.load() != UpdateStage::Installed;
+        }
         return;
     }
     if (errors_.visible()) {
@@ -173,9 +176,13 @@ void App::pollUpdate() {
     status_ = result.message;
     if (result.updated) {
         Logger::instance().info(result.message);
-        updateExitAt_ = svcGetSystemTick() + static_cast<u64>(SYSCLOCK_ARM11 * 3.5);
+        updateNoticeUntil_ = svcGetSystemTick() + static_cast<u64>(SYSCLOCK_ARM11 * 3.5);
     } else if (!result.success) {
         Logger::instance().warning(result.message);
+    }
+    if (updateProgress_.stage.load() == UpdateStage::Failed) {
+        updateKeptCia_ = result.keptForManualInstall;
+        updateNoticeUntil_ = svcGetSystemTick() + static_cast<u64>(SYSCLOCK_ARM11 * 10.0);
     }
 }
 
@@ -341,7 +348,7 @@ bool App::isLoading() const {
 
 bool App::isLoadingWork() const {
     return updateTask_.running()
-        || updateExitAt_ != 0
+        || updateNoticeUntil_ != 0
         || authController_.isRunning()
         || loadService_.blocksUi()
         || saveLoadService_.blocksUi()

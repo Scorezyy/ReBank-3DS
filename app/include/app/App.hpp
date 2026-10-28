@@ -97,7 +97,8 @@ private:
     bool homebrew_;
     AsyncTask<UpdateInstallResult> updateTask_;
     UpdateProgress updateProgress_;
-    u64 updateExitAt_ = 0;
+    u64 updateNoticeUntil_ = 0;
+    bool updateKeptCia_ = false;
     SessionStore sessionStore_{deviceIdentity_};
     AccountSession session_;
     AuthController authController_{api_};

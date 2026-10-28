@@ -12,12 +12,16 @@
 #include <array>
 #include <cstdio>
 #include <optional>
+#include <sys/stat.h>
 #include <string_view>
 #include <vector>
 
 namespace {
 constexpr std::size_t ChunkSize = 32 * 1024;
 constexpr std::string_view SdPrefix = "sdmc:/";
+constexpr int CiaInstallAttempts = 2;
+constexpr const char* FallbackCiaDirectory = "sdmc:/cia";
+constexpr const char* FallbackCiaPath = "sdmc:/cia/ReBank.cia";
 
 bool parseVersion(std::string_view text, std::array<unsigned long, 3>& parts) {
     std::size_t start = 0;
@@ -59,7 +63,7 @@ Result copyIntoCia(Handle handle, FILE* file, std::atomic<std::uint32_t>& copied
     u64 offset = 0;
     while (const std::size_t read = std::fread(buffer.data(), 1, buffer.size(), file)) {
         u32 written = 0;
-        Result result = FSFILE_Write(handle, &written, offset, buffer.data(), read, FS_WRITE_FLUSH);
+        Result result = FSFILE_Write(handle, &written, offset, buffer.data(), read, 0);
         if (R_SUCCEEDED(result) && written != read) {
             result = static_cast<Result>(-1);
         }
@@ -93,7 +97,6 @@ UpdateInstallResult installCiaFile(const std::string& path, std::atomic<std::uin
     } else if (result = AM_FinishCiaInstall(handle); R_FAILED(result)) {
         Logger::instance().error("AM_FinishCiaInstall failed: " + hex(result));
     }
-    std::remove(path.c_str());
     return R_SUCCEEDED(result)
         ? UpdateInstallResult{true, true, "CIA update installed."}
         : UpdateInstallResult{false, false, "CIA update installation failed."};
@@ -105,8 +108,28 @@ UpdateInstallResult installCia(const std::string& path, std::atomic<std::uint32_
         Logger::instance().error("amInit failed: " + hex(result));
         return {false, false, "CIA update service is unavailable."};
     }
-    const UpdateInstallResult installed = installCiaFile(path, copied);
+    UpdateInstallResult installed;
+    for (int attempt = 1; attempt <= CiaInstallAttempts; ++attempt) {
+        copied = 0;
+        installed = installCiaFile(path, copied);
+        if (installed.updated) {
+            break;
+        }
+        Logger::instance().warning("CIA install attempt " + std::to_string(attempt) + " failed");
+    }
     amExit();
+    if (installed.updated) {
+        std::remove(path.c_str());
+        return installed;
+    }
+    mkdir(FallbackCiaDirectory, 0777);
+    std::remove(FallbackCiaPath);
+    if (std::rename(path.c_str(), FallbackCiaPath) == 0) {
+        Logger::instance().info(std::string("Update CIA kept for manual install at ") + FallbackCiaPath);
+        installed.keptForManualInstall = true;
+    } else {
+        std::remove(path.c_str());
+    }
     return installed;
 }
 
@@ -129,10 +152,9 @@ UpdateInstallResult replaceThreeDsx(const std::string& currentPath, const std::s
     std::remove(backupPath.c_str());
     return {true, true, "3DSX update installed. Restart it from the Homebrew Launcher."};
 }
-}
 
-UpdateInstallResult UpdateInstaller::run(ApiClient& api, const std::string& executablePath, bool homebrew,
-                                         UpdateProgress& progress) {
+UpdateInstallResult downloadAndInstall(ApiClient& api, const std::string& executablePath, bool homebrew,
+                                       UpdateProgress& progress) {
     const ClientUpdate update = api.latestClientUpdate();
     if (!update.success) {
         Logger::instance().warning("Update check skipped: " + update.message);
@@ -176,4 +198,14 @@ UpdateInstallResult UpdateInstaller::run(ApiClient& api, const std::string& exec
         progress.stage = UpdateStage::Installed;
     }
     return installed;
+}
+}
+
+UpdateInstallResult UpdateInstaller::run(ApiClient& api, const std::string& executablePath, bool homebrew,
+                                         UpdateProgress& progress) {
+    UpdateInstallResult result = downloadAndInstall(api, executablePath, homebrew, progress);
+    if (!result.updated && progress.stage.load() != UpdateStage::Checking) {
+        progress.stage = UpdateStage::Failed;
+    }
+    return result;
 }
