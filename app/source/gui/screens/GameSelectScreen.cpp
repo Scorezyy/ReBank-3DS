@@ -222,8 +222,10 @@ float GameSelectScreen::carouselEase() const {
 }
 
 void GameSelectScreen::drawHintChip(float x, float y, std::string_view key, std::string_view label) {
-    ui().drawText(key, x, y, 0.44F, Brand);
-    ui().drawText(label, x + (key.size() > 1 ? 32.0F : 20.0F), y, 0.40F, Muted);
+    const float keyWidth = ui().textWidth(key, 0.40F) + 10.0F;
+    drawPill(x - 4.0F, y - 2.0F, keyWidth, 17.0F, 0.15F, WarmBrand);
+    ui().drawText(key, x + 1.0F, y, 0.40F, Surface);
+    ui().drawText(label, x + keyWidth, y, 0.40F, WarmMuted);
 }
 
 void GameSelectScreen::drawIcon(const GameProfile& profile, float centerX, float centerY, float size, float z) {
@@ -249,7 +251,7 @@ void GameSelectScreen::drawIcon(const GameProfile& profile, float centerX, float
         return;
     }
     const GameVisual visual = gameVisual(supportedGames()[profile.catalogIndex].code);
-    C2D_DrawRectSolid(x - 4.0F, y - 4.0F, z, size + 8.0F, size + 8.0F, Ink);
+    C2D_DrawRectSolid(x - 4.0F, y - 4.0F, z, size + 8.0F, size + 8.0F, WarmInk);
     C2D_DrawRectSolid(x, y, z + 0.01F, size, size, visual.primary);
     C2D_DrawRectSolid(x + 6.0F, y + 6.0F, z + 0.02F, size - 12.0F, size - 12.0F, visual.secondary);
     if (profile.iconLoaded) {
@@ -266,47 +268,45 @@ void GameSelectScreen::drawSaveDetails(const GameProfile& profile) {
     const std::string trainer = profile.summaryPending || save.trainerName.empty()
         ? std::string(text(TextId::UnknownTrainer)) + dots
         : save.trainerName;
-    ui().drawText(trainer, 28.0F, 144.0F, 0.56F, Ink);
+    ui().drawText(trainer, 28.0F, 144.0F, 0.56F, Surface);
     ui().drawText(std::string(text(TextId::IdNoPrefix)) + valueOr(paddedTrainerId(save.trainerId)),
-                  222.0F, 144.0F, 0.56F, Ink);
+                  222.0F, 144.0F, 0.56F, Surface);
     ui().drawText(std::string(text(TextId::PlayTimePrefix)) + valueOr(playTime(save.playTimeMinutes)),
-                  28.0F, 188.0F, 0.54F, Ink);
+                  28.0F, 188.0F, 0.54F, Surface);
     ui().drawText(std::string(text(TextId::PokedexPrefix)) + valueOr(std::to_string(save.pokedexCount)),
-                  222.0F, 188.0F, 0.54F, Ink);
+                  222.0F, 188.0F, 0.54F, Surface);
 }
 
 void GameSelectScreen::renderTop(float eyeOffset) {
+    ui().drawWarmTop(eyeOffset);
     const std::string buildLabel = BuildConfig::label();
     constexpr float FooterSize = 0.30F;
-    ui().drawText(buildLabel, 394.0F - ui().textWidth(buildLabel, FooterSize), 225.0F, FooterSize, Muted);
+    ui().drawText(buildLabel, 394.0F - ui().textWidth(buildLabel, FooterSize), 225.0F, FooterSize, WarmCream);
     ui().drawText("ID: " + app_.session_.accountId + " | \"" + app_.accountUsername_ + "\"", 6.0F, 225.0F,
-                  FooterSize, Muted);
+                  FooterSize, WarmCream);
     if (games_.empty()) {
-        ui().drawCentered(text(TextId::NoCompatibleSaveGameTitle), 200.0F, 92.0F, 0.78F, Error);
-        ui().drawCentered(text(TextId::InsertCartridgeOrCreateSave), 200.0F, 130.0F, 0.48F, Muted);
+        ui().drawCentered(text(TextId::NoCompatibleSaveGameTitle), 200.0F, 92.0F, 0.78F, Surface);
+        ui().drawCentered(text(TextId::InsertCartridgeOrCreateSave), 200.0F, 130.0F, 0.48F, WarmCream);
         return;
     }
     const GameProfile& profile = games_[index_];
     const float slide = static_cast<float>(selectionDirection_) * (1.0F - carouselEase()) * 90.0F;
 
-    for (float x = 0.0F; x < 400.0F; x += 20.0F) {
-        C2D_DrawRectSolid(x, 0.0F, 0.01F, 1.0F, 240.0F, C2D_Color32(105, 180, 116, 35));
-    }
+    C2D_DrawRectSolid(0.0F, 136.0F, 0.05F, 400.0F, 80.0F, C2D_Color32(120, 40, 8, 60));
     drawIcon(profile, 200.0F + eyeOffset + slide, 54.0F, 62.0F, 0.12F);
-    drawPill(252.0F + slide, 22.0F, 88.0F, 18.0F, 0.2F, profile.cartridge ? CursorGreen : Muted);
+    drawPill(252.0F + slide, 22.0F, 88.0F, 18.0F, 0.2F, profile.cartridge ? WarmBrandDark : C2D_Color32(120, 60, 30, 255));
     ui().drawCentered(text(profile.cartridge ? TextId::CartridgeLabel : TextId::DigitalLabel), 296.0F + slide, 26.0F,
                       0.34F, Surface);
     if (profile.cartridgeEmpty) {
-        C2D_DrawRectSolid(0.0F, 91.0F, 0.1F, 400.0F, 33.0F, Muted);
+        C2D_DrawRectSolid(0.0F, 91.0F, 0.1F, 400.0F, 33.0F, WarmBrandDark);
         const bool scanning = app_.saveLoadService_.running()
             && app_.saveLoadService_.operation() == SaveLoadService::Operation::RescanCartridge;
         if (scanning) {
-            const float pulse = 0.45F + 0.55F * std::sin(static_cast<float>(secondsNow()) * 6.0F);
-            C2D_DrawCircleSolid(200.0F + eyeOffset + slide, 54.0F, 0.35F, 6.0F + pulse * 3.0F, Surface);
+            ui().drawSpinner(200.0F + eyeOffset + slide, 54.0F, 12.0F, Surface);
             ui().drawCentered(text(TextId::StatusCheckingCartridgeSlot), 200.0F + slide, 99.0F, 0.60F, Surface);
         } else {
             ui().drawCentered(text(TextId::NoCartridgeInserted), 200.0F + slide, 99.0F, 0.68F, Surface);
-            ui().drawCentered(text(TextId::InsertCartridgeToLoad), 160.0F, 160.0F, 0.48F, Muted);
+            ui().drawCentered(text(TextId::InsertCartridgeToLoad), 200.0F, 160.0F, 0.48F, WarmCream);
         }
         return;
     }
@@ -317,10 +317,12 @@ void GameSelectScreen::renderTop(float eyeOffset) {
 }
 
 void GameSelectScreen::render() {
-    ui().drawCentered(text(TextId::ChooseTitle), 160.0F, 18.0F, 0.62F, Ink);
+    ui().drawWarmBackground();
+    ui().drawCentered(text(TextId::ChooseTitle), 160.0F, 14.0F, 0.62F, WarmInk);
+    C2D_DrawRectSolid(130.0F, 36.0F, 0.05F, 60.0F, 2.0F, WarmBrand);
     drawPill(4.0F, 170.0F, 60.0F, 26.0F, 0.1F, Surface);
-    drawDownloadSymbol(16.0F, 183.0F, Brand);
-    ui().drawCentered(text(TextId::PluginButton), 43.0F, 176.0F, 0.38F, Brand);
+    drawDownloadSymbol(16.0F, 183.0F, WarmBrand);
+    ui().drawCentered(text(TextId::PluginButton), 43.0F, 176.0F, 0.38F, WarmBrand);
     drawPill(4.0F, 202.0F, 60.0F, 26.0F, 0.1F, Surface);
     ui().drawCentered(text(TextId::Logout), 34.0F, 208.0F, 0.38F, Error);
     if (games_.empty()) {
@@ -328,19 +330,34 @@ void GameSelectScreen::render() {
         return;
     }
     const std::size_t count = games_.size();
+    const float pulse = 0.5F + 0.5F * std::sin(static_cast<float>(secondsNow()) * 2.4F);
     if (count > 1) {
-        drawIcon(games_[previousIndex(index_, count)], 56.0F, 94.0F, 42.0F, 0.1F);
-        drawIcon(games_[(index_ + 1) % count], 264.0F, 94.0F, 42.0F, 0.1F);
-        ui().drawText("<", 18.0F, 86.0F, 0.72F, Muted);
-        ui().drawText(">", 294.0F, 86.0F, 0.72F, Muted);
+        drawIcon(games_[previousIndex(index_, count)], 64.0F, 98.0F, 40.0F, 0.1F);
+        drawIcon(games_[(index_ + 1) % count], 256.0F, 98.0F, 40.0F, 0.1F);
+        for (const float arrowX : {20.0F, 300.0F}) {
+            C2D_DrawCircleSolid(arrowX, 98.0F, 0.12F, 11.0F, WarmBrand);
+        }
+        ui().drawCentered("<", 19.0F, 88.0F, 0.62F, Surface);
+        ui().drawCentered(">", 301.0F, 88.0F, 0.62F, Surface);
     }
+    C2D_DrawCircleSolid(160.0F, 104.0F, 0.15F, 56.0F + pulse * 3.0F, C2D_Color32(240, 138, 60, 40));
+    C2D_DrawCircleSolid(160.0F, 104.0F, 0.16F, 50.0F, C2D_Color32(255, 226, 184, 120));
     const GameProfile& selected = games_[index_];
     drawIcon(selected, 160.0F, 104.0F, 82.0F, 0.2F);
     ui().drawCentered(selected.cartridgeEmpty ? text(TextId::NoCartridgeInserted)
                                               : supportedGames()[selected.catalogIndex].name,
-                      160.0F, 157.0F, 0.54F, Ink);
-    ui().drawCentered(std::to_string(index_ + 1) + " / " + std::to_string(count), 160.0F, 181.0F, 0.38F, Muted);
-    drawHintChip(76.0F, 208.0F, "A", "Select");
-    drawHintChip(152.0F, 208.0F, "L/R", "Browse");
-    drawHintChip(230.0F, 208.0F, "X", "Rescan");
+                      160.0F, 158.0F, 0.54F, WarmInk);
+    if (count <= 12) {
+        const float start = 160.0F - static_cast<float>(count - 1) * 6.0F;
+        for (std::size_t dot = 0; dot < count; ++dot) {
+            const bool active = dot == index_;
+            drawPill(start + static_cast<float>(dot) * 12.0F - (active ? 6.0F : 3.0F), 182.0F, active ? 12.0F : 6.0F,
+                     6.0F, 0.2F, active ? WarmBrand : C2D_Color32(234, 200, 176, 255));
+        }
+    } else {
+        ui().drawCentered(std::to_string(index_ + 1) + " / " + std::to_string(count), 160.0F, 179.0F, 0.38F, WarmMuted);
+    }
+    drawHintChip(80.0F, 208.0F, "A", "Select");
+    drawHintChip(154.0F, 208.0F, "L/R", "Browse");
+    drawHintChip(236.0F, 208.0F, "X", "Rescan");
 }

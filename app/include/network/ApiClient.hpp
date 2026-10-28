@@ -183,7 +183,8 @@ public:
 
     ClientUpdate latestClientUpdate();
     FileDownloadResult downloadClientUpdate(const std::string& tag, const std::string& assetName,
-                                            const std::string& destination, std::uint32_t expectedSize);
+                                            const std::string& destination, std::uint32_t expectedSize,
+                                            std::atomic<std::uint32_t>& received);
     PluginRelease latestPluginRelease();
     FileDownloadResult downloadPluginRelease(const std::string& tag, const std::string& destination,
                                              std::uint32_t expectedSize, std::atomic<std::uint32_t>& received);

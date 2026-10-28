@@ -8,7 +8,9 @@ using namespace Gui;
 
 namespace {
 constexpr float Easing = 0.15F;
-constexpr u32 TrackColor = C2D_Color32(205, 220, 211, 255);
+constexpr u32 TrackColor = C2D_Color32(240, 214, 196, 255);
+constexpr UiRect Bar{36.0F, 132.0F, 248.0F, 12.0F};
+constexpr std::uint32_t BytesPerKb = 1024;
 
 double secondsNow() {
     return static_cast<double>(svcGetSystemTick()) / SYSCLOCK_ARM11;
@@ -44,7 +46,7 @@ LoadingScreen::StageText LoadingScreen::textFor(Stage stage, bool autoLogin) {
 }
 
 LoadingScreen::Stage LoadingScreen::currentStage() const {
-    if (app_.updateTask_.running()) {
+    if (app_.updateTask_.running() || app_.updateExitAt_ != 0) {
         return Stage::CheckingUpdates;
     }
     if (app_.authController_.isRunning()) {
@@ -106,40 +108,91 @@ void LoadingScreen::tick() {
     displayed_ = 0.0F;
 }
 
-void LoadingScreen::renderTop(float eyeOffset) {
-    const float angle = static_cast<float>(secondsNow()) * 4.5F;
-    ui().drawCentered("ReBank", 200.0F + eyeOffset, 30.0F, 1.05F, Ink);
-    for (int index = 0; index < 10; ++index) {
-        const float phase = angle + static_cast<float>(index) * 0.6283185F;
-        C2D_DrawCircleSolid(200.0F + eyeOffset + std::cos(phase) * 30.0F, 105.0F + std::sin(phase) * 30.0F, 0.3F,
-                            4.5F, C2D_Color32(31, 145, 94, static_cast<u8>(70 + index * 18)));
+std::string LoadingScreen::headline() const {
+    if (shownStage_ == Stage::WelcomeBack) {
+        return welcomeBack();
     }
-    const std::string headline = shownStage_ == Stage::WelcomeBack
-        ? welcomeBack()
-        : std::string(text(textFor(shownStage_, app_.bootAutoLoginInProgress_).headline));
-    ui().drawCentered(headline, 200.0F + eyeOffset, 164.0F, 0.68F, Ink);
+    if (shownStage_ == Stage::CheckingUpdates) {
+        switch (app_.updateProgress_.stage.load()) {
+            case UpdateStage::Checking:
+                break;
+            case UpdateStage::Installed:
+                return std::string(text(TextId::UpdateInstalled));
+            default:
+                return format(TextId::UpdateFound, {"v" + app_.updateProgress_.version});
+        }
+    }
+    return std::string(text(textFor(shownStage_, app_.bootAutoLoginInProgress_).headline));
+}
+
+void LoadingScreen::renderTop(float eyeOffset) {
+    ui().drawWarmTop(eyeOffset);
+    if (app_.resources_.logo) {
+        const C2D_Image logo = C2D_SpriteSheetGetImage(app_.resources_.logo, LogoTopIdx);
+        constexpr float Scale = 0.56F;
+        C2D_DrawImageAt(logo, 200.0F + eyeOffset - logo.subtex->width * Scale * 0.5F, 14.0F, 0.5F, nullptr, Scale, Scale);
+    }
+    const bool installed = shownStage_ == Stage::CheckingUpdates
+        && app_.updateProgress_.stage.load() == UpdateStage::Installed;
+    if (installed) {
+        ui().drawCheckMark(200.0F + eyeOffset, 148.0F, 20.0F);
+    } else {
+        ui().drawSpinner(200.0F + eyeOffset, 148.0F, 16.0F, Surface);
+    }
+    ui().drawCentered(headline(), 200.0F + eyeOffset, 184.0F, 0.68F, Surface);
+}
+
+void LoadingScreen::renderUpdate() {
+    const UpdateProgress& progress = app_.updateProgress_;
+    const UpdateStage stage = progress.stage.load();
+    if (stage == UpdateStage::Checking) {
+        ui().drawCentered(text(TextId::LoadingDetailCheckingUpdates), 160.0F, 76.0F, 0.50F, WarmInk);
+        const float cycle = std::fmod(static_cast<float>(secondsNow()) * 0.65F, 1.0F);
+        ui().drawPill(Bar, 0.2F, TrackColor);
+        ui().drawPill({Bar.x + cycle * (Bar.width - 60.0F), Bar.y, 60.0F, Bar.height}, 0.3F, WarmBrand);
+        return;
+    }
+    if (stage == UpdateStage::Installed) {
+        ui().drawCentered(text(TextId::UpdateInstalled), 160.0F, 84.0F, 0.66F, WarmInk);
+        ui().drawCentered(text(app_.homebrew_ ? TextId::UpdateRestartHomebrew : TextId::UpdateRestartCia), 160.0F,
+                          118.0F, 0.46F, WarmMuted);
+        return;
+    }
+    const TextId detail = stage == UpdateStage::Downloading ? TextId::UpdateDownloading
+        : stage == UpdateStage::Verifying ? TextId::UpdateVerifying : TextId::UpdateInstalling;
+    ui().drawCentered(text(detail), 160.0F, 66.0F, 0.56F, WarmInk);
+    const std::uint32_t total = progress.total.load();
+    const std::uint32_t received = std::min(progress.received.load(), total);
+    const float share = stage == UpdateStage::Verifying || total == 0 ? 1.0F
+        : static_cast<float>(received) / static_cast<float>(total);
+    ui().drawCentered(std::to_string(static_cast<int>(share * 100.0F + 0.5F)) + "%", 160.0F, 96.0F, 0.66F, WarmBrand);
+    ui().drawProgressBar(Bar, share, TrackColor);
+    if (total != 0 && stage != UpdateStage::Verifying) {
+        ui().drawCentered(std::to_string(received / BytesPerKb) + " / " + std::to_string(total / BytesPerKb) + " KB",
+                          160.0F, 152.0F, 0.50F, WarmMuted);
+    }
+    ui().drawCentered(text(TextId::PluginKeepPowerOn), 160.0F, 206.0F, 0.42F, WarmMuted);
 }
 
 void LoadingScreen::render() {
+    ui().drawWarmBackground();
+    if (shownStage_ == Stage::CheckingUpdates) {
+        renderUpdate();
+        return;
+    }
     const StageText stage = textFor(shownStage_, app_.bootAutoLoginInProgress_);
     const std::string detail = shownStage_ == Stage::WelcomeBack ? welcomeBack() : std::string(text(stage.detail));
-    ui().drawCentered(detail, 160.0F, 76.0F, 0.50F, Ink);
+    ui().drawCentered(detail, 160.0F, 76.0F, 0.50F, WarmInk);
 
     if (stage.determinate) {
         const int percent = static_cast<int>(displayed_ + 0.5F);
         ui().drawCentered(std::string(text(TextId::LoadingProgressLabel)) + ": " + std::to_string(percent) + "%",
-                          160.0F, 110.0F, 0.62F, Ink);
-        C2D_DrawRectSolid(36.0F, 138.0F, 0.2F, 248.0F, 10.0F, TrackColor);
-        C2D_DrawRectSolid(36.0F, 138.0F, 0.3F, 248.0F * displayed_ / 100.0F, 10.0F, Brand);
+                          160.0F, 104.0F, 0.62F, WarmBrand);
+        ui().drawProgressBar(Bar, displayed_ / 100.0F, TrackColor);
         return;
     }
 
-    const double seconds = secondsNow();
-    const float cycle = std::fmod(static_cast<float>(seconds) * 0.65F, 1.0F);
-    C2D_DrawRectSolid(36.0F, 122.0F, 0.2F, 248.0F, 8.0F, TrackColor);
-    C2D_DrawRectSolid(36.0F + cycle * 188.0F, 122.0F, 0.3F, 60.0F, 8.0F, Brand);
-    for (int index = 0; index < 3; ++index) {
-        const float pulse = 0.5F + 0.5F * std::sin(static_cast<float>(seconds) * 5.0F + static_cast<float>(index) * 1.4F);
-        C2D_DrawCircleSolid(140.0F + index * 20.0F, 172.0F, 0.3F, 3.0F + pulse * 2.0F, Accent);
-    }
+    const float cycle = std::fmod(static_cast<float>(secondsNow()) * 0.65F, 1.0F);
+    ui().drawPill(Bar, 0.2F, TrackColor);
+    ui().drawPill({Bar.x + cycle * (Bar.width - 60.0F), Bar.y, 60.0F, Bar.height}, 0.3F, WarmBrand);
 }

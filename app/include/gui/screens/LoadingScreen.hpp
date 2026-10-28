@@ -38,6 +38,8 @@ private:
     Stage currentStage() const;
     int serviceProgress(Stage stage) const;
     std::string welcomeBack() const;
+    std::string headline() const;
+    void renderUpdate();
 
     Stage shownStage_ = Stage::Waiting;
     float displayed_ = 0.0F;

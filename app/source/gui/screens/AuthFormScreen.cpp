@@ -7,17 +7,17 @@
 using namespace Gui;
 
 namespace {
-constexpr u32 FocusBlue = C2D_Color32(70, 132, 200, 255);
+constexpr u32 FocusOrange = C2D_Color32(232, 105, 42, 255);
 
 void drawBackdrop(double seconds) {
     for (int band = 0; band < 3; ++band) {
         const float y = 40.0F + band * 62.0F + std::sin(static_cast<float>(seconds) + band) * 2.0F;
-        C2D_DrawRectSolid(0.0F, y, 0.02F, 320.0F, 2.0F, C2D_Color32(210, 220, 240, 60));
+        C2D_DrawRectSolid(0.0F, y, 0.02F, 320.0F, 2.0F, C2D_Color32(240, 138, 60, 40));
     }
 }
 
 void drawFocusRing(const UiRect& rect, float pulse) {
-    const u32 ring = C2D_Color32(70, 132, 200, static_cast<u8>(140 + pulse * 100));
+    const u32 ring = C2D_Color32(232, 105, 42, static_cast<u8>(140 + pulse * 100));
     C2D_DrawRectSolid(rect.x - 3.0F, rect.y - 3.0F, 0.08F, rect.width + 6.0F, 3.0F, ring);
     C2D_DrawRectSolid(rect.x - 3.0F, rect.y + rect.height, 0.08F, rect.width + 6.0F, 3.0F, ring);
     C2D_DrawRectSolid(rect.x - 3.0F, rect.y - 3.0F, 0.08F, 3.0F, rect.height + 6.0F, ring);
@@ -25,23 +25,23 @@ void drawFocusRing(const UiRect& rect, float pulse) {
 }
 
 void drawCheckbox(UiRenderer& ui, const UiRect& rect, bool checked, std::string_view label) {
-    C2D_DrawRectSolid(rect.x, rect.y, 0.1F, rect.width, rect.height, C2D_Color32(250, 250, 254, 220));
+    ui.drawPill(rect, 0.1F, C2D_Color32(255, 255, 255, 200));
     const float boxX = rect.x + 8.0F;
     const float boxY = rect.y + 5.0F;
-    C2D_DrawRectSolid(boxX, boxY, 0.12F, 16.0F, 16.0F, checked ? CursorGreen : C2D_Color32(210, 214, 224, 255));
+    C2D_DrawRectSolid(boxX, boxY, 0.12F, 16.0F, 16.0F, checked ? WarmBrandDark : C2D_Color32(234, 200, 176, 255));
     C2D_DrawRectSolid(boxX + 2.0F, boxY + 2.0F, 0.13F, 12.0F, 12.0F,
-                      checked ? C2D_Color32(80, 200, 120, 255) : C2D_Color32(240, 244, 252, 255));
+                      checked ? WarmBrand : C2D_Color32(255, 248, 240, 255));
     if (checked) {
         C2D_DrawRectSolid(boxX + 4.0F, boxY + 8.0F, 0.14F, 3.0F, 4.0F, Surface);
         C2D_DrawRectSolid(boxX + 5.0F, boxY + 10.0F, 0.14F, 8.0F, 3.0F, Surface);
     }
-    ui.drawText(label, boxX + 26.0F, rect.y + 7.0F, 0.44F, Ink);
+    ui.drawText(label, boxX + 26.0F, rect.y + 7.0F, 0.44F, WarmInk);
 }
 
 void drawTypingDots(double seconds) {
     for (int dot = 0; dot < 3; ++dot) {
         const float phase = static_cast<float>(seconds) * 4.0F + dot * 0.6F;
-        C2D_DrawCircleSolid(140.0F + dot * 14.0F, 226.0F - std::abs(std::sin(phase)) * 6.0F, 0.4F, 4.0F, FocusBlue);
+        C2D_DrawCircleSolid(140.0F + dot * 14.0F, 226.0F - std::abs(std::sin(phase)) * 6.0F, 0.4F, 4.0F, FocusOrange);
     }
 }
 }
@@ -166,7 +166,8 @@ void AuthFormScreen::update(const InputFrame& input) {
 }
 
 void AuthFormScreen::render() {
-    ui().drawButton(BackButton, text(TextId::Back), false);
+    ui().drawWarmBackground();
+    ui().drawWarmButton(BackButton, text(TextId::Back), false);
 
     const double seconds = static_cast<double>(svcGetSystemTick() - animationStartedAt_) / SYSCLOCK_ARM11;
     const float slide = std::max(0.0F, 20.0F - static_cast<float>(seconds) * 90.0F);
@@ -174,8 +175,8 @@ void AuthFormScreen::render() {
     const auto underlineAlpha = static_cast<u8>(std::min(255.0F, (60.0F + pulse * 40.0F) * 3.5F));
 
     drawBackdrop(seconds);
-    ui().drawCentered(text(title_), 160.0F, 18.0F, 0.80F, Ink);
-    C2D_DrawRectSolid(112.0F, 38.0F, 0.05F, 96.0F, 2.0F, C2D_Color32(70, 132, 200, underlineAlpha));
+    ui().drawCentered(text(title_), 160.0F, 14.0F, 0.80F, WarmInk);
+    C2D_DrawRectSolid(122.0F, 38.0F, 0.05F, 76.0F, 2.0F, C2D_Color32(232, 105, 42, underlineAlpha));
 
     for (std::size_t index = 0; index < fields_.size(); ++index) {
         const Field& field = fields_[index];
@@ -184,7 +185,7 @@ void AuthFormScreen::render() {
         if (focus_ == index) {
             drawFocusRing(bounds, pulse);
         }
-        ui().drawField(bounds, text(field.label), field.value, field.secret);
+        ui().drawWarmField(bounds, text(field.label), field.value, field.secret);
     }
     if (autoLoginBounds_) {
         if (itemAt(focus_) == Item::AutoLogin) {
@@ -195,7 +196,7 @@ void AuthFormScreen::render() {
     if (itemAt(focus_) == Item::Submit) {
         drawFocusRing(SubmitButton, pulse);
     }
-    ui().drawButton(SubmitButton, text(TextId::Submit), true);
+    ui().drawWarmButton(SubmitButton, text(TextId::Submit), true);
 
     if (app_.authController_.isRunning()) {
         drawTypingDots(seconds);

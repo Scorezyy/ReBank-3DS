@@ -19,9 +19,15 @@ std::string Screen::format(TextId id, std::initializer_list<std::string_view> ar
 
 void Screen::renderTop(float eyeOffset) {
     const double seconds = static_cast<double>(svcGetSystemTick()) / SYSCLOCK_ARM11;
-    const float drift = std::sin(static_cast<float>(seconds) * 1.7F) * 4.0F;
-    C2D_DrawCircleSolid(200.0F + eyeOffset + drift, 91.0F, 0.0F, 62.0F, Brand);
-    C2D_DrawCircleSolid(200.0F + eyeOffset - drift * 0.4F, 91.0F, 0.0F, 43.0F, Accent);
-    ui().drawCentered("ReBank", 200.0F + eyeOffset, 71.0F, 1.7F, Ink);
-    ui().drawCentered(text(TextId::Tagline), 200.0F, 171.0F, 0.62F, Muted);
+    const float bob = std::sin(static_cast<float>(seconds) * 1.4F) * 3.0F;
+    ui().drawWarmTop(eyeOffset);
+    if (app_.resources_.logo) {
+        const C2D_Image logo = C2D_SpriteSheetGetImage(app_.resources_.logo, LogoTopIdx);
+        const float width = logo.subtex->width;
+        C2D_DrawImageAt(logo, 200.0F + eyeOffset - width * 0.5F, 10.0F + bob, 0.5F);
+    } else {
+        ui().drawCentered("ReBank", 200.0F + eyeOffset, 80.0F, 1.7F, Surface);
+    }
+    C2D_DrawRectSolid(150.0F, 202.0F, 0.4F, 100.0F, 1.0F, C2D_Color32(255, 226, 184, 140));
+    ui().drawCentered(text(TextId::Tagline), 200.0F, 210.0F, 0.58F, WarmCream);
 }

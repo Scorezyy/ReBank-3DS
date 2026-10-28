@@ -24,10 +24,16 @@ void WelcomeScreen::update(const InputFrame& input) {
 }
 
 void WelcomeScreen::render() {
-    ui().drawCentered("ReBank", 160.0F, 30.0F, 1.05F, Ink);
-    ui().drawButton(LoginButton, text(TextId::Login), true);
-    ui().drawButton(RegisterButton, text(TextId::Register), false);
-    ui().drawCentered(text(TextId::ForgotPassword), 160.0F, 207.0F, 0.52F, Brand);
+    ui().drawWarmBackground();
+    if (app_.resources_.logo) {
+        const C2D_Image emblem = C2D_SpriteSheetGetImage(app_.resources_.logo, LogoSmallIdx);
+        C2D_DrawImageAt(emblem, 24.0F, 12.0F, 0.5F);
+    }
+    ui().drawText("ReBank", 96.0F, 20.0F, 0.95F, WarmInk);
+    ui().drawText(text(TextId::Tagline), 97.0F, 52.0F, 0.42F, WarmMuted);
+    ui().drawWarmButton(LoginButton, text(TextId::Login), true);
+    ui().drawWarmButton(RegisterButton, text(TextId::Register), false);
+    ui().drawCentered(text(TextId::ForgotPassword), 160.0F, 207.0F, 0.52F, WarmBrand);
     if (!app_.status_.empty()) {
         ui().drawCentered(app_.status_, 160.0F, 226.0F, 0.36F, Error);
     }
