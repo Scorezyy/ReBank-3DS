@@ -30,10 +30,12 @@ if (-not $versionMatch.Success) {
 $major = [int]$versionMatch.Groups[1].Value
 $minor = [int]$versionMatch.Groups[2].Value
 $patch = [int]$versionMatch.Groups[3].Value
-if ($major -gt 63 -or $minor -gt 63 -or $patch -gt 15) {
+# makerom 0.19 keeps only the top 6 bits and the low 4 bits of -ver and zeroes
+# the minor field in between, so major and minor share the top 6 bits.
+if ($major -gt 3 -or $minor -gt 15 -or $patch -gt 15) {
     throw "BuildConfig version exceeds Nintendo title-version limits."
 }
-$titleVersion = ($major -shl 10) -bor ($minor -shl 4) -bor $patch
+$titleVersion = (($major * 16 + $minor) -shl 10) -bor $patch
 
 Write-Host "Building ($buildEnv) with app\config\server$configSuffix.mk:" -ForegroundColor Cyan
 $clientConfig.Trim().Split([Environment]::NewLine) | ForEach-Object { Write-Host "  $_" }

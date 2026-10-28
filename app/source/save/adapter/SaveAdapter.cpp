@@ -52,6 +52,7 @@ bool SaveAdapter::open(const GameDescriptor& game, std::string& error, SourcePre
 
     std::size_t size = 0;
     Result result = 0;
+    Logger::instance().info("Reading " + std::string(game.code) + " save");
     const std::shared_ptr<std::uint8_t[]> data = locateSave(game, size, result, preference);
     if (!data) {
         error = "Save not found. Check cartridge or SD export.";

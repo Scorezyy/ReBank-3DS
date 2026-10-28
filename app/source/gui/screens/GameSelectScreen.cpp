@@ -198,10 +198,12 @@ void GameSelectScreen::requestNextSummary() {
     if (openRequested_ || app_.saveLoadService_.busy()) {
         return;
     }
-    const auto pending = std::find_if(games_.begin(), games_.end(),
-        [](const GameProfile& profile) { return !profile.cartridgeEmpty && profile.summaryPending; });
-    if (pending != games_.end()) {
-        app_.saveLoadService_.beginSummary(pending->catalogIndex, pending->readsCartridge());
+    if (index_ >= games_.size()) {
+        return;
+    }
+    const GameProfile& selected = games_[index_];
+    if (!selected.cartridgeEmpty && selected.summaryPending) {
+        app_.saveLoadService_.beginSummary(selected.catalogIndex, selected.readsCartridge());
     }
 }
 
