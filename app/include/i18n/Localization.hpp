@@ -228,6 +228,13 @@ enum class TextId : std::size_t {
     PluginFailedUnreachable,
     PluginFailedRejected,
     PluginFailedStorage,
+    UpdateFound,
+    UpdateDownloading,
+    UpdateVerifying,
+    UpdateInstalling,
+    UpdateInstalled,
+    UpdateRestartCia,
+    UpdateRestartHomebrew,
     Count
 };
 

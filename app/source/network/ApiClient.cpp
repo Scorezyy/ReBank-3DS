@@ -634,11 +634,12 @@ ClientUpdate ApiClient::latestClientUpdate() {
 }
 
 FileDownloadResult ApiClient::downloadClientUpdate(const std::string& tag, const std::string& assetName,
-                                                   const std::string& destination, std::uint32_t expectedSize) {
+                                                   const std::string& destination, std::uint32_t expectedSize,
+                                                   std::atomic<std::uint32_t>& received) {
     if (!validUpdateText(tag, true) || (assetName != CiaAssetName && assetName != ThreeDsxAssetName)) {
         return {false, "The update download request is invalid.", 0};
     }
-    return downloadFile(ServerConfig::baseUrl() + "/v1/client/update/" + tag + "/" + assetName, destination, expectedSize, nullptr);
+    return downloadFile(ServerConfig::baseUrl() + "/v1/client/update/" + tag + "/" + assetName, destination, expectedSize, &received);
 }
 
 PluginRelease ApiClient::latestPluginRelease() {

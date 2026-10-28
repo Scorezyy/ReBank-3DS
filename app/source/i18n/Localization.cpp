@@ -9,7 +9,7 @@ constexpr std::size_t at(TextId id) {
 
 constexpr Translation makeEnglish() {
     Translation text{};
-    text[at(TextId::Tagline)] = "Your Pokemon. One secure home.";
+    text[at(TextId::Tagline)] = "Every Pokemon. Every game. One bank.";
     text[at(TextId::Login)] = "Login";
     text[at(TextId::Register)] = "Register";
     text[at(TextId::Username)] = "Username";
@@ -228,6 +228,13 @@ constexpr Translation makeEnglish() {
     text[at(TextId::PluginFailedUnreachable)] = "The download did not work. Check your internet.";
     text[at(TextId::PluginFailedRejected)] = "The file was damaged and has not been installed.";
     text[at(TextId::PluginFailedStorage)] = "The SD card could not be written.";
+    text[at(TextId::UpdateFound)] = "Update {0} found";
+    text[at(TextId::UpdateDownloading)] = "Downloading update...";
+    text[at(TextId::UpdateVerifying)] = "Checking signature...";
+    text[at(TextId::UpdateInstalling)] = "Installing update...";
+    text[at(TextId::UpdateInstalled)] = "Update installed!";
+    text[at(TextId::UpdateRestartCia)] = "ReBank closes now - start it again from HOME.";
+    text[at(TextId::UpdateRestartHomebrew)] = "Please restart ReBank from the Homebrew Launcher.";
     return text;
 }
 
@@ -235,7 +242,7 @@ constexpr Translation English = makeEnglish();
 
 constexpr Translation makeGerman() {
     Translation text{};
-    text[at(TextId::Tagline)] = "Deine Pokémon. Ein sicheres Zuhause.";
+    text[at(TextId::Tagline)] = "Alle Pokémon. Alle Spiele. Eine Bank.";
     text[at(TextId::Login)] = "Anmelden";
     text[at(TextId::Register)] = "Registrieren";
     text[at(TextId::Username)] = "Benutzername";
@@ -454,6 +461,13 @@ constexpr Translation makeGerman() {
     text[at(TextId::PluginFailedUnreachable)] = "Der Download hat nicht geklappt. Prüfe dein Internet.";
     text[at(TextId::PluginFailedRejected)] = "Die Datei war beschädigt und wurde nicht installiert.";
     text[at(TextId::PluginFailedStorage)] = "Die SD-Karte konnte nicht beschrieben werden.";
+    text[at(TextId::UpdateFound)] = "Update {0} gefunden";
+    text[at(TextId::UpdateDownloading)] = "Update wird geladen...";
+    text[at(TextId::UpdateVerifying)] = "Signatur wird geprüft...";
+    text[at(TextId::UpdateInstalling)] = "Update wird installiert...";
+    text[at(TextId::UpdateInstalled)] = "Update installiert!";
+    text[at(TextId::UpdateRestartCia)] = "ReBank wird beendet - starte es im HOME-Menü neu.";
+    text[at(TextId::UpdateRestartHomebrew)] = "Starte ReBank im Homebrew Launcher neu.";
     return text;
 }
 
@@ -461,7 +475,7 @@ constexpr Translation German = makeGerman();
 
 constexpr Translation makeFrench() {
     Translation text{};
-    text[at(TextId::Tagline)] = "Vos Pokemon. Un espace securise.";
+    text[at(TextId::Tagline)] = "Tous les Pokemon. Tous les jeux. Une banque.";
     text[at(TextId::Login)] = "Connexion";
     text[at(TextId::Register)] = "Inscription";
     text[at(TextId::Username)] = "Utilisateur";
@@ -517,7 +531,7 @@ constexpr Translation French = makeFrench();
 
 constexpr Translation makeSpanish() {
     Translation text{};
-    text[at(TextId::Tagline)] = "Tus Pokemon. Un hogar seguro.";
+    text[at(TextId::Tagline)] = "Todos los Pokemon. Todos los juegos. Un banco.";
     text[at(TextId::Login)] = "Iniciar sesion";
     text[at(TextId::Register)] = "Registrarse";
     text[at(TextId::Username)] = "Usuario";
@@ -573,7 +587,7 @@ constexpr Translation Spanish = makeSpanish();
 
 constexpr Translation makeItalian() {
     Translation text{};
-    text[at(TextId::Tagline)] = "I tuoi Pokemon. Una casa sicura.";
+    text[at(TextId::Tagline)] = "Tutti i Pokemon. Tutti i giochi. Una banca.";
     text[at(TextId::Login)] = "Accedi";
     text[at(TextId::Register)] = "Registrati";
     text[at(TextId::Username)] = "Username";
@@ -629,7 +643,7 @@ constexpr Translation Italian = makeItalian();
 
 constexpr Translation makePortuguese() {
     Translation text{};
-    text[at(TextId::Tagline)] = "Seus Pokemon. Um lar seguro.";
+    text[at(TextId::Tagline)] = "Todos os Pokemon. Todos os jogos. Um banco.";
     text[at(TextId::Login)] = "Entrar";
     text[at(TextId::Register)] = "Registrar";
     text[at(TextId::Username)] = "Usuario";

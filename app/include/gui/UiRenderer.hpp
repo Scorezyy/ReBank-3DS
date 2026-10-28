@@ -18,6 +18,14 @@ public:
     float textWidth(std::string_view value, float size);
     void drawButton(const UiRect& rect, std::string_view label, bool primary);
     void drawField(const UiRect& rect, std::string_view label, const std::string& value, bool password);
+    void drawPill(const UiRect& rect, float depth, u32 color);
+    void drawWarmBackground();
+    void drawWarmTop(float eyeOffset);
+    void drawSpinner(float centerX, float centerY, float radius, u32 color);
+    void drawProgressBar(const UiRect& rect, float share, u32 track);
+    void drawCheckMark(float centerX, float centerY, float radius);
+    void drawWarmButton(const UiRect& rect, std::string_view label, bool primary);
+    void drawWarmField(const UiRect& rect, std::string_view label, const std::string& value, bool password);
 
 private:
     enum class Anchor { Left, Center, Right };

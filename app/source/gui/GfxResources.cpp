@@ -27,6 +27,7 @@ constexpr SheetAsset SheetAssets[] = {
     {&GfxResources::genderMaleIcon, "romfs:/assets/icon_male.t3x", std::nullopt},
     {&GfxResources::genderFemaleIcon, "romfs:/assets/icon_female.t3x", std::nullopt},
     {&GfxResources::gameSelectorCard, "romfs:/assets/gameselector_card.t3x", std::nullopt},
+    {&GfxResources::logo, "romfs:/assets/logo.t3x", GPU_LINEAR},
 };
 }
 

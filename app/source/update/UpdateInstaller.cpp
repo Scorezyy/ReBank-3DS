@@ -54,7 +54,7 @@ std::string hex(Result result) {
     return Hex::resultCode(static_cast<std::uint32_t>(result));
 }
 
-Result copyIntoCia(Handle handle, FILE* file) {
+Result copyIntoCia(Handle handle, FILE* file, std::atomic<std::uint32_t>& copied) {
     std::vector<u8> buffer(ChunkSize);
     u64 offset = 0;
     while (const std::size_t read = std::fread(buffer.data(), 1, buffer.size(), file)) {
@@ -68,11 +68,12 @@ Result copyIntoCia(Handle handle, FILE* file) {
             return result;
         }
         offset += written;
+        copied = static_cast<std::uint32_t>(offset);
     }
     return std::ferror(file) ? static_cast<Result>(-1) : 0;
 }
 
-UpdateInstallResult installCiaFile(const std::string& path) {
+UpdateInstallResult installCiaFile(const std::string& path, std::atomic<std::uint32_t>& copied) {
     const UpdateInstallResult notStarted{false, false, "CIA update installation could not start."};
     Handle handle = 0;
     Result result = AM_StartCiaInstall(MEDIATYPE_SD, &handle);
@@ -85,7 +86,7 @@ UpdateInstallResult installCiaFile(const std::string& path) {
         AM_CancelCIAInstall(handle);
         return notStarted;
     }
-    result = copyIntoCia(handle, file);
+    result = copyIntoCia(handle, file, copied);
     std::fclose(file);
     if (R_FAILED(result)) {
         AM_CancelCIAInstall(handle);
@@ -98,13 +99,13 @@ UpdateInstallResult installCiaFile(const std::string& path) {
         : UpdateInstallResult{false, false, "CIA update installation failed."};
 }
 
-UpdateInstallResult installCia(const std::string& path) {
+UpdateInstallResult installCia(const std::string& path, std::atomic<std::uint32_t>& copied) {
     const Result result = amInit();
     if (R_FAILED(result)) {
         Logger::instance().error("amInit failed: " + hex(result));
         return {false, false, "CIA update service is unavailable."};
     }
-    const UpdateInstallResult installed = installCiaFile(path);
+    const UpdateInstallResult installed = installCiaFile(path, copied);
     amExit();
     return installed;
 }
@@ -130,7 +131,8 @@ UpdateInstallResult replaceThreeDsx(const std::string& currentPath, const std::s
 }
 }
 
-UpdateInstallResult UpdateInstaller::run(ApiClient& api, const std::string& executablePath, bool homebrew) {
+UpdateInstallResult UpdateInstaller::run(ApiClient& api, const std::string& executablePath, bool homebrew,
+                                         UpdateProgress& progress) {
     const ClientUpdate update = api.latestClientUpdate();
     if (!update.success) {
         Logger::instance().warning("Update check skipped: " + update.message);
@@ -142,10 +144,15 @@ UpdateInstallResult UpdateInstaller::run(ApiClient& api, const std::string& exec
     const std::string assetName = homebrew ? "ReBank.3dsx" : "ReBank.cia";
     const UpdateAsset& asset = homebrew ? update.threeDsx : update.cia;
     const std::string temporaryPath = homebrew ? executablePath + ".update" : AppPaths::file("ReBank-update.cia");
-    const FileDownloadResult download = api.downloadClientUpdate(update.tag, assetName, temporaryPath, asset.size);
+    progress.version = update.version;
+    progress.total = asset.size;
+    progress.stage = UpdateStage::Downloading;
+    const FileDownloadResult download = api.downloadClientUpdate(update.tag, assetName, temporaryPath, asset.size,
+                                                                 progress.received);
     if (!download.success) {
         return {false, false, download.message};
     }
+    progress.stage = UpdateStage::Verifying;
     const SignedFile::Verdict verdict = SignedFile::verify(temporaryPath, asset);
     if (verdict == SignedFile::Verdict::Corrupt) {
         std::remove(temporaryPath.c_str());
@@ -160,5 +167,13 @@ UpdateInstallResult UpdateInstaller::run(ApiClient& api, const std::string& exec
         return {false, false, "The update is not signed by ReBank and was not installed."};
     }
     Logger::instance().info("Installing verified " + update.tag + " " + assetName);
-    return homebrew ? replaceThreeDsx(executablePath, temporaryPath) : installCia(temporaryPath);
+    progress.received = 0;
+    progress.stage = UpdateStage::Installing;
+    UpdateInstallResult installed = homebrew ? replaceThreeDsx(executablePath, temporaryPath)
+                                             : installCia(temporaryPath, progress.received);
+    if (installed.updated) {
+        progress.received = progress.total.load();
+        progress.stage = UpdateStage::Installed;
+    }
+    return installed;
 }

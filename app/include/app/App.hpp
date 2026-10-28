@@ -96,6 +96,8 @@ private:
     std::string executablePath_;
     bool homebrew_;
     AsyncTask<UpdateInstallResult> updateTask_;
+    UpdateProgress updateProgress_;
+    u64 updateExitAt_ = 0;
     SessionStore sessionStore_{deviceIdentity_};
     AccountSession session_;
     AuthController authController_{api_};

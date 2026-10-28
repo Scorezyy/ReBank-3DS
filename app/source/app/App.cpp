@@ -86,6 +86,10 @@ void App::update(const InputFrame& input) {
         return;
     }
     pollBackgroundWork();
+    if (updateExitAt_ != 0) {
+        running_ = svcGetSystemTick() < updateExitAt_;
+        return;
+    }
     if (errors_.visible()) {
         if (input.pressed(KEY_A | KEY_B) || input.tapped(ErrorDialogOkButton)) {
             errors_.dismiss();
@@ -153,7 +157,7 @@ void App::logout() {
 void App::beginUpdate() {
     status_ = localization_.get(TextId::CheckingForUpdates);
     const bool started = updateTask_.start([this]() {
-        return UpdateInstaller::run(api_, executablePath_, homebrew_);
+        return UpdateInstaller::run(api_, executablePath_, homebrew_, updateProgress_);
     });
     if (!started) {
         status_ = localization_.get(TextId::UpdateStartFailed);
@@ -169,7 +173,7 @@ void App::pollUpdate() {
     status_ = result.message;
     if (result.updated) {
         Logger::instance().info(result.message);
-        running_ = false;
+        updateExitAt_ = svcGetSystemTick() + static_cast<u64>(SYSCLOCK_ARM11 * 3.5);
     } else if (!result.success) {
         Logger::instance().warning(result.message);
     }
@@ -337,6 +341,7 @@ bool App::isLoading() const {
 
 bool App::isLoadingWork() const {
     return updateTask_.running()
+        || updateExitAt_ != 0
         || authController_.isRunning()
         || loadService_.blocksUi()
         || saveLoadService_.blocksUi()

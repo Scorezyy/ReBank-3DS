@@ -32,6 +32,7 @@ public:
     C2D_SpriteSheet genderMaleIcon = nullptr;
     C2D_SpriteSheet genderFemaleIcon = nullptr;
     C2D_SpriteSheet gameSelectorCard = nullptr;
+    C2D_SpriteSheet logo = nullptr;
 
 private:
     void loadFont();

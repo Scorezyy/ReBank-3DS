@@ -11,7 +11,8 @@ namespace {
 constexpr UiRect YesButton{24.0F, 120.0F, 128.0F, 56.0F};
 constexpr UiRect NoButton{168.0F, 120.0F, 128.0F, 56.0F};
 constexpr UiRect DoneButton{24.0F, 150.0F, 272.0F, 44.0F};
-constexpr u32 TrackColor = C2D_Color32(205, 220, 211, 255);
+constexpr u32 TrackColor = C2D_Color32(255, 226, 184, 110);
+constexpr u32 TopError = C2D_Color32(255, 232, 220, 255);
 constexpr float BarX = 60.0F;
 constexpr float BarY = 168.0F;
 constexpr float BarWidth = 280.0F;
@@ -23,24 +24,6 @@ constexpr std::array<TextId, 3> NextSteps = {TextId::PluginNextEnable, TextId::P
 constexpr std::array<TextId, 2> ReadySteps = {TextId::PluginLoaderEnabled, TextId::PluginNextJustStart};
 constexpr std::array<TextId, 3> UpdateLumaSteps = {TextId::PluginLumaTooOld, TextId::PluginLumaUpdate, TextId::PluginLumaThenStart};
 
-double secondsNow() {
-    return static_cast<double>(svcGetSystemTick()) / SYSCLOCK_ARM11;
-}
-
-void drawSpinner(float centerX, float centerY) {
-    const float angle = static_cast<float>(secondsNow()) * 4.5F;
-    for (int index = 0; index < 10; ++index) {
-        const float phase = angle + static_cast<float>(index) * 0.6283185F;
-        C2D_DrawCircleSolid(centerX + std::cos(phase) * 26.0F, centerY + std::sin(phase) * 26.0F, 0.3F, 4.0F,
-                            C2D_Color32(31, 145, 94, static_cast<u8>(70 + index * 18)));
-    }
-}
-
-void drawCheckMark(float centerX, float centerY) {
-    C2D_DrawCircleSolid(centerX, centerY, 0.3F, 26.0F, Brand);
-    C2D_DrawLine(centerX - 12.0F, centerY + 1.0F, Surface, centerX - 3.0F, centerY + 10.0F, Surface, 5.0F, 0.4F);
-    C2D_DrawLine(centerX - 3.0F, centerY + 10.0F, Surface, centerX + 13.0F, centerY - 9.0F, Surface, 5.0F, 0.4F);
-}
 }
 
 void PluginScreen::open() {
@@ -99,8 +82,8 @@ TextId PluginScreen::failureReason() const {
 }
 
 void PluginScreen::drawDescription(float eyeOffset) {
-    ui().drawCentered(text(TextId::PluginTitle), 200.0F + eyeOffset, 18.0F, 0.86F, Ink);
-    C2D_DrawRectSolid(120.0F, 52.0F, 0.1F, 160.0F, 2.0F, Brand);
+    ui().drawCentered(text(TextId::PluginTitle), 200.0F + eyeOffset, 18.0F, 0.86F, Surface);
+    C2D_DrawRectSolid(140.0F, 50.0F, 0.1F, 120.0F, 2.0F, WarmCream);
     float y = 66.0F;
     for (std::size_t line = 0; line < Description.size(); ++line) {
         const bool lead = line < 2;
@@ -108,7 +91,7 @@ void PluginScreen::drawDescription(float eyeOffset) {
         if (line == 2 || footer) {
             y += 8.0F;
         }
-        ui().drawCentered(text(Description[line]), 200.0F, y, lead ? 0.52F : 0.46F, footer ? Muted : Ink);
+        ui().drawCentered(text(Description[line]), 200.0F, y, lead ? 0.52F : 0.46F, footer ? WarmCream : Surface);
         y += lead ? 22.0F : 20.0F;
     }
 }
@@ -116,50 +99,50 @@ void PluginScreen::drawDescription(float eyeOffset) {
 void PluginScreen::drawProgress(float eyeOffset) {
     const std::uint32_t total = progress_.total.load();
     const std::uint32_t received = progress_.received.load();
-    drawSpinner(200.0F + eyeOffset, 64.0F);
+    ui().drawSpinner(200.0F + eyeOffset, 64.0F, 24.0F, Surface);
     const TextId headline = total == 0 ? TextId::PluginConnecting
         : received < total ? TextId::PluginDownloading : TextId::PluginInstalling;
-    ui().drawCentered(text(headline), 200.0F + eyeOffset, 116.0F, 0.66F, Ink);
+    ui().drawCentered(text(headline), 200.0F + eyeOffset, 116.0F, 0.66F, Surface);
     const float share = total == 0 ? 0.0F : static_cast<float>(received > total ? total : received) / static_cast<float>(total);
-    C2D_DrawRectSolid(BarX, BarY, 0.2F, BarWidth, BarHeight, TrackColor);
-    C2D_DrawRectSolid(BarX, BarY, 0.3F, BarWidth * share, BarHeight, Brand);
+    ui().drawProgressBar({BarX, BarY, BarWidth, BarHeight}, share, TrackColor);
     if (total != 0) {
         ui().drawCentered(std::to_string(received / BytesPerKb) + " / " + std::to_string(total / BytesPerKb) + " KB",
-                          200.0F, 190.0F, 0.52F, Ink);
+                          200.0F, 190.0F, 0.52F, Surface);
     }
 }
 
 void PluginScreen::drawResult(float eyeOffset) {
     if (phase_ == Phase::Failed) {
-        ui().drawCentered(text(TextId::PluginFailedTitle), 200.0F + eyeOffset, 70.0F, 0.78F, Error);
-        ui().drawCentered(text(failureReason()), 200.0F, 120.0F, 0.48F, Ink);
+        ui().drawCentered(text(TextId::PluginFailedTitle), 200.0F + eyeOffset, 70.0F, 0.78F, TopError);
+        ui().drawCentered(text(failureReason()), 200.0F, 120.0F, 0.48F, Surface);
         return;
     }
-    drawCheckMark(200.0F + eyeOffset, 48.0F);
-    ui().drawCentered(text(TextId::PluginInstalledTitle), 200.0F + eyeOffset, 86.0F, 0.74F, Ink);
-    ui().drawCentered(format(TextId::PluginInstalledVersion, {result_.version}), 200.0F, 114.0F, 0.42F, Muted);
+    ui().drawCheckMark(200.0F + eyeOffset, 48.0F, 24.0F);
+    ui().drawCentered(text(TextId::PluginInstalledTitle), 200.0F + eyeOffset, 86.0F, 0.74F, Surface);
+    ui().drawCentered(format(TextId::PluginInstalledVersion, {result_.version}), 200.0F, 114.0F, 0.42F, WarmCream);
     float y = 142.0F;
     if (result_.loader == PluginLoaderState::Missing) {
         for (const TextId step : UpdateLumaSteps) {
-            ui().drawCentered(text(step), 200.0F, y, 0.46F, Error);
+            ui().drawCentered(text(step), 200.0F, y, 0.46F, TopError);
             y += 22.0F;
         }
         return;
     }
     if (result_.loader == PluginLoaderState::Enabled) {
         for (const TextId step : ReadySteps) {
-            ui().drawCentered(text(step), 200.0F, y, 0.46F, Ink);
+            ui().drawCentered(text(step), 200.0F, y, 0.46F, Surface);
             y += 22.0F;
         }
         return;
     }
     for (const TextId step : NextSteps) {
-        ui().drawCentered(text(step), 200.0F, y, 0.46F, Ink);
+        ui().drawCentered(text(step), 200.0F, y, 0.46F, Surface);
         y += 22.0F;
     }
 }
 
 void PluginScreen::renderTop(float eyeOffset) {
+    ui().drawWarmTop(eyeOffset);
     switch (phase_) {
         case Phase::Ask:
             drawDescription(eyeOffset);
@@ -175,21 +158,22 @@ void PluginScreen::renderTop(float eyeOffset) {
 }
 
 void PluginScreen::render() {
+    ui().drawWarmBackground();
     switch (phase_) {
         case Phase::Ask:
-            ui().drawCentered(text(TextId::PluginInstallQuestion), 160.0F, 52.0F, 0.78F, Ink);
-            ui().drawButton(YesButton, std::string("A  ") + std::string(text(TextId::PluginYes)), true);
-            ui().drawButton(NoButton, std::string("B  ") + std::string(text(TextId::PluginNo)), false);
+            ui().drawCentered(text(TextId::PluginInstallQuestion), 160.0F, 52.0F, 0.78F, WarmInk);
+            ui().drawWarmButton(YesButton, std::string("A  ") + std::string(text(TextId::PluginYes)), true);
+            ui().drawWarmButton(NoButton, std::string("B  ") + std::string(text(TextId::PluginNo)), false);
             return;
         case Phase::Installing:
-            ui().drawCentered(text(TextId::PluginPleaseWait), 160.0F, 90.0F, 0.66F, Ink);
-            ui().drawCentered(text(TextId::PluginKeepPowerOn), 160.0F, 124.0F, 0.44F, Muted);
+            ui().drawCentered(text(TextId::PluginPleaseWait), 160.0F, 90.0F, 0.66F, WarmInk);
+            ui().drawCentered(text(TextId::PluginKeepPowerOn), 160.0F, 124.0F, 0.44F, WarmMuted);
             return;
         case Phase::Done:
         case Phase::Failed:
             ui().drawCentered(text(phase_ == Phase::Done ? TextId::PluginInstalledTitle : TextId::PluginFailedTitle),
-                              160.0F, 80.0F, 0.62F, phase_ == Phase::Done ? Ink : Error);
-            ui().drawButton(DoneButton, text(TextId::Ok), true);
+                              160.0F, 80.0F, 0.62F, phase_ == Phase::Done ? WarmInk : Error);
+            ui().drawWarmButton(DoneButton, text(TextId::Ok), true);
             return;
     }
 }
