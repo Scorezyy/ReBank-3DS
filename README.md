@@ -3,11 +3,14 @@
 
   # ReBank
 
-  **Your Pokémon collection, safe in the cloud — right from your 3DS.**
+  **Every Pokémon. Every game. One bank.**
 
-  [![Latest Release](https://img.shields.io/github/v/release/Scorezyy/ReBank-3DS?include_prereleases&label=latest%20release&color=1F915E)](../../releases)
-  [![License](https://img.shields.io/badge/license-GPLv3-1F915E)](LICENSE)
-  [![Platform](https://img.shields.io/badge/platform-Nintendo%203DS-1F915E)](../../releases)
+  Free cloud storage for your Pokémon, right on your Nintendo 3DS.
+
+  [![Latest Release](https://img.shields.io/github/v/release/Scorezyy/ReBank-3DS?include_prereleases&label=latest%20release&color=E8692A)](../../releases)
+  [![License](https://img.shields.io/badge/license-GPLv3-E8692A)](LICENSE)
+  [![Platform](https://img.shields.io/badge/platform-Nintendo%203DS-E8692A)](../../releases)
+  [![Website](https://img.shields.io/badge/web-rebank.at-E8692A)](https://rebank.at)
 
 </div>
 
@@ -15,56 +18,25 @@
 
 ## Why ReBank exists
 
-For years, Pokémon Bank was the only official way to store your Pokémon in the cloud and move them freely between games. It was the safety net that let trainers hold onto Pokémon they'd caught, bred, or traded for years — long after the games themselves were retired.
+For years, Pokémon Bank was the only official way to keep your Pokémon in the cloud and move them between games. Now it is being shut down, and many collections would be stuck on old cartridges and save files.
 
-Now Pokémon Bank is being shut down. Without it, a huge part of many trainers' collections would be left stranded on old cartridges, with no safe way to bring them forward.
-
-**ReBank exists to fill that gap.** It's a free, independent cloud storage service for your Pokémon, built entirely for the Nintendo 3DS — no official service required, no subscription, and no collection left behind.
+**ReBank fills that gap.** It is a free, independent cloud bank for your Pokémon, made for the Nintendo 3DS. No subscription, no official service needed, and no collection left behind.
 
 <br />
 
 ## Install in 10 seconds
 
-Have [FBI](https://github.com/Steveice10/FBI) installed? Open it, choose **Remote Install → QR Scan**, and scan this:
+Have [FBI](https://github.com/Steveice10/FBI) installed? Open it, choose **Remote Install → Scan QR Code**, and scan this:
 
 <div align="center">
   <img src=".github/qr-latest-cia.png" alt="QR code linking to the newest ReBank CIA" width="200" />
 </div>
 
-That link always serves the newest build — the QR code itself never needs to change, even after future updates. It's served over plain HTTP on purpose: the 3DS's built-in certificate store is too outdated to trust most modern HTTPS certificates, which is why FBI remote-install links usually have to be plain HTTP. No FBI? Grab the `.cia`, `.3ds`, or `.3dsx` manually from the **[Releases](../../releases)** page instead.
+The link always serves the newest build, so the QR code never changes. It uses plain HTTP on purpose: the 3DS's certificate store is too old to trust most modern HTTPS certificates.
 
-<br />
+No FBI? Download `ReBank.cia`, `ReBank.3dsx` or `ReBank.3ds` from the **[Releases](../../releases)** page or from **[rebank.at](https://rebank.at)**.
 
-## What you can do right now
-
-| | |
-|---|---|
-| ☁️ **Cloud storage** | Move Pokémon from your game cartridge into your personal online bank, and pull them back down whenever you want. Your collection stays yours, independent of any single cartridge. |
-| 🎮 **Automatic cartridge detection** | Insert or swap a game cartridge and ReBank picks it up on its own — no manual rescan needed. |
-| 🎒 **Party support** | View and manage your current party's six Pokémon directly from the bank, right alongside your boxes. |
-| 🧰 **Multi-select tool** | Press **Start** to grab a whole row or a custom rectangle of Pokémon at once, then move, swap, or drop the entire selection in one go instead of one Pokémon at a time. |
-| 🗑️ **Trash Can** | Drop Pokémon you want gone into the trash box, then commit to delete them all at once — with a confirmation prompt before anything is lost for good. |
-| 🗂️ **Custom box names** | Give your cloud boxes their own names, right from the box screen, so a collection of hundreds of Pokémon stays easy to navigate. |
-| 🔁 **Cross-generation transfers** | ReBank understands Pokémon from Generation 1 all the way through Generation 7, so your collection isn't locked to a single game or console generation. |
-| 🕹️ **Virtual Console support** | Pull Pokémon straight out of the Gen 1/2 Virtual Console re-releases — Red, Blue, Yellow, Gold, Silver, and Crystal — and carry them forward into every later generation. |
-| ✨ **Shiny & held item indicators** | Shiny Pokémon get a star badge and held items get their own icon, right on the box screen — no need to open every Pokémon to check. |
-| 🔐 **A safe account of your own** | Sign up with just a username and password. Your session is remembered securely on your device, so you're not stuck logging in every time. |
-| 🌍 **Multi-language support** | English, German, French, Spanish, Italian, and Portuguese, selectable right in the app. |
-
-<br />
-
-## Supported games
-
-ReBank works with save files from:
-
-- **Generation 1 (Virtual Console)** — Red, Green, Blue, Yellow
-- **Generation 2 (Virtual Console)** — Gold, Silver, Crystal
-- **Generation 4** — Diamond, Pearl, Platinum, HeartGold, SoulSilver
-- **Generation 5** — Black, White, Black 2, White 2
-- **Generation 6** — X, Y, Omega Ruby, Alpha Sapphire
-- **Generation 7** — Sun, Moon, Ultra Sun, Ultra Moon
-
-Pokémon can move upward across these generations as you go — catch something in an older game, and it can still make its way into a newer one through your bank.
+After that, ReBank keeps itself up to date: it checks for new versions on start, shows the download and installation progress, and only installs updates signed by ReBank.
 
 <br />
 
@@ -74,21 +46,21 @@ Pokémon can move upward across these generations as you go — catch something 
   <table>
     <tr>
       <td align="center" width="50%">
-        <img src="screenshots/login-screen.png" alt="Login screen" width="100%" /><br />
-        <sub>Login</sub>
+        <img src=".github/screens/welcome.png" alt="Welcome screen" width="100%" /><br />
+        <sub>Welcome</sub>
       </td>
       <td align="center" width="50%">
-        <img src="screenshots/register-screen.png" alt="Account creation screen" width="100%" /><br />
-        <sub>Creating an account</sub>
+        <img src=".github/screens/login.png" alt="Login screen" width="100%" /><br />
+        <sub>Sign in</sub>
       </td>
     </tr>
     <tr>
       <td align="center" width="50%">
-        <img src="screenshots/game-selection.png" alt="Game selection screen" width="100%" /><br />
-        <sub>Picking a game</sub>
+        <img src=".github/screens/game-select.png" alt="Game selection" width="100%" /><br />
+        <sub>Pick a game</sub>
       </td>
       <td align="center" width="50%">
-        <img src="screenshots/bank-screen.png" alt="Cloud bank box screen" width="100%" /><br />
+        <img src=".github/screens/bank.png" alt="Cloud bank box screen" width="100%" /><br />
         <sub>Your cloud bank</sub>
       </td>
     </tr>
@@ -97,39 +69,87 @@ Pokémon can move upward across these generations as you go — catch something 
 
 <br />
 
+## What you can do
+
+**Your bank**
+
+| | |
+|---|---|
+| **Cloud storage** | Move Pokémon from your game into your personal online bank and back whenever you want. Your collection no longer depends on a single cartridge. |
+| **Party support** | See and manage the six Pokémon in your party right next to your boxes. |
+| **Multi-select** | Press **Start** to grab a whole row or a rectangle of Pokémon and move, swap or drop them in one go. |
+| **Trash Can** | Put Pokémon you no longer want into the trash box and delete them together, with a confirmation first. |
+| **Box names** | Give your cloud boxes their own names, right from the box screen. |
+| **Shiny and item badges** | Shiny Pokémon get a star and held items get an icon, right in the box. |
+| **Event Pokémon** | Event Pokémon you claim from the cloud are made for the trainer of your loaded save and written straight into your game. |
+
+**Your games**
+
+| | |
+|---|---|
+| **Generation 1 to 7** | Pokémon move upward through the generations, from the Virtual Console games up to Sun and Moon. Origin game, trainer, IVs and everything else stay as they are. |
+| **Cartridge detection** | Insert or swap a cartridge and ReBank picks it up on its own. |
+| **NDS games as CIA** | Diamond to White 2 also work when you play them through an NDS forwarder; ReBank finds the game and its save on your SD card. |
+| **Game library** | ReBank scans your SD card once and remembers your games, so later starts are fast. Press **X** in the game selection to scan again. |
+
+**LiveBox plugin**
+
+| | |
+|---|---|
+| **One-tap install** | The **Plugin** button in the game selection installs the ReBank LiveBox plugin for X, Y, Omega Ruby, Alpha Sapphire, Sun, Moon, Ultra Sun and Ultra Moon. ReBank turns on Luma's plugin loader for you and keeps any plugin you had before as a backup. |
+| **Online features** | With the plugin, LiveBox, Festival Plaza, Battle Spot, GTS, Wonder Trade and Mystery Gift work through ReBank. |
+
+**Account and safety**
+
+| | |
+|---|---|
+| **Your own account** | Sign up with a username and password. Your session is stored encrypted on the console, so you do not have to log in every time. |
+| **Safe transfers** | Transfers are checked for legality, and a failed transfer never duplicates or loses a Pokémon. |
+| **Signed updates** | Updates and the plugin are only installed with a valid ReBank signature. |
+| **Six languages** | English, German, French, Spanish, Italian and Portuguese, following your console's language. |
+
+<br />
+
+## Supported games
+
+- **Generation 1 (Virtual Console)**: Red, Green, Blue, Yellow
+- **Generation 2 (Virtual Console)**: Gold, Silver, Crystal
+- **Generation 4**: Diamond, Pearl, Platinum, HeartGold, SoulSilver
+- **Generation 5**: Black, White, Black 2, White 2
+- **Generation 6**: X, Y, Omega Ruby, Alpha Sapphire
+- **Generation 7**: Sun, Moon, Ultra Sun, Ultra Moon
+
+<br />
+
 ## Getting started
 
-1. Install the app — scan the QR code above with FBI, or grab a file from **[Releases](../../releases)** manually.
-2. Open ReBank, create a free account, and select your game.
+1. Install ReBank: scan the QR code above with FBI, or download a file from the **[Releases](../../releases)**.
+2. Open ReBank, create a free account and pick your game.
 3. Start moving Pokémon into the cloud.
 
-That's it — no setup, no configuration files, no external accounts needed. Once installed, ReBank also checks for and installs its own updates from within the app.
+Your bank is also on the web: on **[rebank.at](https://rebank.at)** you can manage your boxes, look at your Pokémon in detail, trade and chat, right in the browser. Questions or ideas? Join the **[Discord](https://discord.rebank.at)**.
 
 <br />
 
 ## How far it's come
 
-ReBank has been in active beta since its first public release, with something landing in nearly every update:
+- **0.1.x**: the foundation. Gen 4 to 7 saves, accounts, legality-checked transfers, pinned HTTPS and automatic updates.
+- **0.2.x**: a new UI, party support, box names, the Trash Can, cartridge detection, Gen 1 and 2 Virtual Console support, the multi-select tool, safer transfers and signed updates.
+- **0.3.x**: NDS games installed as CIA, game covers, a faster start, and the LiveBox plugin installer for Gen 6 and Gen 7, plus event Pokémon for your own trainer.
+- **0.4.0**: a new orange design that matches the ReBank logo, a new icon and banner, an update screen with download progress, and reliable self-updates.
 
-- **Early betas (0.1.x)** — the foundation: Gen 4–7 save support, accounts, legality-checked transfers, pinned HTTPS, automatic self-updating, and a string of stability fixes (including tracking down a nasty Bad Egg bug across two generations of games).
-- **0.2.0** — a full UI redesign, party team support, cloud box renaming, major performance and reliability work across networking and the commit pipeline, and safer handling that stops failed transfers from ever duplicating or losing a Pokémon.
-- **0.2.1** — the Trash Can, for bulk-deleting Pokémon you no longer want.
-- **0.2.2** — automatic cartridge detection: swap cartridges freely and ReBank keeps up on its own, plus a large internal refactor to keep the codebase easy to extend.
-- **0.2.3** — Generation 1 & 2 Virtual Console support: pull Pokémon straight out of Red, Blue, Yellow, Gold, Silver, and Crystal.
-- **0.2.5** — Added Pokémon Green (JPN Virtual Console) support.
-
-The full history, with details on every fix and feature, lives on the **[Releases](../../releases)** page.
+Every release with all details is on the **[Releases](../../releases)** page.
 
 <br />
 
 ## A project made with care
 
-ReBank is built and maintained independently, by someone who didn't want to see years of collecting disappear along with a shutting-down service. It's still actively growing, with new features, polish, and fixes landing regularly — what you see in the [Releases](../../releases) page is a living, evolving project, not a finished product left to gather dust.
+ReBank is built and maintained independently, by someone who did not want years of collecting to disappear with a closing service. It keeps growing, with new features and fixes in nearly every update.
 
-If something breaks, looks off, or could be better, that feedback goes straight into the next update.
+If something breaks, looks off or could be better, tell us. That feedback goes straight into the next update.
 
 <br />
 
 ---
 
-<sub>Licensed under [GPLv3](LICENSE). Built on some open-source components — see [NOTICE](NOTICE.md) for details. Pokémon and all related names, images, and data are property of Nintendo, Game Freak, and Creatures Inc. ReBank is an independent fan project, not affiliated with or endorsed by any of them.</sub>
+<sub>Licensed under [GPLv3](LICENSE). Built on some open-source components, see [NOTICE](NOTICE.md) for details. Pokémon and all related names, images and data are property of Nintendo, Game Freak and Creatures Inc. ReBank is an independent fan project, not affiliated with or endorsed by any of them.</sub>
