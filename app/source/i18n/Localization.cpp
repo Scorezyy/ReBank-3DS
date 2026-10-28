@@ -235,6 +235,10 @@ constexpr Translation makeEnglish() {
     text[at(TextId::UpdateInstalled)] = "Update installed!";
     text[at(TextId::UpdateRestartCia)] = "ReBank closes now - start it again from HOME.";
     text[at(TextId::UpdateRestartHomebrew)] = "Please restart ReBank from the Homebrew Launcher.";
+    text[at(TextId::UpdateFailed)] = "Update failed";
+    text[at(TextId::UpdateManualFbi)] = "Install sdmc:/cia/ReBank.cia with FBI.";
+    text[at(TextId::UpdateManualQr)] = "Install ReBank again with the QR code on rebank.at.";
+    text[at(TextId::UpdateContinueSoon)] = "ReBank continues in a few seconds.";
     return text;
 }
 
@@ -468,6 +472,10 @@ constexpr Translation makeGerman() {
     text[at(TextId::UpdateInstalled)] = "Update installiert!";
     text[at(TextId::UpdateRestartCia)] = "ReBank wird beendet - starte es im HOME-Menü neu.";
     text[at(TextId::UpdateRestartHomebrew)] = "Starte ReBank im Homebrew Launcher neu.";
+    text[at(TextId::UpdateFailed)] = "Update fehlgeschlagen";
+    text[at(TextId::UpdateManualFbi)] = "Installiere sdmc:/cia/ReBank.cia mit FBI.";
+    text[at(TextId::UpdateManualQr)] = "Installiere ReBank neu über den QR-Code auf rebank.at.";
+    text[at(TextId::UpdateContinueSoon)] = "ReBank geht gleich weiter.";
     return text;
 }
 

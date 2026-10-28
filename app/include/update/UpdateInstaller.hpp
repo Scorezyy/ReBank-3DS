@@ -10,9 +10,10 @@ struct UpdateInstallResult {
     bool success = false;
     bool updated = false;
     std::string message;
+    bool keptForManualInstall = false;
 };
 
-enum class UpdateStage { Checking, Downloading, Verifying, Installing, Installed };
+enum class UpdateStage { Checking, Downloading, Verifying, Installing, Installed, Failed };
 
 struct UpdateProgress {
     std::atomic<UpdateStage> stage{UpdateStage::Checking};
