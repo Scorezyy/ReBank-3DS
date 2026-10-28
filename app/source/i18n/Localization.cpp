@@ -200,7 +200,7 @@ constexpr Translation makeEnglish() {
     text[at(TextId::ServerUnreachable)] = "Could not reach the ReBank server. Check your connection and try again.";
     text[at(TextId::PluginButton)] = "Plugin";
     text[at(TextId::PluginTitle)] = "ReBank LiveBox";
-    text[at(TextId::PluginInfoConnects)] = "Links Pokemon X, Y, OR and AS to ReBank";
+    text[at(TextId::PluginInfoConnects)] = "Links Pokemon Gen 6 and Gen 7 to ReBank";
     text[at(TextId::PluginInfoAccount)] = "while you are playing.";
     text[at(TextId::PluginInfoTransfer)] = "- Move Pokemon between your game and the bank";
     text[at(TextId::PluginInfoOnline)] = "- Trade, battle and meet friends online again";
@@ -426,7 +426,7 @@ constexpr Translation makeGerman() {
     text[at(TextId::ServerUnreachable)] = "Der ReBank-Server ist nicht erreichbar. Prüfe deine Verbindung und versuch es erneut.";
     text[at(TextId::PluginButton)] = "Plugin";
     text[at(TextId::PluginTitle)] = "ReBank LiveBox";
-    text[at(TextId::PluginInfoConnects)] = "Verbindet Pokémon X, Y, OR und AS mit ReBank,";
+    text[at(TextId::PluginInfoConnects)] = "Verbindet Pokémon Gen 6 und Gen 7 mit ReBank,";
     text[at(TextId::PluginInfoAccount)] = "während du spielst.";
     text[at(TextId::PluginInfoTransfer)] = "- Pokémon zwischen Spiel und Bank verschieben";
     text[at(TextId::PluginInfoOnline)] = "- Wieder online tauschen, kämpfen, Freunde treffen";
