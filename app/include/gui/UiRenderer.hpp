@@ -16,6 +16,8 @@ public:
     void drawCentered(std::string_view value, float centerX, float y, float size, u32 color);
     void drawRight(std::string_view value, float rightX, float y, float size, u32 color);
     float textWidth(std::string_view value, float size);
+    float measure(std::string_view value, float size) const;
+    float lineHeight(float size) const;
     void drawButton(const UiRect& rect, std::string_view label, bool primary);
     void drawField(const UiRect& rect, std::string_view label, const std::string& value, bool password);
     void drawPill(const UiRect& rect, float depth, u32 color);

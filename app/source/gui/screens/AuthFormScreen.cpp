@@ -8,6 +8,9 @@ using namespace Gui;
 
 namespace {
 constexpr u32 FocusOrange = C2D_Color32(232, 105, 42, 255);
+constexpr u32 LinkBlue = C2D_Color32(28, 92, 204, 255);
+constexpr float ConsentTextSize = 0.44F;
+constexpr float CheckboxTextOffset = 34.0F;
 
 void drawBackdrop(double seconds) {
     for (int band = 0; band < 3; ++band) {
@@ -24,7 +27,7 @@ void drawFocusRing(const UiRect& rect, float pulse) {
     C2D_DrawRectSolid(rect.x + rect.width, rect.y - 3.0F, 0.08F, 3.0F, rect.height + 6.0F, ring);
 }
 
-void drawCheckbox(UiRenderer& ui, const UiRect& rect, bool checked, std::string_view label) {
+void drawCheckboxBox(UiRenderer& ui, const UiRect& rect, bool checked) {
     ui.drawPill(rect, 0.1F, C2D_Color32(255, 255, 255, 200));
     const float boxX = rect.x + 8.0F;
     const float boxY = rect.y + 5.0F;
@@ -35,7 +38,11 @@ void drawCheckbox(UiRenderer& ui, const UiRect& rect, bool checked, std::string_
         C2D_DrawRectSolid(boxX + 4.0F, boxY + 8.0F, 0.14F, 3.0F, 4.0F, Surface);
         C2D_DrawRectSolid(boxX + 5.0F, boxY + 10.0F, 0.14F, 8.0F, 3.0F, Surface);
     }
-    ui.drawText(label, boxX + 26.0F, rect.y + 7.0F, 0.44F, WarmInk);
+}
+
+void drawCheckbox(UiRenderer& ui, const UiRect& rect, bool checked, std::string_view label) {
+    drawCheckboxBox(ui, rect, checked);
+    ui.drawText(label, rect.x + CheckboxTextOffset, rect.y + 7.0F, ConsentTextSize, WarmInk);
 }
 
 void drawTypingDots(double seconds) {
@@ -47,36 +54,65 @@ void drawTypingDots(double seconds) {
 }
 
 AuthFormScreen::AuthFormScreen(App& app, ScreenId id, TextId title, std::vector<Field> fields,
-                               std::optional<UiRect> autoLoginBounds)
-    : Screen(app), id_(id), title_(title), fields_(std::move(fields)), autoLoginBounds_(autoLoginBounds) {}
+                               std::optional<UiRect> autoLoginBounds, std::optional<UiRect> consentBounds)
+    : Screen(app), id_(id), title_(title), fields_(std::move(fields)), autoLoginBounds_(autoLoginBounds),
+      consentBounds_(consentBounds) {}
 
 std::size_t AuthFormScreen::itemCount() const {
-    return fields_.size() + (autoLoginBounds_ ? 1 : 0) + 2;
+    return fields_.size() + (autoLoginBounds_ ? 1 : 0) + (consentBounds_ ? 1 : 0) + 2;
 }
 
 AuthFormScreen::Item AuthFormScreen::itemAt(std::size_t index) const {
     if (index < fields_.size()) {
         return Item::Field;
     }
-    const std::size_t trailing = itemCount() - index;
-    if (trailing == 1) {
-        return Item::Back;
+    std::size_t next = fields_.size();
+    if (autoLoginBounds_ && index == next++) {
+        return Item::AutoLogin;
     }
-    return trailing == 2 ? Item::Submit : Item::AutoLogin;
+    if (consentBounds_ && index == next++) {
+        return Item::Consent;
+    }
+    return index == next ? Item::Submit : Item::Back;
 }
 
 std::size_t AuthFormScreen::indexOf(Item item) const {
-    switch (item) {
-        case Item::Back:
-            return itemCount() - 1;
-        case Item::Submit:
-            return itemCount() - 2;
-        case Item::AutoLogin:
-            return fields_.size();
-        case Item::Field:
-            break;
+    for (std::size_t index = 0; index < itemCount(); ++index) {
+        if (itemAt(index) == item) {
+            return index;
+        }
     }
     return 0;
+}
+
+float AuthFormScreen::consentTextSize() const {
+    const float available = consentBounds_->width - CheckboxTextOffset - 8.0F;
+    const float needed = ui().textWidth(text(TextId::PrivacyConsentPrefix), 1.0F)
+                         + ui().textWidth(text(TextId::PrivacyConsentLink), 1.0F);
+    return needed <= 0.0F ? ConsentTextSize : std::min(ConsentTextSize, available / needed);
+}
+
+UiRect AuthFormScreen::consentLinkBounds() const {
+    const float size = consentTextSize();
+    const float x = consentBounds_->x + CheckboxTextOffset + ui().textWidth(text(TextId::PrivacyConsentPrefix), size);
+    return {x - 2.0F, consentBounds_->y, ui().textWidth(text(TextId::PrivacyConsentLink), size) + 4.0F,
+            consentBounds_->height};
+}
+
+void AuthFormScreen::renderConsent(float pulse) {
+    const UiRect& rect = *consentBounds_;
+    if (itemAt(focus_) == Item::Consent) {
+        drawFocusRing(rect, pulse);
+    }
+    drawCheckboxBox(ui(), rect, consentAccepted_);
+    const float size = consentTextSize();
+    const float textY = rect.y + 7.0F;
+    const std::string_view prefix = text(TextId::PrivacyConsentPrefix);
+    const std::string_view link = text(TextId::PrivacyConsentLink);
+    const float linkX = rect.x + CheckboxTextOffset + ui().textWidth(prefix, size);
+    ui().drawText(prefix, rect.x + CheckboxTextOffset, textY, size, WarmInk);
+    ui().drawText(link, linkX, textY, size, LinkBlue);
+    C2D_DrawRectSolid(linkX, textY + 30.0F * size + 1.0F, 0.15F, ui().textWidth(link, size), 1.0F, LinkBlue);
 }
 
 void AuthFormScreen::open() {
@@ -89,6 +125,7 @@ void AuthFormScreen::reset() {
     for (Field& field : fields_) {
         field.value.clear();
     }
+    consentAccepted_ = false;
 }
 
 void AuthFormScreen::back() {
@@ -122,6 +159,9 @@ void AuthFormScreen::activate() {
         case Item::AutoLogin:
             app_.toggleAutoLogin();
             return;
+        case Item::Consent:
+            consentAccepted_ = !consentAccepted_;
+            return;
         case Item::Submit:
             submit();
             return;
@@ -146,6 +186,10 @@ void AuthFormScreen::update(const InputFrame& input) {
     if (autoLoginBounds_ && input.pressed(KEY_Y)) {
         app_.toggleAutoLogin();
     }
+    if (consentBounds_ && input.pressed(KEY_X)) {
+        openConsentDocument();
+        return;
+    }
     if (input.pressed(KEY_B) || input.tapped(BackButton)) {
         back();
         return;
@@ -156,7 +200,13 @@ void AuthFormScreen::update(const InputFrame& input) {
             return;
         }
     }
-    if (autoLoginBounds_ && input.tapped(*autoLoginBounds_)) {
+    if (consentBounds_ && input.tapped(consentLinkBounds())) {
+        focus(Item::Consent);
+        openConsentDocument();
+    } else if (consentBounds_ && input.tapped(*consentBounds_)) {
+        focus(Item::Consent);
+        consentAccepted_ = !consentAccepted_;
+    } else if (autoLoginBounds_ && input.tapped(*autoLoginBounds_)) {
         focus(Item::AutoLogin);
         app_.toggleAutoLogin();
     } else if (input.tapped(SubmitButton)) {
@@ -192,6 +242,9 @@ void AuthFormScreen::render() {
             drawFocusRing(*autoLoginBounds_, pulse);
         }
         drawCheckbox(ui(), *autoLoginBounds_, app_.autoLogin_, text(TextId::AutoLoginToggle));
+    }
+    if (consentBounds_) {
+        renderConsent(pulse);
     }
     if (itemAt(focus_) == Item::Submit) {
         drawFocusRing(SubmitButton, pulse);
