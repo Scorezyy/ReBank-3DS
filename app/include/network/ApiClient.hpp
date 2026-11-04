@@ -8,6 +8,7 @@
 #include <atomic>
 #include <cstdint>
 #include <optional>
+#include <string_view>
 #include <string>
 #include <utility>
 #include <vector>
@@ -157,6 +158,13 @@ struct FileDownloadResult {
     std::uint32_t size = 0;
 };
 
+struct PolicyBlock {
+    enum class Kind { Title, Heading, Subheading, Paragraph, Bullet, Row };
+    Kind kind = Kind::Paragraph;
+    std::string text;
+    std::vector<std::string> cells;
+};
+
 class ApiClient {
 public:
     ApiClient();
@@ -170,6 +178,7 @@ public:
     AuthResult refresh(const std::string& refreshToken);
     AuthResult requestPasswordReset(const std::string& email);
     std::optional<std::string> issueDeviceToken(const std::string& fingerprint, const std::string& accessToken);
+    std::optional<std::vector<PolicyBlock>> privacyPolicy(std::string_view language);
 
     UploadResult uploadPokemon(const std::vector<UploadPokemon>& pokemon, const std::string& accessToken);
     DownloadResult downloadPokemon(CloudSlot slot, const std::string& accessToken);

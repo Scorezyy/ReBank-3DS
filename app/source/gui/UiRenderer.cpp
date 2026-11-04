@@ -83,6 +83,28 @@ void UiRenderer::drawRight(std::string_view value, float rightX, float y, float 
     draw(value, rightX, y, size, color, Anchor::Right);
 }
 
+float UiRenderer::measure(std::string_view value, float size) const {
+    float width = 0.0F;
+    std::size_t index = 0;
+    while (index < value.size()) {
+        const auto lead = static_cast<unsigned char>(value[index]);
+        const std::size_t length = lead < 0x80 ? 1 : (lead >> 5) == 0x6 ? 2 : (lead >> 4) == 0xE ? 3 : (lead >> 3) == 0x1E ? 4 : 1;
+        u32 codePoint = length == 1 ? lead : lead & (0xFF >> (length + 1));
+        for (std::size_t extra = 1; extra < length && index + extra < value.size(); ++extra) {
+            codePoint = (codePoint << 6) | (static_cast<unsigned char>(value[index + extra]) & 0x3F);
+        }
+        index += length;
+        const charWidthInfo_s* info = C2D_FontGetCharWidthInfo(font_, C2D_FontGlyphIndexFromCodePoint(font_, codePoint));
+        width += info ? info->charWidth * size : 0.0F;
+    }
+    return width;
+}
+
+float UiRenderer::lineHeight(float size) const {
+    const FINF_s* info = C2D_FontGetInfo(font_);
+    return (info ? info->lineFeed : 30.0F) * size;
+}
+
 float UiRenderer::textWidth(std::string_view value, float size) {
     C2D_Text text = parse(value);
     float width = 0.0F;

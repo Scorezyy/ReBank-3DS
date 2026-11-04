@@ -239,6 +239,16 @@ constexpr Translation makeEnglish() {
     text[at(TextId::UpdateManualFbi)] = "Install sdmc:/cia/ReBank.cia with FBI.";
     text[at(TextId::UpdateManualQr)] = "Install ReBank again with the QR code on rebank.at.";
     text[at(TextId::UpdateContinueSoon)] = "ReBank continues in a few seconds.";
+    text[at(TextId::PrivacyConsentPrefix)] = "I accept the ";
+    text[at(TextId::PrivacyConsentLink)] = "privacy policy";
+    text[at(TextId::PrivacyRequiredTitle)] = "Privacy policy";
+    text[at(TextId::PrivacyRequiredMessage)] = "Please read and accept the privacy policy to create an account.";
+    text[at(TextId::PrivacyLoading)] = "Loading privacy policy...";
+    text[at(TextId::PrivacyUnavailableTitle)] = "Privacy policy unavailable";
+    text[at(TextId::PrivacyUnavailableMessage)] = "The privacy policy could not be loaded. Check your connection and try again.";
+    text[at(TextId::PolicyAccept)] = "Accept (A)";
+    text[at(TextId::PolicyAgeConfirmation)] = "By accepting you also confirm that you are at least 16 years old or that your parents agree.";
+    text[at(TextId::PolicyDecline)] = "Decline (B)";
     return text;
 }
 
@@ -476,6 +486,16 @@ constexpr Translation makeGerman() {
     text[at(TextId::UpdateManualFbi)] = "Installiere sdmc:/cia/ReBank.cia mit FBI.";
     text[at(TextId::UpdateManualQr)] = "Installiere ReBank neu über den QR-Code auf rebank.at.";
     text[at(TextId::UpdateContinueSoon)] = "ReBank geht gleich weiter.";
+    text[at(TextId::PrivacyConsentPrefix)] = "Ich akzeptiere die ";
+    text[at(TextId::PrivacyConsentLink)] = "Datenschutzerklärung";
+    text[at(TextId::PrivacyRequiredTitle)] = "Datenschutzerklärung";
+    text[at(TextId::PrivacyRequiredMessage)] = "Bitte lies und akzeptiere die Datenschutzerklärung, um ein Konto zu erstellen.";
+    text[at(TextId::PrivacyLoading)] = "Datenschutzerklärung wird geladen...";
+    text[at(TextId::PrivacyUnavailableTitle)] = "Datenschutzerklärung nicht verfügbar";
+    text[at(TextId::PrivacyUnavailableMessage)] = "Die Datenschutzerklärung konnte nicht geladen werden. Prüfe deine Verbindung und versuche es erneut.";
+    text[at(TextId::PolicyAccept)] = "Akzeptieren (A)";
+    text[at(TextId::PolicyAgeConfirmation)] = "Mit \"Akzeptieren\" bestätigst du außerdem, dass du mindestens 16 Jahre alt bist oder deine Eltern einverstanden sind.";
+    text[at(TextId::PolicyDecline)] = "Ablehnen (B)";
     return text;
 }
 
@@ -532,6 +552,16 @@ constexpr Translation makeFrench() {
     text[at(TextId::PokedexPrefix)] = "Pokedex : ";
     text[at(TextId::CartridgeRemovedTitle)] = "Cartouche retiree";
     text[at(TextId::CartridgeRemovedMessage)] = "La cartouche de jeu a ete retiree. Retour a la selection des jeux.";
+    text[at(TextId::PrivacyConsentPrefix)] = "J'accepte la ";
+    text[at(TextId::PrivacyConsentLink)] = "politique de confidentialite";
+    text[at(TextId::PrivacyRequiredTitle)] = "Politique de confidentialite";
+    text[at(TextId::PrivacyRequiredMessage)] = "Lis et accepte la politique de confidentialite pour creer un compte.";
+    text[at(TextId::PrivacyLoading)] = "Chargement de la politique de confidentialite...";
+    text[at(TextId::PrivacyUnavailableTitle)] = "Politique de confidentialite indisponible";
+    text[at(TextId::PrivacyUnavailableMessage)] = "La politique de confidentialite n'a pas pu etre chargee. Verifie ta connexion et reessaie.";
+    text[at(TextId::PolicyAccept)] = "Accepter (A)";
+    text[at(TextId::PolicyAgeConfirmation)] = "En acceptant, tu confirmes aussi avoir au moins 16 ans ou l'accord de tes parents.";
+    text[at(TextId::PolicyDecline)] = "Refuser (B)";
     return text;
 }
 
@@ -588,6 +618,16 @@ constexpr Translation makeSpanish() {
     text[at(TextId::PokedexPrefix)] = "Pokedex: ";
     text[at(TextId::CartridgeRemovedTitle)] = "Cartucho retirado";
     text[at(TextId::CartridgeRemovedMessage)] = "Se retiro el cartucho del juego. Volviendo a la seleccion de juegos.";
+    text[at(TextId::PrivacyConsentPrefix)] = "Acepto la ";
+    text[at(TextId::PrivacyConsentLink)] = "politica de privacidad";
+    text[at(TextId::PrivacyRequiredTitle)] = "Politica de privacidad";
+    text[at(TextId::PrivacyRequiredMessage)] = "Lee y acepta la politica de privacidad para crear una cuenta.";
+    text[at(TextId::PrivacyLoading)] = "Cargando la politica de privacidad...";
+    text[at(TextId::PrivacyUnavailableTitle)] = "Politica de privacidad no disponible";
+    text[at(TextId::PrivacyUnavailableMessage)] = "No se pudo cargar la politica de privacidad. Revisa tu conexion e intentalo de nuevo.";
+    text[at(TextId::PolicyAccept)] = "Aceptar (A)";
+    text[at(TextId::PolicyAgeConfirmation)] = "Al aceptar confirmas tambien que tienes al menos 16 anos o que tus padres estan de acuerdo.";
+    text[at(TextId::PolicyDecline)] = "Rechazar (B)";
     return text;
 }
 
@@ -644,6 +684,16 @@ constexpr Translation makeItalian() {
     text[at(TextId::PokedexPrefix)] = "Pokedex: ";
     text[at(TextId::CartridgeRemovedTitle)] = "Cartuccia rimossa";
     text[at(TextId::CartridgeRemovedMessage)] = "La cartuccia di gioco e stata rimossa. Ritorno alla selezione dei giochi.";
+    text[at(TextId::PrivacyConsentPrefix)] = "Accetto l'";
+    text[at(TextId::PrivacyConsentLink)] = "informativa privacy";
+    text[at(TextId::PrivacyRequiredTitle)] = "Informativa privacy";
+    text[at(TextId::PrivacyRequiredMessage)] = "Leggi e accetta l'informativa privacy per creare un account.";
+    text[at(TextId::PrivacyLoading)] = "Caricamento dell'informativa privacy...";
+    text[at(TextId::PrivacyUnavailableTitle)] = "Informativa privacy non disponibile";
+    text[at(TextId::PrivacyUnavailableMessage)] = "Impossibile caricare l'informativa privacy. Controlla la connessione e riprova.";
+    text[at(TextId::PolicyAccept)] = "Accetta (A)";
+    text[at(TextId::PolicyAgeConfirmation)] = "Accettando confermi anche di avere almeno 16 anni o il consenso dei tuoi genitori.";
+    text[at(TextId::PolicyDecline)] = "Rifiuta (B)";
     return text;
 }
 
@@ -700,6 +750,16 @@ constexpr Translation makePortuguese() {
     text[at(TextId::PokedexPrefix)] = "Pokedex: ";
     text[at(TextId::CartridgeRemovedTitle)] = "Cartucho removido";
     text[at(TextId::CartridgeRemovedMessage)] = "O cartucho do jogo foi removido. Voltando para a selecao de jogos.";
+    text[at(TextId::PrivacyConsentPrefix)] = "Aceito a ";
+    text[at(TextId::PrivacyConsentLink)] = "politica de privacidade";
+    text[at(TextId::PrivacyRequiredTitle)] = "Politica de privacidade";
+    text[at(TextId::PrivacyRequiredMessage)] = "Le e aceita a politica de privacidade para criar uma conta.";
+    text[at(TextId::PrivacyLoading)] = "A carregar a politica de privacidade...";
+    text[at(TextId::PrivacyUnavailableTitle)] = "Politica de privacidade indisponivel";
+    text[at(TextId::PrivacyUnavailableMessage)] = "Nao foi possivel carregar a politica de privacidade. Verifica a ligacao e tenta novamente.";
+    text[at(TextId::PolicyAccept)] = "Aceitar (A)";
+    text[at(TextId::PolicyAgeConfirmation)] = "Ao aceitar confirmas tambem que tens pelo menos 16 anos ou que os teus pais concordam.";
+    text[at(TextId::PolicyDecline)] = "Recusar (B)";
     return text;
 }
 

@@ -239,6 +239,16 @@ enum class TextId : std::size_t {
     UpdateManualFbi,
     UpdateManualQr,
     UpdateContinueSoon,
+    PrivacyConsentPrefix,
+    PrivacyConsentLink,
+    PrivacyRequiredTitle,
+    PrivacyRequiredMessage,
+    PrivacyLoading,
+    PrivacyUnavailableTitle,
+    PrivacyUnavailableMessage,
+    PolicyAccept,
+    PolicyAgeConfirmation,
+    PolicyDecline,
     Count
 };
 

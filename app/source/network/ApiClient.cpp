@@ -323,7 +323,9 @@ AuthResult ApiClient::registerAccount(const std::string& username, const std::st
     body.set("username", json_string(username.c_str()))
         .set("email", json_string(email.c_str()))
         .set("password", json_string(password.c_str()))
-        .set("deviceFingerprint", json_string(deviceFingerprint.c_str()));
+        .set("deviceFingerprint", json_string(deviceFingerprint.c_str()))
+        .set("privacyAccepted", json_true())
+        .set("ageConfirmed", json_true());
     return postAuth("/v1/auth/register", body.dump());
 }
 
@@ -358,6 +360,50 @@ std::optional<std::string> ApiClient::issueDeviceToken(const std::string& finger
         return std::nullopt;
     }
     return token;
+}
+
+std::optional<std::vector<PolicyBlock>> ApiClient::privacyPolicy(std::string_view language) {
+    const HttpResult response = request(Method::Get, "/v1/legal/privacy?lang=" + std::string(language));
+    if (!response.success) {
+        return std::nullopt;
+    }
+    const Envelope envelope = parseEnvelope(response.status, response.body, "Privacy policy unavailable.");
+    if (!envelope.ok()) {
+        return std::nullopt;
+    }
+    static constexpr std::pair<std::string_view, PolicyBlock::Kind> Kinds[] = {
+        {"title", PolicyBlock::Kind::Title},       {"heading", PolicyBlock::Kind::Heading},
+        {"subheading", PolicyBlock::Kind::Subheading}, {"paragraph", PolicyBlock::Kind::Paragraph},
+        {"bullet", PolicyBlock::Kind::Bullet},     {"row", PolicyBlock::Kind::Row}};
+    json_t* blocks = envelope.document.field("blocks");
+    std::vector<PolicyBlock> result;
+    for (std::size_t index = 0; index < json_array_size(blocks); ++index) {
+        json_t* entry = json_array_get(blocks, index);
+        const std::string kind = Json::string(entry, "kind");
+        PolicyBlock block;
+        bool known = false;
+        for (const auto& [name, value] : Kinds) {
+            if (kind == name) {
+                block.kind = value;
+                known = true;
+            }
+        }
+        if (!known) {
+            continue;
+        }
+        block.text = Json::string(entry, "text");
+        json_t* cells = json_object_get(entry, "cells");
+        for (std::size_t cell = 0; cell < json_array_size(cells); ++cell) {
+            if (const char* value = json_string_value(json_array_get(cells, cell))) {
+                block.cells.emplace_back(value);
+            }
+        }
+        result.push_back(std::move(block));
+    }
+    if (result.empty()) {
+        return std::nullopt;
+    }
+    return result;
 }
 
 AuthResult ApiClient::postAuth(const std::string& path, const std::string& body) {
