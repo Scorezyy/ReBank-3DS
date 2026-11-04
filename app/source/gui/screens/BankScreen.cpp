@@ -159,7 +159,8 @@ u32 BankScreen::selectionModeAccent() const {
 }
 
 std::optional<C2D_Image> BankScreen::spriteOf(const PokemonSummary& summary) const {
-    if (!summary.occupied() || !app_.resources_.pokemonSprites) {
+    if (!summary.occupied() || !app_.resources_.pokemonSprites
+        || summary.species >= C2D_SpriteSheetCount(app_.resources_.pokemonSprites)) {
         return std::nullopt;
     }
     return C2D_SpriteSheetGetImage(app_.resources_.pokemonSprites, summary.species);
