@@ -26,6 +26,7 @@ constexpr std::size_t MaximumRequestSize = 0xF000;
 constexpr std::size_t MaximumUpdateSize = 5 * 1024 * 1024;
 constexpr std::size_t DownloadChunkSize = 32 * 1024;
 constexpr std::size_t MaximumCertificateSize = 16 * 1024;
+constexpr std::size_t DeviceTokenLength = 43;
 constexpr const char* TrustedRootPaths[] = {
     "romfs:/assets/tls/usertrust-rsa.der",
     "romfs:/assets/tls/sectigo-r46.der",
@@ -336,6 +337,27 @@ AuthResult ApiClient::requestPasswordReset(const std::string& email) {
     Json::Document body = Json::Document::object();
     body.set("email", json_string(email.c_str()));
     return postAuth("/v1/auth/password-reset", body.dump());
+}
+
+std::optional<std::string> ApiClient::issueDeviceToken(const std::string& fingerprint, const std::string& accessToken) {
+    if (fingerprint.empty() || accessToken.empty()) {
+        return std::nullopt;
+    }
+    Json::Document body = Json::Document::object();
+    body.set("fingerprint", json_string(fingerprint.c_str()));
+    const HttpResult response = request(Method::Post, "/v1/livebox/device-token", body.dump(), accessToken);
+    if (!response.success) {
+        return std::nullopt;
+    }
+    const Envelope envelope = parseEnvelope(response.status, response.body, "Device token rejected.");
+    if (!envelope.ok()) {
+        return std::nullopt;
+    }
+    const std::string token = envelope.document.string("deviceToken");
+    if (token.size() != DeviceTokenLength) {
+        return std::nullopt;
+    }
+    return token;
 }
 
 AuthResult ApiClient::postAuth(const std::string& path, const std::string& body) {

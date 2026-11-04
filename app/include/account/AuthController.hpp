@@ -66,6 +66,7 @@ public:
 
 private:
     Completed run(const AuthRequest& request);
+    void storeDeviceToken(const std::string& fingerprint, const std::string& accessToken);
 
     ApiClient& api_;
     AsyncTask<Completed> task_;

@@ -169,6 +169,7 @@ public:
                                const std::string& deviceFingerprint);
     AuthResult refresh(const std::string& refreshToken);
     AuthResult requestPasswordReset(const std::string& email);
+    std::optional<std::string> issueDeviceToken(const std::string& fingerprint, const std::string& accessToken);
 
     UploadResult uploadPokemon(const std::vector<UploadPokemon>& pokemon, const std::string& accessToken);
     DownloadResult downloadPokemon(CloudSlot slot, const std::string& accessToken);
