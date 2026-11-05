@@ -152,6 +152,21 @@ struct PluginRelease {
     UpdateAsset file;
 };
 
+struct CatalogPlugin {
+    std::string id;
+    bool access = false;
+    bool available = false;
+    std::string tag;
+    std::string version;
+    UpdateAsset file;
+};
+
+struct PluginCatalog {
+    bool success = false;
+    std::string message;
+    std::vector<CatalogPlugin> plugins;
+};
+
 struct FileDownloadResult {
     bool success = false;
     std::string message;
@@ -198,6 +213,10 @@ public:
     PluginRelease latestPluginRelease();
     FileDownloadResult downloadPluginRelease(const std::string& tag, const std::string& destination,
                                              std::uint32_t expectedSize, std::atomic<std::uint32_t>& received);
+    PluginCatalog pluginCatalog(const std::string& accessToken);
+    FileDownloadResult downloadCatalogPlugin(const std::string& id, const std::string& tag, const std::string& destination,
+                                             std::uint32_t expectedSize, std::atomic<std::uint32_t>& received,
+                                             const std::string& accessToken);
 
     bool consumeSessionRejected();
 
@@ -226,7 +245,7 @@ private:
     HttpResult requestOnce(Method method, const std::string& path, const std::string& body,
                            const std::string& accessToken, std::uint64_t timeoutNanoseconds);
     FileDownloadResult downloadFile(const std::string& url, const std::string& destination, std::uint32_t expectedSize,
-                                    std::atomic<std::uint32_t>* progress);
+                                    std::atomic<std::uint32_t>* progress, const std::string& accessToken = {});
     void syncClock(bool force = false);
     std::uint64_t signedTimestampSeconds();
 

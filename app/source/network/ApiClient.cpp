@@ -740,8 +740,56 @@ FileDownloadResult ApiClient::downloadPluginRelease(const std::string& tag, cons
     return downloadFile(ServerConfig::baseUrl() + "/v1/livebox/plugin/update/" + tag, destination, expectedSize, &received);
 }
 
+PluginCatalog ApiClient::pluginCatalog(const std::string& accessToken) {
+    PluginCatalog catalog;
+    const HttpResult response = request(Method::Get, "/v1/plugins", {}, accessToken);
+    if (!response.success || response.status != 200) {
+        catalog.message = response.success ? "The plugin list could not be loaded." : response.message;
+        return catalog;
+    }
+    const Json::Document root = Json::Document::parse(response.body);
+    json_t* list = root.isObject() ? json_object_get(root.root(), "plugins") : nullptr;
+    if (!json_is_array(list)) {
+        catalog.message = "The server returned an invalid plugin list.";
+        return catalog;
+    }
+    std::size_t index = 0;
+    json_t* entry = nullptr;
+    json_array_foreach(list, index, entry) {
+        CatalogPlugin plugin;
+        plugin.id = Json::string(entry, "id");
+        plugin.access = json_is_true(json_object_get(entry, "access"));
+        plugin.available = json_is_true(json_object_get(entry, "available"));
+        if (plugin.available) {
+            std::optional<UpdateAsset> file = parseUpdateAsset(entry);
+            plugin.tag = Json::string(entry, "tag");
+            plugin.version = Json::string(entry, "version");
+            if (!file || file->signature.empty() || !validUpdateText(plugin.tag, true) || !validUpdateText(plugin.version, false)) {
+                plugin.available = false;
+            } else {
+                plugin.file = std::move(*file);
+            }
+        }
+        if (!plugin.id.empty()) {
+            catalog.plugins.push_back(std::move(plugin));
+        }
+    }
+    catalog.success = true;
+    catalog.message = "Plugin list loaded.";
+    return catalog;
+}
+
+FileDownloadResult ApiClient::downloadCatalogPlugin(const std::string& id, const std::string& tag, const std::string& destination,
+                                                    std::uint32_t expectedSize, std::atomic<std::uint32_t>& received,
+                                                    const std::string& accessToken) {
+    if ((id != "livebox" && id != "acnl") || !validUpdateText(tag, true)) {
+        return {false, "The plugin download request is invalid.", 0};
+    }
+    return downloadFile(ServerConfig::baseUrl() + "/v1/plugins/download/" + id + "/" + tag, destination, expectedSize, &received, accessToken);
+}
+
 FileDownloadResult ApiClient::downloadFile(const std::string& url, const std::string& destination, std::uint32_t expectedSize,
-                                           std::atomic<std::uint32_t>* progress) {
+                                           std::atomic<std::uint32_t>* progress, const std::string& accessToken) {
     if (!initialized_ || expectedSize == 0 || expectedSize > MaximumUpdateSize) {
         return {false, "The update download request is invalid.", 0};
     }
@@ -752,6 +800,10 @@ FileDownloadResult ApiClient::downloadFile(const std::string& url, const std::st
         return {false, openError, 0};
     }
     result = httpcAddRequestHeaderField(&context, "Accept", "application/octet-stream");
+    if (R_SUCCEEDED(result) && !accessToken.empty()) {
+        const std::string authorization = "Bearer " + accessToken;
+        result = httpcAddRequestHeaderField(&context, "Authorization", authorization.c_str());
+    }
     if (R_SUCCEEDED(result)) {
         result = httpcBeginRequest(&context);
     }
