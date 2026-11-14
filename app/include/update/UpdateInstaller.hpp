@@ -1,6 +1,6 @@
 #pragma once
 
-#include "network/ApiClient.hpp"
+#include "network/api/ReleaseApi.hpp"
 
 #include <atomic>
 #include <cstdint>
@@ -23,5 +23,5 @@ struct UpdateProgress {
 };
 
 namespace UpdateInstaller {
-UpdateInstallResult run(ApiClient& api, const std::string& executablePath, bool homebrew, UpdateProgress& progress);
+UpdateInstallResult run(ReleaseApi& api, const std::string& executablePath, bool homebrew, UpdateProgress& progress);
 }

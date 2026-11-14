@@ -1,8 +1,8 @@
 #pragma once
 
-#include "core/ErrorNotice.hpp"
+#include "gui/widgets/ErrorNotice.hpp"
 #include "i18n/Localization.hpp"
-#include "network/ApiClient.hpp"
+#include "network/api/CloudApi.hpp"
 
 #include <cstddef>
 #include <functional>
@@ -14,7 +14,7 @@ class LoadService;
 struct BankContext {
     static constexpr std::size_t DefaultBoxLimit = 50;
 
-    ApiClient& api;
+    CloudApi& api;
     LoadService& loads;
     const AccountSession& account;
     std::string& status;

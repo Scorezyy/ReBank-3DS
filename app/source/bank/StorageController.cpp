@@ -1,18 +1,10 @@
 #include "bank/StorageController.hpp"
 
-#include "core/Logger.hpp"
-#include "core/PayloadHash.hpp"
+#include "platform/Logger.hpp"
 
 #include <utility>
 
 namespace {
-void logSlot(const std::string& action, const std::string& location, const PokemonSummary& mon,
-             const PokemonPayload& payload) {
-    Logger::instance().info(action + ": " + location + " species " + std::to_string(mon.species)
-                            + " \"" + mon.nickname + "\" payload=" + payloadTag(payload.data)
-                            + " (" + std::to_string(payload.data.size()) + " bytes)");
-}
-
 std::string slotLocation(const char* area, std::size_t box, std::size_t slot) {
     return std::string(area) + " " + std::to_string(box + 1) + " slot " + std::to_string(slot + 1);
 }
@@ -26,116 +18,6 @@ std::optional<std::size_t> firstSlotWhere(std::size_t count, Predicate&& predica
     }
     return std::nullopt;
 }
-}
-
-void StorageController::pickUp() {
-    if (session_.hand.active) {
-        return;
-    }
-    const StorageAddress address = session_.focusedAddress();
-    const std::size_t slot = session_.focusedSlot;
-    SlotContents contents;
-    if (slots_.read(address, slot, contents) == SlotState::Empty) {
-        context_.status = context_.text.get(TextId::SlotEmpty);
-        return;
-    }
-    if (address.pane == StoragePane::Party && session_.party.occupiedCount() <= 1) {
-        context_.status = context_.text.get(TextId::TeamCannotBeEmpty);
-        return;
-    }
-    if (address.isCloudBank() && !context_.signedIn()) {
-        context_.status = context_.text.get(TextId::SignInAgain);
-        return;
-    }
-    slots_.clear(address, slot);
-    Hand& hand = session_.hand;
-    hand.take(slots_.held(address, slot, std::move(contents)));
-    ++session_.handGeneration;
-    context_.status = context_.text.format(TextId::PokemonPickedUp, {hand.summary.nickname});
-    logSlot(hand.payloadKnown ? "pickUp" : "pickUp (fetching)", slots_.describe(address, slot), hand.summary,
-            hand.payload);
-    if (!hand.payloadKnown) {
-        startCloudFetch(LoadService::Operation::PickupCloud, slot, hand.summary);
-    }
-}
-
-void StorageController::drop() {
-    const Hand& hand = session_.hand;
-    if (!hand.active) {
-        return;
-    }
-    if (!hand.payloadKnown) {
-        context_.status = context_.text.format(TextId::StillFetching, {hand.summary.nickname});
-        return;
-    }
-    const StorageAddress address = session_.focusedAddress();
-    const std::size_t slot = session_.focusedSlot;
-    if (address.isInSave() && !session_.saveAdapter.canImportPokemon(hand.payload)) {
-        context_.status = context_.text.format(TextId::GenerationIncompatible,
-            {std::to_string(hand.payload.format), std::to_string(session_.saveAdapter.gameGeneration())});
-        return;
-    }
-    if (!slots_.loaded(address)) {
-        context_.status = context_.text.get(TextId::BankBoxLoading);
-        return;
-    }
-    if (!slots_.available(address, slot)) {
-        context_.status = context_.text.format(TextId::SlotUnavailable,
-                                               {std::to_string(session_.saveAdapter.boxCapacity())});
-        return;
-    }
-    SlotContents occupant;
-    switch (slots_.read(address, slot, occupant)) {
-        case SlotState::Empty:
-            placeHand(address, slot);
-            return;
-        case SlotState::Ready:
-            swapHand(address, slot, std::move(occupant));
-            return;
-        case SlotState::PayloadPending:
-            break;
-    }
-    if (!context_.signedIn()) {
-        context_.status = context_.text.get(TextId::SignInAgain);
-        return;
-    }
-    if (context_.loads.busy()) {
-        return;
-    }
-    context_.status = context_.text.get(TextId::FetchingOccupant);
-    startCloudFetch(LoadService::Operation::SwapCloud, slot, occupant.summary);
-}
-
-void StorageController::completeCloudSwap(std::size_t slot, PokemonPayload occupantPayload) {
-    const StorageAddress bank{StoragePane::Cloud, false};
-    swapHand(bank, slot, {session_.cloud.summaries[slot], std::move(occupantPayload)});
-}
-
-void StorageController::placeHand(StorageAddress address, std::size_t slot) {
-    Hand& hand = session_.hand;
-    slots_.write(address, slot, {hand.summary, hand.payload});
-    context_.status = context_.text.format(TextId::PokemonPlaced, {hand.summary.nickname});
-    logSlot("drop placed", slots_.describe(address, slot), hand.summary, hand.payload);
-    hand = Hand{};
-    ++session_.handGeneration;
-}
-
-void StorageController::swapHand(StorageAddress address, std::size_t slot, SlotContents occupant) {
-    Hand& hand = session_.hand;
-    Logger::instance().info("drop swap: " + slots_.describe(address, slot) + " incoming species "
-                            + std::to_string(hand.summary.species) + " payload=" + payloadTag(hand.payload.data)
-                            + " ; outgoing species " + std::to_string(occupant.summary.species) + " payload="
-                            + payloadTag(occupant.payload.data));
-    slots_.write(address, slot, {hand.summary, hand.payload});
-    hand.swapWith(slots_.held(address, slot, std::move(occupant)));
-    ++session_.handGeneration;
-    context_.status = context_.text.format(TextId::PokemonSwapped, {hand.summary.nickname});
-}
-
-void StorageController::startCloudFetch(LoadService::Operation operation, std::size_t slot,
-                                        const PokemonSummary& summary) {
-    context_.loads.beginPayloadFetch(operation,
-        PayloadFetchRequest{slot, session_.cloudPosition(), summary, session_.handGeneration});
 }
 
 BoxSlots& StorageController::localDraftForWrite(std::size_t box) {
@@ -180,37 +62,30 @@ void StorageController::restorePokemon(const HeldPokemon& pokemon) {
     }
 }
 
-void StorageController::returnHand() {
-    if (!session_.hand.active) {
-        return;
-    }
-    Hand hand = std::move(session_.hand);
-    HeldPokemon held = hand;
-    Logger::instance().info("returnHand: unwinding " + std::to_string(hand.swapHistory.size()) + " swap(s)");
-    while (!hand.swapHistory.empty()) {
-        restorePokemon(held);
-        held = std::move(hand.swapHistory.back());
-        hand.swapHistory.pop_back();
-    }
-    restorePokemon(held);
-
-    context_.status = context_.text.format(TextId::ReturnedToSlot, {std::to_string(held.sourceIndex + 1)});
-    logSlot("returnHand", slots_.describe(held.source, held.sourceIndex), held.summary, held.payload);
-    session_.hand = Hand{};
-    ++session_.handGeneration;
-}
-
 std::optional<std::string> StorageController::pendingChange() const {
-    if (const auto baseline = session_.localBaselines.find(session_.localBox);
-        baseline != session_.localBaselines.end()) {
-        const auto slot = firstSlotWhere(BoxSlotCount,
-            [&](std::size_t index) { return session_.local.slotDiffers(baseline->second, index); });
-        if (slot) {
-            return slotLocation("local box", session_.localBox, *slot);
+    for (const auto check : {&StorageController::openLocalBoxChange, &StorageController::openCloudBoxChange,
+                             &StorageController::partyChange, &StorageController::trashChange,
+                             &StorageController::storedLocalDraftChange, &StorageController::storedCloudDraftChange}) {
+        if (std::optional<std::string> change = (this->*check)()) {
+            return change;
         }
     }
+    return std::nullopt;
+}
+
+std::optional<std::string> StorageController::openLocalBoxChange() const {
+    const auto baseline = session_.localBaselines.find(session_.localBox);
+    if (baseline == session_.localBaselines.end()) {
+        return std::nullopt;
+    }
+    const auto slot = firstSlotWhere(BoxSlotCount,
+        [&](std::size_t index) { return session_.local.slotDiffers(baseline->second, index); });
+    return slot ? std::optional(slotLocation("local box", session_.localBox, *slot)) : std::nullopt;
+}
+
+std::optional<std::string> StorageController::openCloudBoxChange() const {
     const CloudBoxDraft* cloudDraft = session_.currentCloudDraft();
-    const auto cloudSlot = firstSlotWhere(BoxSlotCount, [&](std::size_t index) {
+    const auto slot = firstSlotWhere(BoxSlotCount, [&](std::size_t index) {
         const PokemonPayload& pending = session_.cloud.pending[index];
         if (!cloudDraft) {
             return pending.known();
@@ -218,17 +93,20 @@ std::optional<std::string> StorageController::pendingChange() const {
         return !sameIdentity(session_.cloud.summaries[index], cloudDraft->baseline[index])
             || (pending.known() && pending.data != cloudDraft->payloads[index].data);
     });
-    if (cloudSlot) {
-        return slotLocation("bank", session_.cloudBox, *cloudSlot);
-    }
-    const auto partySlot = firstSlotWhere(PartySlotCount,
+    return slot ? std::optional(slotLocation("bank", session_.cloudBox, *slot)) : std::nullopt;
+}
+
+std::optional<std::string> StorageController::partyChange() const {
+    const auto slot = firstSlotWhere(PartySlotCount,
         [&](std::size_t index) { return session_.party.slotDiffers(session_.partyBaseline, index); });
-    if (partySlot) {
-        return "party slot " + std::to_string(*partySlot + 1);
-    }
-    if (!session_.trash.empty()) {
-        return "trash box holds Pokemon awaiting deletion";
-    }
+    return slot ? std::optional("party slot " + std::to_string(*slot + 1)) : std::nullopt;
+}
+
+std::optional<std::string> StorageController::trashChange() const {
+    return session_.trash.empty() ? std::nullopt : std::optional<std::string>("trash box holds Pokemon awaiting deletion");
+}
+
+std::optional<std::string> StorageController::storedLocalDraftChange() const {
     for (const auto& [box, draft] : session_.localDrafts) {
         const auto baseline = session_.localBaselines.find(box);
         if (baseline == session_.localBaselines.end()) {
@@ -240,6 +118,10 @@ std::optional<std::string> StorageController::pendingChange() const {
             return slotLocation("local box", box, *slot);
         }
     }
+    return std::nullopt;
+}
+
+std::optional<std::string> StorageController::storedCloudDraftChange() const {
     for (const auto& [box, draft] : session_.cloudBoxes) {
         if (box == session_.cloudKey()) {
             continue;
@@ -269,6 +151,32 @@ void StorageController::loadLocalBox() {
     session_.local = draft != session_.localDrafts.end() ? draft->second : baseline->second;
     focusFirstOccupied(session_.local.summaries);
     Logger::instance().info("Local box loaded: " + std::to_string(session_.localBox + 1));
+}
+
+void StorageController::stepLocalBox(bool backwards) {
+    const std::size_t boxCount = session_.saveAdapter.boxCount();
+    persistLocalDraft();
+    session_.localBox = (session_.localBox + (backwards ? boxCount - 1 : 1)) % boxCount;
+    loadLocalBox();
+}
+
+void StorageController::stepCloudBox(bool backwards) {
+    const std::size_t boxLimit = context_.cloudBoxLimit();
+    if (session_.trashBoxActive) {
+        session_.setTrashActive(false);
+        session_.cloudBox = backwards ? boxLimit - 1 : 0;
+        refreshCloudBox();
+        return;
+    }
+    persistCloudDraft();
+    const bool leavesRange = backwards ? session_.cloudBox == 0 : session_.cloudBox + 1 >= boxLimit;
+    if (leavesRange) {
+        session_.setTrashActive(true);
+        loadTrashBox();
+        return;
+    }
+    session_.cloudBox = backwards ? session_.cloudBox - 1 : session_.cloudBox + 1;
+    refreshCloudBox();
 }
 
 void StorageController::loadTrashBox() {

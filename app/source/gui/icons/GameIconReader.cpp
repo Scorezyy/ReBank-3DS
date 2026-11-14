@@ -1,0 +1,133 @@
+#include "gui/icons/GameIconReader.hpp"
+
+#include "gui/icons/DsBanner.hpp"
+#include "platform/AppPaths.hpp"
+#include "platform/FileSystem.hpp"
+#include "platform/FsGuard.hpp"
+#include "platform/Logger.hpp"
+#include "save/catalog/VirtualConsoleTitles.hpp"
+#include "save/storage/RomLibrary.hpp"
+#include "save/storage/TitleIds.hpp"
+
+#include <3ds.h>
+
+#include <cstring>
+#include <memory>
+#include <new>
+#include <span>
+#include <string>
+
+namespace {
+constexpr std::size_t IconBytes = sizeof(IconPixels);
+constexpr std::string_view CacheDirectory = "cache/icons";
+
+std::string cachePath(const GameDescriptor& game, bool cartridge) {
+    return AppPaths::file(std::string(CacheDirectory) + "/" + std::string(game.code)
+                          + (cartridge ? "_cart.icon" : "_sd.icon"));
+}
+
+bool loadCached(const GameDescriptor& game, bool cartridge, IconPixels& pixels) {
+    return FileSystem::readAt(cachePath(game, cartridge), 0,
+                              std::span(reinterpret_cast<std::uint8_t*>(pixels.data()), IconBytes));
+}
+
+void storeCached(const GameDescriptor& game, bool cartridge, const IconPixels& pixels) {
+    AppPaths::ensureDirectory(CacheDirectory);
+    const std::string path = cachePath(game, cartridge);
+    if (!FileSystem::write(path, std::span(reinterpret_cast<const std::uint8_t*>(pixels.data()), IconBytes))) {
+        Logger::instance().warning("Icon cache could not be written: " + path);
+    }
+}
+
+bool readDsCartridgeIcon(IconPixels& pixels) {
+    const std::unique_ptr<std::uint8_t[]> banner(new (std::nothrow) std::uint8_t[0x23C0]());
+    if (!banner || R_FAILED(FSUSER_GetLegacyBannerData(MEDIATYPE_GAME_CARD, 0, banner.get()))) {
+        return false;
+    }
+    DsBanner::decodeIcon(banner.get(), pixels);
+    return true;
+}
+
+bool readRomIcon(const GameDescriptor& game, IconPixels& pixels) {
+    const auto rom = RomLibrary::find(game.code);
+    return rom && RomLibrary::readIcon(*rom, pixels);
+}
+
+bool read3dsIconForTitle(std::uint64_t titleId, FS_MediaType mediaType, IconPixels& pixels) {
+    const std::uint32_t archivePathData[4] = {
+        static_cast<std::uint32_t>(titleId),
+        static_cast<std::uint32_t>(titleId >> 32),
+        static_cast<std::uint32_t>(mediaType),
+        0
+    };
+    static constexpr std::uint32_t IconFilePathData[5] = {
+        0x00000000, 0x00000000, 0x00000002, 0x6E6F6369, 0x00000000
+    };
+    Handle file = 0;
+    Result result = FSUSER_OpenFileDirectly(&file, ARCHIVE_SAVEDATA_AND_CONTENT,
+        FS_Path{PATH_BINARY, sizeof(archivePathData), archivePathData},
+        FS_Path{PATH_BINARY, sizeof(IconFilePathData), IconFilePathData},
+        FS_OPEN_READ, 0);
+    if (R_FAILED(result)) {
+        return false;
+    }
+    constexpr std::uint32_t SmdhSize = 0x36C0;
+    const std::unique_ptr<std::uint8_t[]> smdh(new (std::nothrow) std::uint8_t[SmdhSize]());
+    std::uint32_t bytesRead = 0;
+    result = smdh ? FSFILE_Read(file, &bytesRead, 0, smdh.get(), SmdhSize) : -1;
+    FSFILE_Close(file);
+    if (R_FAILED(result) || bytesRead != SmdhSize || std::memcmp(smdh.get(), "SMDH", 4) != 0) {
+        return false;
+    }
+    const auto* icon = reinterpret_cast<const std::uint16_t*>(smdh.get() + 0x24C0);
+    for (std::size_t tileY = 0; tileY < 6; ++tileY) {
+        for (std::size_t tileX = 0; tileX < 6; ++tileX) {
+            for (std::size_t pixel = 0; pixel < 64; ++pixel) {
+                const std::size_t source = (tileY * 6 + tileX) * 64 + pixel;
+                const std::size_t x = tileX * 8 + ((pixel & 1) | ((pixel >> 1) & 2) | ((pixel >> 2) & 4));
+                const std::size_t y = tileY * 8 + (((pixel >> 1) & 1) | ((pixel >> 2) & 2) | ((pixel >> 3) & 4));
+                pixels[y * GameIconSize + x] = icon[source];
+            }
+        }
+    }
+    return true;
+}
+
+bool read3dsIcon(const GameDescriptor& game, bool cartridge, IconPixels& pixels) {
+    const FS_MediaType mediaType = cartridge ? MEDIATYPE_GAME_CARD : MEDIATYPE_SD;
+    if (const auto titleId = TitleIds::titleIdFor(game.code)) {
+        return read3dsIconForTitle(*titleId, mediaType, pixels);
+    }
+    const auto vcTitleId = VirtualConsoleTitles::resolveInstalledTitleId(game.code);
+    return vcTitleId && read3dsIconForTitle(*vcTitleId, mediaType, pixels);
+}
+
+bool loadIcon(const GameDescriptor& game, bool cartridge, IconPixels& pixels) {
+    if (game.platform == GamePlatform::NintendoDs && cartridge) {
+        return readDsCartridgeIcon(pixels);
+    }
+    return RomLibrary::supports(game.platform) ? readRomIcon(game, pixels) : read3dsIcon(game, cartridge, pixels);
+}
+}
+
+namespace GameIconReader {
+bool read(const GameDescriptor& game, bool cartridge, IconPixels& pixels) {
+    const FsGuard guard;
+    if (loadCached(game, cartridge, pixels)) {
+        return true;
+    }
+    pixels.fill(0);
+    const bool loaded = loadIcon(game, cartridge, pixels);
+    if (!loaded) {
+        return false;
+    }
+    storeCached(game, cartridge, pixels);
+    return true;
+}
+
+bool readUncached(const GameDescriptor& game, bool cartridge, IconPixels& pixels) {
+    const FsGuard guard;
+    std::remove(cachePath(game, cartridge).c_str());
+    return read(game, cartridge, pixels);
+}
+}

@@ -1,8 +1,9 @@
 #include "app/App.hpp"
-#include "core/Logger.hpp"
-#include "core/ServerConfig.hpp"
+
+#include "config/ServerConfig.hpp"
 #include "gui/Theme.hpp"
-#include "gui/elements/ErrorDialog.hpp"
+#include "gui/widgets/ErrorDialog.hpp"
+#include "platform/Logger.hpp"
 
 #include <utils/i18n.hpp>
 
@@ -13,12 +14,26 @@
 using namespace Gui;
 
 namespace {
-constexpr double WelcomeBackSeconds = 1.1;
 constexpr float StereoDepth = 2.5F;
+
+TextId authFailureTitle(AuthOperation operation) {
+    switch (operation) {
+        case AuthOperation::Login:
+            return TextId::LoginFailedTitle;
+        case AuthOperation::Register:
+            return TextId::RegistrationFailedTitle;
+        case AuthOperation::ResetPassword:
+            return TextId::ResetFailedTitle;
+        case AuthOperation::Refresh:
+            return TextId::SessionRestoreFailedTitle;
+    }
+    return TextId::RequestFailedTitle;
+}
 }
 
 App::App(std::string executablePath, bool homebrew)
-    : executablePath_(std::move(executablePath)), homebrew_(homebrew) {
+    : updateFlow_(releaseApi_, std::move(executablePath), update_) {
+    update_.homebrew = homebrew;
     Logger::instance().initialize();
     Logger::instance().info("Client boot");
     Logger::instance().info("Server " + ServerConfig::baseUrl());
@@ -27,9 +42,8 @@ App::App(std::string executablePath, bool homebrew)
     music_.start("romfs:/assets/music.ogg", "romfs:/assets/music_vc.ogg");
     resources_.load();
     ui_.setFont(resources_.textFont);
-    deviceIdentity_.resolve();
-    SessionStore::removeLegacyCredentials();
-    beginUpdate();
+    accountFlow_.initialize();
+    status_ = localization_.get(updateFlow_.start() ? TextId::CheckingForUpdates : TextId::UpdateStartFailed);
 }
 
 App::~App() {
@@ -47,13 +61,9 @@ int App::run() {
     return 0;
 }
 
-bool App::onAuthScreen() const {
-    return screen_ == ScreenId::Welcome || screen_ == ScreenId::Login || screen_ == ScreenId::Register
-        || screen_ == ScreenId::ResetPassword;
-}
-
-bool App::canExit() const {
-    return !isLoading() && (onAuthScreen() || screen_ == ScreenId::GameSelect);
+void App::show(ScreenId screen) {
+    screen_ = screen;
+    activeScreen().enter();
 }
 
 Screen& App::activeScreen() {
@@ -80,18 +90,38 @@ Screen& App::activeScreen() {
     return logsScreen_;
 }
 
+bool App::onAuthScreen() const {
+    return screen_ == ScreenId::Welcome || screen_ == ScreenId::Login || screen_ == ScreenId::Register
+        || screen_ == ScreenId::ResetPassword;
+}
+
+bool App::canExit() const {
+    return !isLoading() && (onAuthScreen() || screen_ == ScreenId::GameSelect);
+}
+
+bool App::isLoading() const {
+    return loadingWork() || loadingScreen_.finishing();
+}
+
+bool App::loadingWork() const {
+    return updateRunning() || accountFlow_.running() || loadService_.blocksUi() || saveLoadService_.blocksUi()
+        || account_.welcomeBackPending;
+}
+
 void App::update(const InputFrame& input) {
     if (input.pressed(KEY_START) && canExit()) {
         running_ = false;
         return;
     }
     pollBackgroundWork();
-    if (updateNoticeUntil_ != 0) {
-        if (svcGetSystemTick() >= updateNoticeUntil_) {
-            updateNoticeUntil_ = 0;
-            running_ = updateProgress_.stage.load() != UpdateStage::Installed;
-        }
-        return;
+    switch (updateFlow_.pollNotice()) {
+        case UpdateFlow::Notice::Ended:
+            running_ = !updateFlow_.installed();
+            return;
+        case UpdateFlow::Notice::Showing:
+            return;
+        case UpdateFlow::Notice::None:
+            break;
     }
     if (errors_.visible()) {
         if (input.pressed(KEY_A | KEY_B) || input.tapped(ErrorDialogOkButton)) {
@@ -103,20 +133,24 @@ void App::update(const InputFrame& input) {
         return;
     }
     if (input.pressed(KEY_SELECT) && screen_ != ScreenId::Bank && screen_ != ScreenId::Plugin) {
-        if (screen_ == ScreenId::Logs) {
-            screen_ = previousScreen_;
-        } else {
-            previousScreen_ = std::exchange(screen_, ScreenId::Logs);
-        }
+        toggleLogs();
         return;
     }
     activeScreen().update(input);
 }
 
+void App::toggleLogs() {
+    if (screen_ == ScreenId::Logs) {
+        screen_ = previousScreen_;
+        return;
+    }
+    previousScreen_ = std::exchange(screen_, ScreenId::Logs);
+}
+
 void App::pollBackgroundWork() {
     pollUpdate();
     pollAuth();
-    pollWelcomeBack();
+    accountFlow_.pollWelcomeBack();
     pollSaveLoad();
     pollBankLoad();
     bankScreen_.pollBackgroundWork();
@@ -126,174 +160,95 @@ void App::pollBackgroundWork() {
 
 void App::finishIntro() {
     screen_ = ScreenId::Welcome;
-    std::string refreshToken;
-    if (sessionStore_.load(refreshToken, accountUsername_)) {
-        autoLogin_ = true;
-        bootAutoLoginInProgress_ = true;
-        beginAuth(AuthRequest::refresh(std::move(refreshToken)));
+    if (std::optional<AuthRequest> stored = accountFlow_.storedSession()) {
+        beginAuth(std::move(*stored));
     }
 }
 
 void App::resetAccountState() {
-    sessionStore_.clear();
-    session_ = {};
-    bootAutoLoginInProgress_ = false;
-    welcomeBackPending_ = false;
-    cloudBoxCache_ = {};
-    cloudBoxNamesCache_.clear();
-    loadService_.invalidate();
+    accountFlow_.forget();
+    cloudCache_ = {};
     bankScreen_.reset();
     gameSelectScreen_.reset();
 }
 
 void App::logout() {
     resetAccountState();
-    accountUsername_.clear();
+    accountFlow_.signOut();
     loginScreen_.reset();
     registerScreen_.reset();
     resetPasswordScreen_.reset();
     status_ = localization_.get(TextId::LoggedOut);
     screen_ = ScreenId::Welcome;
-    Logger::instance().info("User logged out");
-}
-
-void App::beginUpdate() {
-    status_ = localization_.get(TextId::CheckingForUpdates);
-    const bool started = updateTask_.start([this]() {
-        return UpdateInstaller::run(api_, executablePath_, homebrew_, updateProgress_);
-    });
-    if (!started) {
-        status_ = localization_.get(TextId::UpdateStartFailed);
-        Logger::instance().warning("Update worker creation failed");
-    }
-}
-
-void App::pollUpdate() {
-    UpdateInstallResult result;
-    if (!updateTask_.poll(result)) {
-        return;
-    }
-    status_ = result.message;
-    if (result.updated) {
-        Logger::instance().info(result.message);
-        updateNoticeUntil_ = svcGetSystemTick() + static_cast<u64>(SYSCLOCK_ARM11 * 3.5);
-    } else if (!result.success) {
-        Logger::instance().warning(result.message);
-    }
-    if (updateProgress_.stage.load() == UpdateStage::Failed) {
-        updateKeptCia_ = result.keptForManualInstall;
-        updateNoticeUntil_ = svcGetSystemTick() + static_cast<u64>(SYSCLOCK_ARM11 * 10.0);
-    }
 }
 
 void App::toggleAutoLogin() {
-    autoLogin_ = !autoLogin_;
-    status_ = localization_.get(autoLogin_ ? TextId::AutoLoginEnabled : TextId::AutoLoginDisabled);
-    if (!autoLogin_) {
-        sessionStore_.clear();
+    accountFlow_.toggleAutoLogin();
+    status_ = localization_.get(account_.autoLogin ? TextId::AutoLoginEnabled : TextId::AutoLoginDisabled);
+}
+
+void App::pollUpdate() {
+    if (const std::optional<UpdateInstallResult> result = updateFlow_.poll()) {
+        status_ = result->message;
     }
 }
 
 void App::beginAuth(AuthRequest request) {
-    if (authController_.isRunning()) {
+    if (accountFlow_.running()) {
         return;
     }
-    status_ = localization_.get(request.operation == AuthOperation::Refresh ? TextId::RestoringSession
-                                                                            : TextId::Connecting);
-    request.deviceFingerprint = deviceIdentity_.fingerprint();
-    if (!authController_.begin(std::move(request))) {
+    const bool refresh = request.operation == AuthOperation::Refresh;
+    status_ = localization_.get(refresh ? TextId::RestoringSession : TextId::Connecting);
+    if (!accountFlow_.begin(std::move(request))) {
         status_ = localization_.get(TextId::AuthStartFailed);
-        Logger::instance().error("Authentication worker creation failed");
+    }
+}
+
+void App::pollAuth() {
+    const AuthOutcome outcome = accountFlow_.poll();
+    switch (outcome.kind) {
+        case AuthOutcome::Kind::None:
+            return;
+        case AuthOutcome::Kind::Failed:
+            onAuthFailed(outcome);
+            return;
+        case AuthOutcome::Kind::PasswordResetAccepted:
+            status_ = outcome.message;
+            screen_ = ScreenId::Welcome;
+            return;
+        case AuthOutcome::Kind::SignedIn:
+            status_ = outcome.message;
+            onSignedIn(outcome.operation);
+            return;
+    }
+}
+
+void App::onAuthFailed(const AuthOutcome& outcome) {
+    if (outcome.sessionLost) {
+        resetAccountState();
+        screen_ = ScreenId::Welcome;
+    }
+    const std::string message = outcome.networkError ? std::string(localization_.get(TextId::ServerUnreachable))
+                                                     : outcome.message;
+    showError(std::string(localization_.get(authFailureTitle(outcome.operation))), message);
+}
+
+void App::onSignedIn(AuthOperation operation) {
+    if (operation == AuthOperation::Login) {
+        loginScreen_.reset();
+    } else if (operation == AuthOperation::Register) {
+        registerScreen_.reset();
     }
 }
 
 void App::pollSessionRejected() {
-    if (isLoading() || bankScreen_.backgroundWorkRunning() || !api_.consumeSessionRejected() || onAuthScreen()) {
+    if (isLoading() || bankScreen_.backgroundWorkRunning() || !http_.consumeSessionRejected() || onAuthScreen()) {
         return;
     }
     Logger::instance().warning("Session rejected by the server - signing out");
     resetAccountState();
     screen_ = ScreenId::Welcome;
     showError(TextId::SignedOutTitle, TextId::SignedOutMessage);
-}
-
-namespace {
-TextId authFailureTitle(AuthOperation operation) {
-    switch (operation) {
-        case AuthOperation::Login:
-            return TextId::LoginFailedTitle;
-        case AuthOperation::Register:
-            return TextId::RegistrationFailedTitle;
-        case AuthOperation::ResetPassword:
-            return TextId::ResetFailedTitle;
-        case AuthOperation::Refresh:
-            return TextId::SessionRestoreFailedTitle;
-    }
-    return TextId::RequestFailedTitle;
-}
-}
-
-void App::pollAuth() {
-    AuthController::Completed completed;
-    if (!authController_.poll(completed)) {
-        return;
-    }
-    if (completed.result.success) {
-        onAuthSucceeded(std::move(completed));
-    } else {
-        onAuthFailed(completed);
-    }
-}
-
-void App::onAuthFailed(const AuthController::Completed& completed) {
-    const AuthResult& result = completed.result;
-    Logger::instance().warning("Authentication failed");
-    bootAutoLoginInProgress_ = false;
-    if (completed.operation == AuthOperation::Refresh && !result.networkError && result.httpStatus == 401) {
-        resetAccountState();
-        screen_ = ScreenId::Welcome;
-    }
-    showError(std::string(localization_.get(authFailureTitle(completed.operation))),
-              result.networkError ? std::string(localization_.get(TextId::ServerUnreachable)) : result.message);
-}
-
-void App::onAuthSucceeded(AuthController::Completed completed) {
-    status_ = completed.result.message;
-    if (completed.operation == AuthOperation::ResetPassword) {
-        Logger::instance().info("Password reset accepted");
-        screen_ = ScreenId::Welcome;
-        return;
-    }
-    session_ = std::move(completed.result.session);
-    if (!completed.username.empty()) {
-        accountUsername_ = completed.username;
-    }
-    if (autoLogin_) {
-        sessionStore_.save(session_.refreshToken, accountUsername_);
-    } else {
-        sessionStore_.clear();
-    }
-    if (completed.operation == AuthOperation::Login) {
-        loginScreen_.reset();
-    } else if (completed.operation == AuthOperation::Register) {
-        registerScreen_.reset();
-    }
-    Logger::instance().info("Authentication succeeded");
-
-    if (!std::exchange(bootAutoLoginInProgress_, false)) {
-        loadService_.begin(LoadService::Operation::LoadBank);
-        return;
-    }
-    welcomeBackPending_ = true;
-    welcomeBackUntil_ = svcGetSystemTick() + static_cast<u64>(WelcomeBackSeconds * SYSCLOCK_ARM11);
-}
-
-void App::pollWelcomeBack() {
-    if (!welcomeBackPending_ || svcGetSystemTick() < welcomeBackUntil_) {
-        return;
-    }
-    welcomeBackPending_ = false;
-    loadService_.begin(LoadService::Operation::LoadBank);
 }
 
 void App::pollSaveLoad() {
@@ -305,10 +260,10 @@ void App::pollSaveLoad() {
         case SaveLoadService::Operation::OpenGame:
             if (saveLoadService_.openGameResult.success) {
                 bankScreen_.onGameOpened();
-            } else {
-                status_ = saveLoadService_.openGameResult.message;
-                screen_ = ScreenId::GameSelect;
+                return;
             }
+            status_ = saveLoadService_.openGameResult.message;
+            screen_ = ScreenId::GameSelect;
             return;
         case SaveLoadService::Operation::Summary:
             gameSelectScreen_.applySummary(saveLoadService_.catalogIndex, saveLoadService_.summaryCartridge,
@@ -322,8 +277,8 @@ void App::pollSaveLoad() {
 void App::pollBankLoad() {
     switch (loadService_.poll()) {
         case LoadService::Operation::LoadBank:
-            cloudBoxCache_ = loadService_.cloudBoxResult;
-            cloudBoxNamesCache_ = std::move(loadService_.pendingBoxNames);
+            cloudCache_.firstBox = loadService_.cloudBoxResult;
+            cloudCache_.boxNames = std::move(loadService_.pendingBoxNames);
             loadService_.pendingBoxNames.clear();
             status_ = localization_.get(TextId::StatusFindingSaveGames);
             gameSelectScreen_.refresh(false);
@@ -340,19 +295,6 @@ void App::pollBankLoad() {
         case LoadService::Operation::None:
             return;
     }
-}
-
-bool App::isLoading() const {
-    return isLoadingWork() || loadingScreen_.finishing();
-}
-
-bool App::isLoadingWork() const {
-    return updateTask_.running()
-        || updateNoticeUntil_ != 0
-        || authController_.isRunning()
-        || loadService_.blocksUi()
-        || saveLoadService_.blocksUi()
-        || welcomeBackPending_;
 }
 
 void App::render() {

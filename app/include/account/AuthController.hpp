@@ -1,7 +1,7 @@
 #pragma once
 
-#include "core/AsyncTask.hpp"
-#include "network/ApiClient.hpp"
+#include "network/api/AccountApi.hpp"
+#include "platform/AsyncTask.hpp"
 
 #include <string>
 #include <utility>
@@ -58,7 +58,7 @@ public:
         AuthResult result;
     };
 
-    explicit AuthController(ApiClient& api) : api_(api) {}
+    explicit AuthController(AccountApi& api) : api_(api) {}
 
     bool begin(AuthRequest request);
     bool poll(Completed& completed) { return task_.poll(completed); }
@@ -68,6 +68,6 @@ private:
     Completed run(const AuthRequest& request);
     void storeDeviceToken(const std::string& fingerprint, const std::string& accessToken);
 
-    ApiClient& api_;
+    AccountApi& api_;
     AsyncTask<Completed> task_;
 };

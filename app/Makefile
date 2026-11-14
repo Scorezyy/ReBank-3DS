@@ -23,30 +23,15 @@ include $(TOPDIR)/config/client-secret$(CONFIG_SUFFIX).mk
 REBANK_UPDATE_KEY_MODULUS ?=
 -include $(TOPDIR)/config/update-key.mk
 
-ifeq ($(wildcard $(TOPDIR)/source/core/RequestSigning.cpp),)
-$(error source/core/RequestSigning.cpp is missing. Copy source/core/RequestSigning.cpp.example to source/core/RequestSigning.cpp, or supply your own, matching whatever your server verifies)
+ifeq ($(wildcard $(TOPDIR)/source/security/RequestSigning.cpp),)
+$(error source/security/RequestSigning.cpp is missing. Copy source/security/RequestSigning.cpp.example to source/security/RequestSigning.cpp, or supply your own, matching whatever your server verifies)
 endif
 
 TARGET := rebank
 BUILD := build
 PKSM_CORE := vendor/PKSM-Core
-SOURCES := source/app \
-	source/core \
-	source/save \
-	source/save/catalog \
-	source/save/adapter \
-	source/save/pokemon \
-	source/io \
-	source/network \
-	source/account \
-	source/update \
-	source/bank \
-	source/selection \
-	source/audio \
-	source/i18n \
-	source/gui \
-	source/gui/elements \
-	source/gui/screens \
+APP_SOURCE_DIRS := $(patsubst %/,%,$(sort $(dir $(wildcard source/*/*.cpp source/*/*/*.cpp source/*/*/*/*.cpp))))
+SOURCES := $(APP_SOURCE_DIRS) \
 	vendor/PKSM-SPI \
 	$(PKSM_CORE)/memecrypto \
 	$(PKSM_CORE)/source/i18n \

@@ -27,6 +27,7 @@ inline constexpr u32 WarmBrandDark = C2D_Color32(154, 52, 18, 255);
 inline constexpr u32 WarmInk = C2D_Color32(84, 36, 14, 255);
 inline constexpr u32 WarmMuted = C2D_Color32(160, 104, 74, 255);
 inline constexpr u32 WarmCream = C2D_Color32(255, 226, 184, 255);
+inline constexpr float ControlRadius = 10.0F;
 inline constexpr int LogoTopIdx = 0;
 inline constexpr int LogoSmallIdx = 1;
 inline constexpr int BoxBgAnimSquaresIdx = 0;

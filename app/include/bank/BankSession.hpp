@@ -1,8 +1,9 @@
 #pragma once
 
 #include "bank/BankTypes.hpp"
+#include "bank/selection/SelectionState.hpp"
+#include "platform/Clock.hpp"
 #include "save/adapter/SaveAdapter.hpp"
-#include "selection/SelectionState.hpp"
 
 #include <3ds.h>
 
@@ -62,7 +63,7 @@ public:
 
     void setTrashActive(bool active) {
         trashBoxActive = active;
-        trashTransitionStart = svcGetSystemTick();
+        trashTransitionStart = Clock::now();
     }
 
     GridGeometry grid(StoragePane pane) const { return GridGeometry::forPane(pane, saveAdapter.boxCapacity()); }

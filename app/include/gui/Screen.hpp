@@ -1,41 +1,30 @@
 #pragma once
 
+#include "app/AppContext.hpp"
 #include "gui/InputFrame.hpp"
-#include "i18n/Localization.hpp"
 
 #include <string>
 #include <string_view>
 
-class App;
-class UiRenderer;
-
-enum class ScreenId {
-    Intro,
-    Welcome,
-    Login,
-    Register,
-    ResetPassword,
-    GameSelect,
-    Bank,
-    Plugin,
-    Logs
-};
-
 class Screen {
 public:
-    explicit Screen(App& app) : app_(app) {}
+    explicit Screen(AppContext& app) : app_(app) {}
     virtual ~Screen() = default;
     Screen(const Screen&) = delete;
     Screen& operator=(const Screen&) = delete;
 
+    virtual void enter() {}
     virtual void update(const InputFrame& input) = 0;
     virtual void renderTop(float eyeOffset);
     virtual void render() = 0;
 
 protected:
-    UiRenderer& ui() const;
-    std::string_view text(TextId id) const;
-    std::string format(TextId id, std::initializer_list<std::string_view> arguments) const;
+    UiRenderer& ui() const { return app_.ui; }
+    std::string_view text(TextId id) const { return app_.text.get(id); }
+    void drawLogo(float eyeOffset, float y, float scale) const;
+    std::string format(TextId id, std::initializer_list<std::string_view> arguments) const {
+        return app_.text.format(id, arguments);
+    }
 
-    App& app_;
+    AppContext& app_;
 };

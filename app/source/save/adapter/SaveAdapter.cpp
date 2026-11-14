@@ -1,33 +1,15 @@
 #include "save/adapter/SaveAdapter.hpp"
-#include "core/Logger.hpp"
-#include "save/catalog/VirtualConsoleTitles.hpp"
+
+#include "platform/Logger.hpp"
+#include "save/adapter/SaveParser.hpp"
 #include "save/pokemon/PokemonTransfer.hpp"
-#include "io/RomLibrary.hpp"
-#include "io/SaveMedium.hpp"
-#include "spi.hpp"
 
 #include <3ds.h>
 #include <pkx/PKX.hpp>
 #include <sav/Sav.hpp>
-#include <sav/Sav1.hpp>
-#include <sav/SavDP.hpp>
-#include <sav/SavPT.hpp>
-#include <sav/SavHGSS.hpp>
-#include <sav/SavBW.hpp>
-#include <sav/SavB2W2.hpp>
 
 #include <algorithm>
 #include <memory>
-
-struct SaveAdapter::Source {
-    enum class Kind { None, ArchiveGameCard, ArchiveSd, DsCard, SdFile };
-    Kind kind = Kind::None;
-    std::uint64_t titleId = 0;
-    CardType cardType = NO_CHIP;
-    bool infrared = false;
-    std::size_t capacity = 0;
-    std::string sdPath;
-};
 
 SaveAdapter::SaveAdapter() = default;
 SaveAdapter::~SaveAdapter() = default;
@@ -42,185 +24,32 @@ void SaveAdapter::close() {
     dirty_ = false;
 }
 
-bool SaveAdapter::open(const GameDescriptor& game, std::string& error, SourcePreference preference) {
-    save_.reset();
-    source_ = std::make_unique<Source>();
-    dirty_ = false;
-    partyEdited_ = false;
+bool SaveAdapter::open(const GameDescriptor& game, std::string& error, SaveSource::Preference preference) {
+    close();
     game_ = game;
     gameCode_ = game.code;
-
-    std::size_t size = 0;
+    Logger::instance().info("Reading " + gameCode_ + " save");
+    SaveImage image;
     Result result = 0;
-    Logger::instance().info("Reading " + std::string(game.code) + " save");
-    const std::shared_ptr<std::uint8_t[]> data = locateSave(game, size, result, preference);
-    if (!data) {
+    source_ = SaveSource::locate(game, preference, image, result);
+    if (!source_) {
         error = "Save not found. Check cartridge or SD export.";
-        Logger::instance().error(
-            "Save open failed for " + std::string(game.code) + ": " + std::to_string(result)
-        );
+        Logger::instance().error("Save open failed for " + gameCode_ + ": " + std::to_string(result));
         return false;
     }
-
-    if (!parseSave(game, data, size, error)) {
-        return false;
-    }
-
-    previousBuffer_.assign(data.get(), data.get() + size);
-    Logger::instance().info(
-        "Loaded " + std::string(game.code) + " save (source=" + std::to_string(static_cast<int>(source_->kind))
-        + ", bytes=" + std::to_string(size) + ", maxBoxes=" + std::to_string(save_->maxBoxes()) + ")"
-    );
-    return true;
-}
-
-std::shared_ptr<std::uint8_t[]> SaveAdapter::locateSave(const GameDescriptor& game, std::size_t& size, Result& result,
-                                                          SourcePreference preference) {
-    const bool allowCartridge = preference != SourcePreference::StorageOnly;
-    const bool allowStorage = preference != SourcePreference::CartridgeOnly;
-
-    std::shared_ptr<std::uint8_t[]> data;
-    if (game.platform == GamePlatform::Nintendo3Ds) {
-        data = locate3dsCartridgeSave(game, size, result, allowCartridge, allowStorage);
-    } else if (game.platform == GamePlatform::VirtualConsole) {
-        data = allowStorage ? locateVirtualConsoleSave(game, size, result) : nullptr;
-    } else if (allowCartridge && game.platform == GamePlatform::NintendoDs) {
-        data = locateNintendoDsCartridgeSave(game, size, result);
-    }
-    if (data || !allowStorage) {
-        return data;
-    }
-
-    std::string path;
-    if (auto exported = SaveMedium::readExport(game.code, size, path)) {
-        source_->kind = Source::Kind::SdFile;
-        source_->sdPath = path;
-        return exported;
-    }
-    return RomLibrary::supports(game.platform) ? locateRomSave(game, size) : nullptr;
-}
-
-std::shared_ptr<std::uint8_t[]> SaveAdapter::locateRomSave(const GameDescriptor& game, std::size_t& size) {
-    const auto rom = RomLibrary::find(game.code);
-    if (!rom) {
-        return nullptr;
-    }
-    auto data = SaveMedium::readFile(rom->savePath, size);
-    if (data) {
-        source_->kind = Source::Kind::SdFile;
-        source_->sdPath = rom->savePath;
-    }
-    return data;
-}
-
-std::shared_ptr<std::uint8_t[]> SaveAdapter::locate3dsCartridgeSave(const GameDescriptor& game, std::size_t& size,
-                                                                      Result& result, bool allowCartridge,
-                                                                      bool allowStorage) {
-    const auto titleId = SaveMedium::titleIdFor(game.code);
-    if (!titleId) {
-        return nullptr;
-    }
-    source_->titleId = *titleId;
-    if (allowCartridge) {
-        if (auto data = SaveMedium::readArchive(*titleId, MEDIATYPE_GAME_CARD, size, result)) {
-            source_->kind = Source::Kind::ArchiveGameCard;
-            return data;
-        }
-    }
-    if (allowStorage) {
-        if (auto data = SaveMedium::readArchive(*titleId, MEDIATYPE_SD, size, result)) {
-            source_->kind = Source::Kind::ArchiveSd;
-            return data;
-        }
-    }
-    return nullptr;
-}
-
-std::shared_ptr<std::uint8_t[]> SaveAdapter::locateVirtualConsoleSave(const GameDescriptor& game, std::size_t& size,
-                                                                        Result& result) {
-    const auto titleId = VirtualConsoleTitles::resolveInstalledTitleId(game.code);
-    if (!titleId) {
-        return nullptr;
-    }
-    auto data = SaveMedium::readArchive(*titleId, MEDIATYPE_SD, size, result);
-    if (data) {
-        source_->titleId = *titleId;
-        source_->kind = Source::Kind::ArchiveSd;
-    }
-    return data;
-}
-
-std::shared_ptr<std::uint8_t[]> SaveAdapter::locateNintendoDsCartridgeSave(const GameDescriptor& game,
-                                                                             std::size_t& size, Result& result) {
-    source_->infrared = game.code == "heartgold" || game.code == "soulsilver"
-        || game.code == "black" || game.code == "white"
-        || game.code == "black2" || game.code == "white2";
-    SaveMedium::DsCardRead dsRead = SaveMedium::readDsCard(game.code, source_->infrared, result);
-    if (!dsRead.data) {
-        return nullptr;
-    }
-    source_->kind = Source::Kind::DsCard;
-    source_->cardType = dsRead.cardType;
-    source_->capacity = dsRead.capacity;
-    size = dsRead.size;
-    return std::move(dsRead.data);
-}
-
-bool SaveAdapter::parseSave(const GameDescriptor& game, const std::shared_ptr<std::uint8_t[]>& data,
-                             std::size_t size, std::string& error) {
-    try {
-        if (size == 0x80000 || size == 0x8007A) {
-            if (game.code == "diamond" || game.code == "pearl") {
-                save_ = std::make_unique<pksm::SavDP>(data);
-            } else if (game.code == "platinum") {
-                save_ = std::make_unique<pksm::SavPT>(data);
-            } else if (game.code == "heartgold" || game.code == "soulsilver") {
-                save_ = std::make_unique<pksm::SavHGSS>(data);
-            } else if (game.code == "black" || game.code == "white") {
-                save_ = std::make_unique<pksm::SavBW>(data);
-            } else if (game.code == "black2" || game.code == "white2") {
-                save_ = std::make_unique<pksm::SavB2W2>(data);
-            }
-        }
-        if (!save_ && game.format == PokemonFormat::Generation1 && (size == 0x8000 || size == 0x8010)) {
-            save_ = std::make_unique<pksm::Sav1>(data, static_cast<std::uint32_t>(size));
-        }
-        if (!save_) {
-            save_ = pksm::Sav::getSave(data, size);
-        }
-    } catch (const std::exception& exception) {
-        error = "Save parser error.";
-        Logger::instance().error("Save parser exception: " + std::string(exception.what()));
-        return false;
-    }
+    save_ = SaveParser::parse(game, image, error);
     if (!save_) {
-        error = "The save format or checksum is invalid.";
-        Logger::instance().error("PKSM-Core rejected save for " + std::string(game.code));
         return false;
     }
-    if (save_->generation() != PokemonTransfer::expectedGeneration(game.format)) {
-        save_.reset();
-        error = "The save belongs to a different Pokemon generation.";
-        Logger::instance().error("Selected game does not match detected save generation");
-        return false;
-    }
+    previousBuffer_.assign(image.data.get(), image.data.get() + image.size);
+    Logger::instance().info("Loaded " + gameCode_ + " save (source=" + std::to_string(source_->kindCode())
+                            + ", bytes=" + std::to_string(image.size) + ", maxBoxes="
+                            + std::to_string(save_->maxBoxes()) + ")");
     return true;
 }
 
 bool SaveAdapter::isCartridge() const {
-    return source_ && (source_->kind == Source::Kind::ArchiveGameCard
-        || source_->kind == Source::Kind::DsCard);
-}
-
-bool SaveAdapter::storageSaveExists(const GameDescriptor& game) {
-    std::optional<std::uint64_t> titleId;
-    if (game.platform == GamePlatform::Nintendo3Ds) {
-        titleId = SaveMedium::titleIdFor(game.code);
-    } else if (game.platform == GamePlatform::VirtualConsole) {
-        titleId = VirtualConsoleTitles::resolveInstalledTitleId(game.code);
-    }
-    return (titleId && SaveMedium::archiveHasSave(*titleId, MEDIATYPE_SD)) || SaveMedium::exportExists(game.code)
-        || (RomLibrary::supports(game.platform) && RomLibrary::find(game.code));
+    return source_ && source_->isCartridge();
 }
 
 SaveSummary SaveAdapter::summary() const {
@@ -235,11 +64,11 @@ SaveSummary SaveAdapter::summary() const {
     };
 }
 
-std::optional<SaveTrainer> SaveAdapter::trainer() const {
+std::optional<TrainerInfo> SaveAdapter::trainer() const {
     if (!save_) {
         return std::nullopt;
     }
-    SaveTrainer trainer;
+    TrainerInfo trainer;
     trainer.format = saveFormat();
     trainer.name = save_->otName();
     trainer.gender = save_->gender() == pksm::Gender::Female ? 1 : 0;
@@ -290,44 +119,6 @@ bool SaveAdapter::validSlot(std::size_t box, std::size_t slot) const {
 
 bool SaveAdapter::validPartySlot(std::size_t slot) const {
     return save_ && slot < PartySlotCount;
-}
-
-std::shared_ptr<std::uint8_t[]> SaveAdapter::rereadSource(std::size_t& size) const {
-    Result result = 0;
-    switch (source_->kind) {
-        case Source::Kind::ArchiveGameCard:
-            return SaveMedium::readArchive(source_->titleId, MEDIATYPE_GAME_CARD, size, result);
-        case Source::Kind::ArchiveSd:
-            return SaveMedium::readArchive(source_->titleId, MEDIATYPE_SD, size, result);
-        case Source::Kind::SdFile:
-            return SaveMedium::readFile(source_->sdPath, size);
-        case Source::Kind::DsCard: {
-            SaveMedium::DsCardRead read = SaveMedium::readDsCard(gameCode_, source_->infrared, result);
-            size = read.size;
-            return std::move(read.data);
-        }
-        default:
-            break;
-    }
-    return nullptr;
-}
-
-bool SaveAdapter::writeToSource(const std::vector<std::uint8_t>& image) {
-    switch (source_->kind) {
-        case Source::Kind::ArchiveGameCard:
-            return SaveMedium::writeArchive(source_->titleId, MEDIATYPE_GAME_CARD, image.data(), image.size());
-        case Source::Kind::ArchiveSd:
-            return SaveMedium::writeArchive(source_->titleId, MEDIATYPE_SD, image.data(), image.size());
-        case Source::Kind::DsCard:
-            return SaveMedium::writeDsCard(source_->cardType, image.data(), image.size(),
-                                           previousBuffer_.empty() ? nullptr : previousBuffer_.data(),
-                                           previousBuffer_.size());
-        case Source::Kind::SdFile:
-            return SaveMedium::writeSdFile(source_->sdPath, image.data(), image.size());
-        default:
-            break;
-    }
-    return false;
 }
 
 void SaveAdapter::beginPartyEdit() {
@@ -399,13 +190,12 @@ bool SaveAdapter::writeSave(std::string& error, bool finalWrite) {
     }
     const std::uint8_t* bytes = save_->rawData().get();
     const std::vector<std::uint8_t> image(bytes, bytes + save_->getLength());
-    const bool written = writeToSource(image);
+    const bool written = source_->write(image, previousBuffer_);
     save_->beginEditing();
 
-    std::size_t diskSize = 0;
-    const auto disk = rereadSource(diskSize);
-    const bool diskMatches = disk && diskSize == image.size()
-        && std::equal(image.begin(), image.end(), disk.get());
+    const std::optional<SaveImage> disk = source_->reread();
+    const bool diskMatches = disk && disk->size == image.size()
+        && std::equal(image.begin(), image.end(), disk->data.get());
     if (written && (diskMatches || !disk)) {
         if (!disk) {
             Logger::instance().warning("writeSave: written, but the save could not be read back to verify it");
@@ -419,7 +209,7 @@ bool SaveAdapter::writeSave(std::string& error, bool finalWrite) {
         return true;
     }
     if (disk) {
-        previousBuffer_.assign(disk.get(), disk.get() + diskSize);
+        previousBuffer_.assign(disk->data.get(), disk->data.get() + disk->size);
     }
     error = written ? "The save on disk does not match what was written." : "Failed to write save.";
     Logger::instance().error("writeSave: " + error + (disk ? " (disk state re-read)" : " (disk state unknown)"));
@@ -431,11 +221,10 @@ bool SaveAdapter::discardUnsavedChanges(std::string& error) {
         error = "No save loaded.";
         return false;
     }
-    const std::size_t size = previousBuffer_.size();
-    std::shared_ptr<std::uint8_t[]> data(new std::uint8_t[size]);
-    std::copy(previousBuffer_.begin(), previousBuffer_.end(), data.get());
-    save_.reset();
-    if (!parseSave(*game_, data, size, error)) {
+    SaveImage image{std::shared_ptr<std::uint8_t[]>(new std::uint8_t[previousBuffer_.size()]), previousBuffer_.size()};
+    std::copy(previousBuffer_.begin(), previousBuffer_.end(), image.data.get());
+    save_ = SaveParser::parse(*game_, image, error);
+    if (!save_) {
         Logger::instance().error("discardUnsavedChanges: last written save could not be parsed again");
         return false;
     }

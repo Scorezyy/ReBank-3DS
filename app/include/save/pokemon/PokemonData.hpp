@@ -17,6 +17,18 @@
 inline constexpr std::size_t BoxSlotCount = 30;
 inline constexpr std::size_t PartySlotCount = 6;
 
+struct TrainerInfo {
+    std::uint8_t format = 0;
+    std::string name;
+    std::uint8_t gender = 0;
+    std::uint16_t tid = 0;
+    std::uint16_t sid = 0;
+    std::uint8_t language = 0;
+    std::uint8_t country = 0;
+    std::uint8_t region = 0;
+    std::uint8_t consoleRegion = 0;
+};
+
 struct PokemonSummary {
     std::uint16_t species = 0;
     std::uint16_t form = 0;

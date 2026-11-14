@@ -1,7 +1,7 @@
 #pragma once
 
-#include "core/BackgroundOperation.hpp"
-#include "io/GameIconReader.hpp"
+#include "gui/icons/IconPixels.hpp"
+#include "platform/BackgroundOperation.hpp"
 #include "save/adapter/SaveAdapter.hpp"
 
 #include <cstddef>
@@ -61,7 +61,7 @@ public:
     void begin(Operation operation);
     void beginDiscovery(bool rebuildLibrary);
     bool beginSummary(std::size_t catalogIndex, bool cartridge);
-    bool beginOpen(std::size_t catalogIndex, SaveAdapter::SourcePreference preference);
+    bool beginOpen(std::size_t catalogIndex, SaveSource::Preference preference);
     Operation poll() { return takeCompleted(); }
     void dropCartridgeGames() { discoveredGames = digitalCache_; }
     bool blocksUi() const {
@@ -69,7 +69,7 @@ public:
     }
 
     std::size_t catalogIndex = 0;
-    SaveAdapter::SourcePreference openSourcePreference = SaveAdapter::SourcePreference::Any;
+    SaveSource::Preference openSourcePreference = SaveSource::Preference::Any;
 
     std::vector<DiscoveredGame> discoveredGames;
     OpenGameResult openGameResult;

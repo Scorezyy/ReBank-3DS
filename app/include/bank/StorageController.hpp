@@ -18,11 +18,6 @@ public:
     SlotAccess& slots() { return slots_; }
     const SlotAccess& slots() const { return slots_; }
 
-    void pickUp();
-    void drop();
-    void pickUpOrDrop() { session_.hand.active ? drop() : pickUp(); }
-    void completeCloudSwap(std::size_t slot, PokemonPayload occupantPayload);
-    void returnHand();
     void restorePokemon(const HeldPokemon& pokemon);
 
     bool hasPendingChanges() const { return pendingChange().has_value(); }
@@ -30,6 +25,8 @@ public:
 
     void loadLocalBox();
     void loadTrashBox();
+    void stepLocalBox(bool backwards);
+    void stepCloudBox(bool backwards);
     void refreshCloudBox(bool keepPreviousPreview = false);
     void persistLocalDraft();
     void persistCloudDraft();
@@ -43,9 +40,12 @@ public:
     void reset();
 
 private:
-    void placeHand(StorageAddress address, std::size_t slot);
-    void swapHand(StorageAddress address, std::size_t slot, SlotContents occupant);
-    void startCloudFetch(LoadService::Operation operation, std::size_t slot, const PokemonSummary& summary);
+    std::optional<std::string> openLocalBoxChange() const;
+    std::optional<std::string> openCloudBoxChange() const;
+    std::optional<std::string> partyChange() const;
+    std::optional<std::string> trashChange() const;
+    std::optional<std::string> storedLocalDraftChange() const;
+    std::optional<std::string> storedCloudDraftChange() const;
     BoxSlots& localDraftForWrite(std::size_t box);
     void focusFirstOccupied(const std::array<PokemonSummary, BoxSlotCount>& summaries);
     void resetDrafts();

@@ -1,6 +1,7 @@
 #include "account/DeviceIdentity.hpp"
-#include "core/Hmac.hpp"
-#include "core/Logger.hpp"
+
+#include "platform/Logger.hpp"
+#include "security/Hmac.hpp"
 
 #include <3ds.h>
 

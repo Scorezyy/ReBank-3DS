@@ -1,88 +1,69 @@
 #pragma once
 
-#include "account/AuthController.hpp"
-#include "account/DeviceIdentity.hpp"
-#include "account/SessionStore.hpp"
-#include "audio/MusicPlayer.hpp"
-#include "bank/LoadService.hpp"
-#include "core/AsyncTask.hpp"
-#include "core/ErrorNotice.hpp"
-#include "gui/GfxResources.hpp"
-#include "gui/UiRenderer.hpp"
-#include "gui/screens/BankScreen.hpp"
-#include "gui/screens/GameSelectScreen.hpp"
-#include "gui/screens/IntroScreen.hpp"
-#include "gui/screens/LoadingScreen.hpp"
-#include "gui/screens/LoginScreen.hpp"
-#include "gui/screens/LogsScreen.hpp"
-#include "gui/screens/PluginScreen.hpp"
-#include "gui/screens/RegisterScreen.hpp"
-#include "gui/screens/ResetPasswordScreen.hpp"
-#include "gui/screens/WelcomeScreen.hpp"
-#include "i18n/Localization.hpp"
-#include "network/ApiClient.hpp"
-#include "save/SaveLoadService.hpp"
-#include "save/adapter/SaveAdapter.hpp"
-#include "update/UpdateInstaller.hpp"
+#include "app/AccountFlow.hpp"
+#include "app/AppContext.hpp"
+#include "app/Navigator.hpp"
+#include "app/UpdateFlow.hpp"
+#include "gui/screens/auth/LoginScreen.hpp"
+#include "gui/screens/auth/RegisterScreen.hpp"
+#include "gui/screens/auth/ResetPasswordScreen.hpp"
+#include "gui/screens/auth/WelcomeScreen.hpp"
+#include "gui/screens/bank/BankScreen.hpp"
+#include "gui/screens/games/GameSelectScreen.hpp"
+#include "gui/screens/plugins/PluginScreen.hpp"
+#include "gui/screens/system/IntroScreen.hpp"
+#include "gui/screens/system/LoadingScreen.hpp"
+#include "gui/screens/system/LogsScreen.hpp"
+#include "network/HttpClient.hpp"
 
 #include <citro2d.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <string_view>
-#include <vector>
 
-class App {
+class App final : private Navigator {
 public:
     App(std::string executablePath, bool homebrew);
-    ~App();
+    ~App() override;
     int run();
 
 private:
-    friend class Screen;
-    friend class IntroScreen;
-    friend class WelcomeScreen;
-    friend class AuthFormScreen;
-    friend class LoginScreen;
-    friend class RegisterScreen;
-    friend class ResetPasswordScreen;
-    friend class GameSelectScreen;
-    friend class LogsScreen;
-    friend class BankScreen;
-    friend class LoadingScreen;
-    friend class PluginScreen;
+    void show(ScreenId screen) override;
+    ScreenId current() const override { return screen_; }
+    void showError(TextId title, TextId message) override;
+    void showError(std::string title, std::string message) override;
+    void requestText(std::string& destination, std::string_view hint, bool password, std::size_t maxLength) override;
+    void beginAuth(AuthRequest request) override;
+    bool authRunning() const override { return accountFlow_.running(); }
+    bool updateRunning() const override { return updateFlow_.running(); }
+    bool loadingWork() const override;
+    void toggleAutoLogin() override;
+    void logout() override;
+    void finishIntro() override;
 
     void update(const InputFrame& input);
+    void toggleLogs();
     void pollBackgroundWork();
     bool onAuthScreen() const;
     bool canExit() const;
+    bool isLoading() const;
     Screen& activeScreen();
 
-    void finishIntro();
-    void beginAuth(AuthRequest request);
-    void pollAuth();
-    void onAuthFailed(const AuthController::Completed& completed);
-    void onAuthSucceeded(AuthController::Completed completed);
-    void pollSessionRejected();
-    void pollWelcomeBack();
-    void beginUpdate();
     void pollUpdate();
+    void pollAuth();
+    void onAuthFailed(const AuthOutcome& outcome);
+    void onSignedIn(AuthOperation operation);
+    void pollSessionRejected();
     void pollSaveLoad();
     void pollBankLoad();
     void resetAccountState();
-    void logout();
-    void toggleAutoLogin();
-    bool isLoading() const;
-    bool isLoadingWork() const;
 
     void render();
     void beginScene(C3D_RenderTarget* target, C2D_TextBuf buffer, float width);
     void renderTop(C3D_RenderTarget* target, C2D_TextBuf buffer, float eyeOffset);
     void renderBottom();
-
-    void requestText(std::string& destination, std::string_view hint, bool password, std::size_t maxLength = 256);
-    void showError(std::string title, std::string message);
-    void showError(TextId title, TextId message);
 
     Localization localization_;
     ScreenId screen_ = ScreenId::Intro;
@@ -91,37 +72,32 @@ private:
     UiRenderer ui_;
     ErrorNotice errors_;
     std::string status_;
-    DeviceIdentity deviceIdentity_;
-    ApiClient api_;
-    std::string executablePath_;
-    bool homebrew_;
-    AsyncTask<UpdateInstallResult> updateTask_;
-    UpdateProgress updateProgress_;
-    u64 updateNoticeUntil_ = 0;
-    bool updateKeptCia_ = false;
-    SessionStore sessionStore_{deviceIdentity_};
-    AccountSession session_;
-    AuthController authController_{api_};
-    LoadService loadService_{api_, session_};
+    HttpClient http_;
+    AccountApi accountApi_{http_};
+    CloudApi cloudApi_{http_};
+    ReleaseApi releaseApi_{http_};
+    UpdateState update_;
+    UpdateFlow updateFlow_;
+    AccountState account_;
+    LoadService loadService_{cloudApi_, account_.session};
+    AccountFlow accountFlow_{accountApi_, account_, loadService_};
     SaveAdapter saveAdapter_;
     SaveLoadService saveLoadService_{saveAdapter_};
     MusicPlayer music_;
+    CloudCache cloudCache_;
     bool running_ = true;
-    bool autoLogin_ = true;
-    std::string accountUsername_;
-    bool bootAutoLoginInProgress_ = false;
-    bool welcomeBackPending_ = false;
-    u64 welcomeBackUntil_ = 0;
-    BoxListResult cloudBoxCache_;
-    std::vector<BoxNameEntry> cloudBoxNamesCache_;
-    IntroScreen introScreen_{*this};
-    WelcomeScreen welcomeScreen_{*this};
-    LoginScreen loginScreen_{*this};
-    RegisterScreen registerScreen_{*this};
-    ResetPasswordScreen resetPasswordScreen_{*this};
-    GameSelectScreen gameSelectScreen_{*this};
-    BankScreen bankScreen_{*this};
-    PluginScreen pluginScreen_{*this};
-    LogsScreen logsScreen_{*this};
-    LoadingScreen loadingScreen_{*this};
+    AppContext context_{*this,       ui_,          resources_,       localization_, errors_,
+                        status_,     account_,     update_,          cloudCache_,   accountApi_,
+                        cloudApi_,   releaseApi_,  saveAdapter_,     saveLoadService_, loadService_,
+                        music_};
+    IntroScreen introScreen_{context_};
+    WelcomeScreen welcomeScreen_{context_};
+    LoginScreen loginScreen_{context_};
+    RegisterScreen registerScreen_{context_};
+    ResetPasswordScreen resetPasswordScreen_{context_};
+    GameSelectScreen gameSelectScreen_{context_};
+    BankScreen bankScreen_{context_};
+    PluginScreen pluginScreen_{context_};
+    LogsScreen logsScreen_{context_};
+    LoadingScreen loadingScreen_{context_};
 };

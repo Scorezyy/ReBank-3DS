@@ -1,16 +1,14 @@
 #include "account/AuthController.hpp"
 
-#include "core/AppPaths.hpp"
-#include "core/Logger.hpp"
+#include "platform/AppPaths.hpp"
+#include "platform/FileSystem.hpp"
+#include "platform/Logger.hpp"
 
-#include <cstdio>
 #include <utility>
 
 namespace {
-
 constexpr std::string_view PluginFolder = "LivePlugin";
 constexpr std::string_view DeviceTokenFile = "LivePlugin/device.token";
-
 }
 
 bool AuthController::begin(AuthRequest request) {
@@ -48,13 +46,9 @@ void AuthController::storeDeviceToken(const std::string& fingerprint, const std:
         return;
     }
     AppPaths::ensureDirectory(PluginFolder);
-    const std::string path = AppPaths::file(DeviceTokenFile);
-    std::FILE* file = std::fopen(path.c_str(), "wb");
-    if (!file) {
+    if (!FileSystem::write(AppPaths::file(DeviceTokenFile), *token)) {
         Logger::instance().error("LiveBox device token could not be saved");
         return;
     }
-    std::fwrite(token->data(), 1, token->size(), file);
-    std::fclose(file);
     Logger::instance().info("LiveBox device token saved");
 }

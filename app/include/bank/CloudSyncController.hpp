@@ -2,11 +2,11 @@
 
 #include "bank/BankContext.hpp"
 #include "bank/BankSession.hpp"
-#include "bank/CommitService.hpp"
-#include "bank/LoadService.hpp"
+#include "bank/HandController.hpp"
 #include "bank/StorageController.hpp"
-#include "core/AsyncTask.hpp"
-#include "selection/SelectionController.hpp"
+#include "bank/commit/CommitService.hpp"
+#include "bank/selection/SelectionController.hpp"
+#include "platform/AsyncTask.hpp"
 
 #include <3ds.h>
 
@@ -16,9 +16,9 @@
 
 class CloudSyncController {
 public:
-    CloudSyncController(BankContext& context, BankSession& session, StorageController& storage,
+    CloudSyncController(BankContext& context, BankSession& session, StorageController& storage, HandController& hand,
                         CommitService& commit, SelectionController& selection)
-        : context_(context), session_(session), storage_(storage), commit_(commit), selection_(selection) {}
+        : context_(context), session_(session), storage_(storage), hand_(hand), commit_(commit), selection_(selection) {}
 
     void pumpBackgroundFetches();
 
@@ -49,6 +49,7 @@ private:
     BankContext& context_;
     BankSession& session_;
     StorageController& storage_;
+    HandController& hand_;
     CommitService& commit_;
     SelectionController& selection_;
     AsyncTask<RenameJob> rename_;

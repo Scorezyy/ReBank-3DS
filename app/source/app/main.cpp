@@ -1,9 +1,11 @@
 #include "app/App.hpp"
-#include "core/Logger.hpp"
+#include "platform/Logger.hpp"
 
 #include <3ds.h>
 
-extern "C" u32 __stacksize__ = 1 * 1024 * 1024;
+extern "C" {
+u32 __stacksize__ = 1 * 1024 * 1024;
+}
 
 int main(int argc, char* argv[]) {
     const bool cfgReady = R_SUCCEEDED(cfguInit());

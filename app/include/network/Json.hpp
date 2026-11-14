@@ -2,12 +2,14 @@
 
 #include <jansson.h>
 
+#include <initializer_list>
 #include <string>
 #include <utility>
 
 namespace Json {
 std::string string(json_t* object, const char* key);
 bool flag(json_t* object, const char* key);
+std::string encode(std::initializer_list<std::pair<const char*, json_t*>> fields);
 
 template <typename T>
 T integer(json_t* object, const char* key, T fallback) {

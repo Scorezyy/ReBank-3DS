@@ -1,14 +1,10 @@
 #include "bank/CloudSyncController.hpp"
 
-#include "core/Logger.hpp"
+#include "platform/Clock.hpp"
+#include "platform/Logger.hpp"
 
 #include <utility>
 
-namespace {
-u64 ticksFromNow(double seconds) {
-    return svcGetSystemTick() + static_cast<u64>(seconds * SYSCLOCK_ARM11);
-}
-}
 
 void CloudSyncController::pumpBackgroundFetches() {
     pumpHandPayloadFetch();
@@ -58,7 +54,7 @@ void CloudSyncController::pumpHandPayloadFetch() {
 void CloudSyncController::pumpCloudPayloadPrefetch() {
     if (session_.hand.active || selection_.engaged() || session_.storagePane != StoragePane::Cloud
         || commit_.requested() || session_.trashBoxActive || blockedByOtherWork()
-        || svcGetSystemTick() < regionFetchRetryAt_) {
+        || !Clock::reached(regionFetchRetryAt_)) {
         return;
     }
     const CloudView& cloud = session_.cloud;
@@ -75,7 +71,7 @@ void CloudSyncController::pumpCloudPayloadPrefetch() {
 }
 
 void CloudSyncController::pumpHeldRegionPayloadFetch() {
-    if (blockedByOtherWork() || svcGetSystemTick() < regionFetchRetryAt_) {
+    if (blockedByOtherWork() || !Clock::reached(regionFetchRetryAt_)) {
         return;
     }
     const std::optional<RegionPayloadRequest> request = selection_.nextPayloadRequest();
@@ -92,7 +88,7 @@ std::optional<std::uint16_t> CloudSyncController::nextCloudPrefetchKey() const {
         return std::nullopt;
     }
     const std::size_t boxLimit = context_.cloudBoxLimit();
-    const u64 now = svcGetSystemTick();
+    const u64 now = Clock::now();
     const auto available = [&](std::uint16_t key) {
         if (session_.cloudBoxes.count(key)) {
             return false;
@@ -142,7 +138,7 @@ void CloudSyncController::onCloudBoxLoaded() {
         if (current) {
             session_.cloud.clear(false);
         }
-        session_.cloudPrefetchCooldownUntil[boxKey] = ticksFromNow(15.0);
+        session_.cloudPrefetchCooldownUntil[boxKey] = Clock::after(15.0);
         context_.status = result.message;
         Logger::instance().warning("Cloud box refresh failed: " + context_.status);
         return;
@@ -186,7 +182,7 @@ void CloudSyncController::onCloudPickupCompleted() {
     if (!stillHeld) {
         if (selection_.holding()) {
             selection_.failPayload(fetch.cloudBox, fetch.slot);
-            regionFetchRetryAt_ = ticksFromNow(3.0);
+            regionFetchRetryAt_ = Clock::after(3.0);
         } else if (viewingFetchedBox && fetch.slot < BoxSlotCount) {
             session_.cloud.prefetchFailed[fetch.slot] = true;
         }
@@ -217,7 +213,7 @@ void CloudSyncController::onCloudSwapCompleted() {
         context_.status = context_.text.get(stillValid ? TextId::SwapCancelledBoxChanged : TextId::SwapCancelled);
         return;
     }
-    storage_.completeCloudSwap(fetch.slot, std::move(result.payload));
+    hand_.completeCloudSwap(fetch.slot, std::move(result.payload));
 }
 
 void CloudSyncController::beginRenameBox(std::uint16_t position, std::string name) {

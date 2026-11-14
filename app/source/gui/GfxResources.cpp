@@ -1,5 +1,6 @@
 #include "gui/GfxResources.hpp"
-#include "core/Logger.hpp"
+
+#include "platform/Logger.hpp"
 
 #include <3ds.h>
 

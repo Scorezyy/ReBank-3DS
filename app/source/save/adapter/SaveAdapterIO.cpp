@@ -1,5 +1,5 @@
+#include "platform/Logger.hpp"
 #include "save/adapter/SaveAdapter.hpp"
-#include "core/Logger.hpp"
 #include "save/pokemon/PokemonTransfer.hpp"
 
 #include <pkx/PKX.hpp>
@@ -62,47 +62,71 @@ SlotGroup<Count> readSlots(std::size_t count, const std::string& gameCode, std::
     return result;
 }
 
-template <typename Store, typename Read>
-bool writeChecked(pksm::Sav& save, std::uint8_t saveGen, const std::string& location, const PokemonPayload& payload,
-                  Store&& store, Read&& read) {
-    const std::uint8_t format = payload.format;
-    auto buffer = payload.data;
-    const pksm::Generation gen = PokemonTransfer::generationFromFormat(format);
-    if (gen == pksm::Generation::UNUSED) {
-        return false;
+std::unique_ptr<pksm::PKX> parsePayload(const PokemonPayload& payload, const std::string& location) {
+    const pksm::Generation generation = PokemonTransfer::generationFromFormat(payload.format);
+    if (generation == pksm::Generation::UNUSED) {
+        return nullptr;
     }
-    auto pkx = pksm::PKX::getPKM(gen, buffer.data(), buffer.size(), false);
+    std::vector<std::uint8_t> buffer = payload.data;
+    auto pkx = pksm::PKX::getPKM(generation, buffer.data(), buffer.size(), false);
     if (!pkx || static_cast<std::uint16_t>(pkx->species()) == 0) {
         Logger::instance().warning("write " + location + ": payload has no species");
-        return false;
+        return nullptr;
     }
-    std::unique_ptr<pksm::PKX> converted;
-    if (format != saveGen) {
-        converted = PokemonTransfer::convertForSave(*pkx, format, saveGen, save);
-        if (!converted) {
-            Logger::instance().warning("write " + location + ": conversion from Gen " + std::to_string(format)
-                                       + " to Gen " + std::to_string(saveGen) + " failed");
-            return false;
-        }
+    return pkx;
+}
+
+std::unique_ptr<pksm::PKX> convertIfNeeded(std::unique_ptr<pksm::PKX> pkx, std::uint8_t format, std::uint8_t saveGen,
+                                           pksm::Sav& save, const std::string& location) {
+    if (format == saveGen) {
+        return pkx;
     }
-    pksm::PKX& pkmRef = converted ? *converted : *pkx;
-    const auto expectedGeneration = pkmRef.generation();
-    const auto expectedSpecies = pkmRef.species();
-    const std::uint16_t storedChecksum = pkmRef.checksum();
-    pkmRef.refreshChecksum();
-    if (storedChecksum != pkmRef.checksum()) {
+    std::unique_ptr<pksm::PKX> converted = PokemonTransfer::convertForSave(*pkx, format, saveGen, save);
+    if (!converted) {
+        Logger::instance().warning("write " + location + ": conversion from Gen " + std::to_string(format) + " to Gen "
+                                   + std::to_string(saveGen) + " failed");
+    }
+    return converted;
+}
+
+void keepStoredChecksum(pksm::PKX& pkx, const std::string& location) {
+    const std::uint16_t storedChecksum = pkx.checksum();
+    pkx.refreshChecksum();
+    if (storedChecksum != pkx.checksum()) {
         Logger::instance().warning("write " + location + ": checksum mismatch before write, keeping stored 0x"
                                    + std::to_string(storedChecksum));
-        pkmRef.checksum(storedChecksum);
+        pkx.checksum(storedChecksum);
     }
-    store(pkmRef);
-    auto written = read();
-    if (!written || written->generation() != expectedGeneration || written->species() != expectedSpecies) {
+}
+
+bool verifyWritten(const pksm::PKX* written, const pksm::PKX& expected, bool wasEgg, const std::string& location) {
+    if (!written || written->generation() != expected.generation() || written->species() != expected.species()) {
         Logger::instance().error("write " + location + ": readback failed");
         return false;
     }
-    if (written->egg() && !pkx->egg()) {
+    if (written->egg() && !wasEgg) {
         Logger::instance().error("write " + location + ": write turned a non-egg into an egg, refusing");
+        return false;
+    }
+    return true;
+}
+
+template <typename Store, typename Read>
+bool writeChecked(pksm::Sav& save, std::uint8_t saveGen, const std::string& location, const PokemonPayload& payload,
+                  Store&& store, Read&& read) {
+    std::unique_ptr<pksm::PKX> original = parsePayload(payload, location);
+    if (!original) {
+        return false;
+    }
+    const bool wasEgg = original->egg();
+    std::unique_ptr<pksm::PKX> pkx = convertIfNeeded(std::move(original), payload.format, saveGen, save, location);
+    if (!pkx) {
+        return false;
+    }
+    keepStoredChecksum(*pkx, location);
+    store(*pkx);
+    const auto written = read();
+    if (!verifyWritten(written.get(), *pkx, wasEgg, location)) {
         return false;
     }
     Logger::instance().info("write " + location + ": species "

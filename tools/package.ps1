@@ -22,7 +22,7 @@ if (-not (Test-Path $serverConfigPath)) {
     throw "$serverConfigPath is missing. Copy config\server$configSuffix.mk.example to config\server$configSuffix.mk and fill it in."
 }
 $clientConfig = Get-Content $serverConfigPath -Raw
-$buildConfig = Get-Content (Join-Path $app "include\BuildConfig.hpp") -Raw
+$buildConfig = Get-Content (Join-Path $app "include\config\BuildConfig.hpp") -Raw
 $versionMatch = [regex]::Match($buildConfig, 'Version\s*=\s*"(\d+)\.(\d+)\.(\d+)"')
 if (-not $versionMatch.Success) {
     throw "BuildConfig version must use major.minor.patch."

@@ -1,5 +1,6 @@
 #include "bank/LoadService.hpp"
-#include "core/Logger.hpp"
+
+#include "platform/Logger.hpp"
 
 #include <utility>
 
@@ -50,12 +51,12 @@ void LoadService::work(Operation operation) {
     const bool listing = operation == Operation::LoadBank || operation == Operation::CloudBox;
     try {
         if (operation == Operation::LoadBank) {
-            cloudBoxResult = api_.listCloudBox(1, accessToken_);
+            cloudBoxResult = api_.listBox(1, accessToken_);
             pendingBoxNames = api_.listBoxNames(accessToken_).boxes;
         } else if (operation == Operation::CloudBox) {
-            cloudBoxResult = api_.listCloudBox(static_cast<std::uint16_t>(resolvedCloudBoxKey + 1), accessToken_);
+            cloudBoxResult = api_.listBox(static_cast<std::uint16_t>(resolvedCloudBoxKey + 1), accessToken_);
         } else {
-            pickupResult = api_.downloadPokemon({fetch.cloudBox, static_cast<std::uint8_t>(fetch.slot + 1)},
+            pickupResult = api_.download({fetch.cloudBox, static_cast<std::uint8_t>(fetch.slot + 1)},
                                                 accessToken_);
         }
         if (listing) {

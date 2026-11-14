@@ -1,43 +1,13 @@
 #include "bank/BankInputController.hpp"
 
-#include "bank/LoadService.hpp"
-#include "core/Logger.hpp"
-#include "gui/BankLayout.hpp"
-#include "selection/GridGeometry.hpp"
+#include "bank/selection/GridGeometry.hpp"
+#include "gui/screens/bank/BankLayout.hpp"
+#include "platform/Logger.hpp"
 
 #include <algorithm>
 
 namespace {
-constexpr double InitialRepeatDelaySeconds = 0.28;
-constexpr double RepeatIntervalSeconds = 0.09;
 constexpr std::size_t BoxNameMaxLength = 16;
-
-CursorDirection directionFromKeys(u32 keys) {
-    if (keys & KEY_UP) {
-        return CursorDirection::Up;
-    }
-    if (keys & KEY_DOWN) {
-        return CursorDirection::Down;
-    }
-    if (keys & KEY_LEFT) {
-        return CursorDirection::Left;
-    }
-    return keys & KEY_RIGHT ? CursorDirection::Right : CursorDirection::None;
-}
-
-CursorDirection directionFromCircle(circlePosition circle) {
-    constexpr s16 Threshold = InputFrame::StickThreshold;
-    if (circle.dy > Threshold) {
-        return CursorDirection::Up;
-    }
-    if (circle.dy < -Threshold) {
-        return CursorDirection::Down;
-    }
-    if (circle.dx < -Threshold) {
-        return CursorDirection::Left;
-    }
-    return circle.dx > Threshold ? CursorDirection::Right : CursorDirection::None;
-}
 
 std::size_t neighbourSlot(const GridGeometry& grid, StoragePane pane, std::size_t slot, CursorDirection direction) {
     const int lastRow = grid.rows() - 1;
@@ -64,31 +34,6 @@ std::size_t neighbourSlot(const GridGeometry& grid, StoragePane pane, std::size_
     return grid.slotOf(point);
 }
 
-u64 ticksFromNow(double seconds) {
-    return svcGetSystemTick() + static_cast<u64>(SYSCLOCK_ARM11 * seconds);
-}
-}
-
-CursorDirection BankInputController::repeatedDirection(const InputFrame& input) {
-    CursorDirection direction = directionFromKeys(input.held);
-    if (direction == CursorDirection::None) {
-        direction = directionFromCircle(input.circle);
-    }
-    if (direction == CursorDirection::None) {
-        heldDirection_ = CursorDirection::None;
-        directionRepeatAt_ = 0;
-        return CursorDirection::None;
-    }
-    if (direction != heldDirection_ || directionFromKeys(input.down) == direction) {
-        heldDirection_ = direction;
-        directionRepeatAt_ = ticksFromNow(InitialRepeatDelaySeconds);
-        return direction;
-    }
-    if (svcGetSystemTick() >= directionRepeatAt_) {
-        directionRepeatAt_ = ticksFromNow(RepeatIntervalSeconds);
-        return direction;
-    }
-    return CursorDirection::None;
 }
 
 void BankInputController::handle(const InputFrame& input) {
@@ -119,7 +64,7 @@ void BankInputController::handle(const InputFrame& input) {
         if (selection_.mode() != SelectionMode::Single) {
             selection_.confirm();
         } else {
-            storage_.pickUpOrDrop();
+            hand_.pickUpOrDrop();
         }
     }
     handleMovement(input);
@@ -153,7 +98,7 @@ void BankInputController::handleBack() {
         return;
     }
     if (session_.hand.active) {
-        storage_.returnHand();
+        hand_.returnHand();
         return;
     }
     if (const auto change = storage_.pendingChange()) {
@@ -172,35 +117,16 @@ void BankInputController::handleBoxShoulder(const InputFrame& input) {
     if (!input.pressed(KEY_L | KEY_R) || session_.storagePane == StoragePane::Party) {
         return;
     }
-    const bool goPrevious = input.pressed(KEY_L);
+    const bool backwards = input.pressed(KEY_L);
     if (session_.storagePane == StoragePane::Local) {
-        const std::size_t boxCount = session_.saveAdapter.boxCount();
-        storage_.persistLocalDraft();
-        session_.localBox = (session_.localBox + (goPrevious ? boxCount - 1 : 1)) % boxCount;
-        storage_.loadLocalBox();
-        return;
+        storage_.stepLocalBox(backwards);
+    } else {
+        storage_.stepCloudBox(backwards);
     }
-
-    const std::size_t boxLimit = context_.cloudBoxLimit();
-    if (session_.trashBoxActive) {
-        session_.setTrashActive(false);
-        session_.cloudBox = goPrevious ? boxLimit - 1 : 0;
-        storage_.refreshCloudBox();
-        return;
-    }
-    storage_.persistCloudDraft();
-    const bool leavesRange = goPrevious ? session_.cloudBox == 0 : session_.cloudBox + 1 >= boxLimit;
-    if (leavesRange) {
-        session_.setTrashActive(true);
-        storage_.loadTrashBox();
-        return;
-    }
-    session_.cloudBox = goPrevious ? session_.cloudBox - 1 : session_.cloudBox + 1;
-    storage_.refreshCloudBox();
 }
 
 void BankInputController::handleCloudNameFocus(const InputFrame& input) {
-    repeatedDirection(input);
+    directions_.next(input);
     if (input.pressed(KEY_DOWN | KEY_B)) {
         session_.cloudNameFocused = false;
         return;
@@ -221,7 +147,7 @@ void BankInputController::handleCloudNameFocus(const InputFrame& input) {
 }
 
 void BankInputController::handleMovement(const InputFrame& input) {
-    const CursorDirection direction = repeatedDirection(input);
+    const CursorDirection direction = directions_.next(input);
     if (selection_.holding()) {
         selection_.move(direction);
         return;
@@ -232,7 +158,7 @@ void BankInputController::handleMovement(const InputFrame& input) {
         session_.focusedSlot = neighbourSlot(session_.grid(session_.storagePane), session_.storagePane, session_.focusedSlot, direction);
     }
     if (!selection_.engaged()) {
-        handlePaneTransitions(directionFromKeys(input.down), priorPane, priorSlot);
+        handlePaneTransitions(DirectionRepeat::fromKeys(input.down), priorPane, priorSlot);
     }
 }
 
@@ -326,6 +252,6 @@ void BankInputController::activateSlot(StoragePane pane, std::size_t slot) {
     if (session_.storagePane != pane || session_.focusedSlot != slot) {
         enterPane(pane, slot);
     } else {
-        storage_.pickUpOrDrop();
+        hand_.pickUpOrDrop();
     }
 }

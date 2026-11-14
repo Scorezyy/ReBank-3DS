@@ -6,7 +6,7 @@ app/build/
 app/config/client-secret.mk
 app/config/client-secret.dev.mk
 app/config/server.dev.mk
-app/source/core/RequestSigning.cpp
+app/source/security/RequestSigning.cpp
 app/rebank.3dsx
 app/rebank.elf
 app/rebank.map
@@ -29,7 +29,12 @@ graphify-out/
 architecture.html
 ReBank-Architektur.html
 ReBank-3DS-LivePlugin/codebin/
+ReBank-ACNL/codebin/
 ReBank-3DS-LivePlugin/build-*/
 ReBank-3DS-LivePlugin/re/
 *.3gx
 ReBank-3DS-LivePlugin/*.elf
+ReBank Ökosystem.png
+video/
+screenshots/
+tools/

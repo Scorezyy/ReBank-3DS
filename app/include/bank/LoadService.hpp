@@ -1,7 +1,7 @@
 #pragma once
 
-#include "core/BackgroundOperation.hpp"
-#include "network/ApiClient.hpp"
+#include "network/api/CloudApi.hpp"
+#include "platform/BackgroundOperation.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -33,7 +33,7 @@ public:
     using Operation = LoadOperation;
     using Phase = LoadPhase;
 
-    LoadService(ApiClient& api, const AccountSession& account)
+    LoadService(CloudApi& api, const AccountSession& account)
         : BackgroundOperation("LoadService"), api_(api), account_(account) {}
 
     void begin(Operation operation);
@@ -53,7 +53,7 @@ public:
 private:
     void work(Operation operation);
 
-    ApiClient& api_;
+    CloudApi& api_;
     const AccountSession& account_;
     bool discardResult_ = false;
     std::string accessToken_;

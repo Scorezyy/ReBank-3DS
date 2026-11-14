@@ -1,10 +1,11 @@
 #include "update/UpdateInstaller.hpp"
 
-#include "BuildConfig.hpp"
-#include "core/AppPaths.hpp"
-#include "core/Hex.hpp"
-#include "core/Logger.hpp"
-#include "update/SignedFile.hpp"
+#include "config/BuildConfig.hpp"
+#include "platform/AppPaths.hpp"
+#include "platform/FileSystem.hpp"
+#include "platform/Logger.hpp"
+#include "security/Hex.hpp"
+#include "security/SignedFile.hpp"
 
 #include <3ds.h>
 
@@ -12,7 +13,6 @@
 #include <array>
 #include <cstdio>
 #include <optional>
-#include <sys/stat.h>
 #include <string_view>
 #include <vector>
 
@@ -122,7 +122,7 @@ UpdateInstallResult installCia(const std::string& path, std::atomic<std::uint32_
         std::remove(path.c_str());
         return installed;
     }
-    mkdir(FallbackCiaDirectory, 0777);
+    FileSystem::createDirectories(FallbackCiaDirectory);
     std::remove(FallbackCiaPath);
     if (std::rename(path.c_str(), FallbackCiaPath) == 0) {
         Logger::instance().info(std::string("Update CIA kept for manual install at ") + FallbackCiaPath);
@@ -153,7 +153,23 @@ UpdateInstallResult replaceThreeDsx(const std::string& currentPath, const std::s
     return {true, true, "3DSX update installed. Restart it from the Homebrew Launcher."};
 }
 
-UpdateInstallResult downloadAndInstall(ApiClient& api, const std::string& executablePath, bool homebrew,
+std::optional<UpdateInstallResult> verifyDownload(const std::string& path, const UpdateAsset& asset) {
+    const SignedFile::Verdict verdict = SignedFile::verify(path, asset);
+    if (verdict == SignedFile::Verdict::Valid) {
+        return std::nullopt;
+    }
+    std::remove(path.c_str());
+    if (verdict == SignedFile::Verdict::Corrupt) {
+        Logger::instance().error("Update SHA-256 verification failed");
+        return UpdateInstallResult{false, false, "Update verification failed."};
+    }
+    Logger::instance().error(BuildConfig::UpdateKeyModulus.empty()
+        ? "Update refused: this build has no update signing key"
+        : "Update refused: the release signature is missing or invalid");
+    return UpdateInstallResult{false, false, "The update is not signed by ReBank and was not installed."};
+}
+
+UpdateInstallResult downloadAndInstall(ReleaseApi& api, const std::string& executablePath, bool homebrew,
                                        UpdateProgress& progress) {
     const ClientUpdate update = api.latestClientUpdate();
     if (!update.success) {
@@ -175,18 +191,8 @@ UpdateInstallResult downloadAndInstall(ApiClient& api, const std::string& execut
         return {false, false, download.message};
     }
     progress.stage = UpdateStage::Verifying;
-    const SignedFile::Verdict verdict = SignedFile::verify(temporaryPath, asset);
-    if (verdict == SignedFile::Verdict::Corrupt) {
-        std::remove(temporaryPath.c_str());
-        Logger::instance().error("Update SHA-256 verification failed");
-        return {false, false, "Update verification failed."};
-    }
-    if (verdict == SignedFile::Verdict::Unsigned) {
-        std::remove(temporaryPath.c_str());
-        Logger::instance().error(BuildConfig::UpdateKeyModulus.empty()
-            ? "Update refused: this build has no update signing key"
-            : "Update refused: the release signature is missing or invalid");
-        return {false, false, "The update is not signed by ReBank and was not installed."};
+    if (std::optional<UpdateInstallResult> rejected = verifyDownload(temporaryPath, asset)) {
+        return *rejected;
     }
     Logger::instance().info("Installing verified " + update.tag + " " + assetName);
     progress.received = 0;
@@ -201,7 +207,7 @@ UpdateInstallResult downloadAndInstall(ApiClient& api, const std::string& execut
 }
 }
 
-UpdateInstallResult UpdateInstaller::run(ApiClient& api, const std::string& executablePath, bool homebrew,
+UpdateInstallResult UpdateInstaller::run(ReleaseApi& api, const std::string& executablePath, bool homebrew,
                                          UpdateProgress& progress) {
     UpdateInstallResult result = downloadAndInstall(api, executablePath, homebrew, progress);
     if (!result.updated && progress.stage.load() != UpdateStage::Checking) {

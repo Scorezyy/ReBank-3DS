@@ -1,7 +1,7 @@
 #include "save/catalog/VirtualConsoleTitles.hpp"
 
-#include "core/KeyValueConfig.hpp"
-#include "io/SaveMedium.hpp"
+#include "platform/KeyValueConfig.hpp"
+#include "save/storage/SaveArchive.hpp"
 
 #include <3ds.h>
 
@@ -117,7 +117,7 @@ std::optional<std::uint64_t> resolveInstalledTitleId(std::string_view code) {
         return std::nullopt;
     }
     const auto withSave = std::find_if(candidates.begin(), candidates.end(), [](std::uint64_t titleId) {
-        return SaveMedium::archiveHasSave(titleId, MEDIATYPE_SD);
+        return SaveArchive::hasSave(titleId, MEDIATYPE_SD);
     });
     return withSave != candidates.end() ? *withSave : candidates.front();
 }

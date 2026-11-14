@@ -1,5 +1,7 @@
 #include "gui/UiRenderer.hpp"
-#include "gui/elements/Shapes.hpp"
+
+#include "gui/widgets/Shapes.hpp"
+#include "platform/Clock.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -100,6 +102,62 @@ float UiRenderer::measure(std::string_view value, float size) const {
     return width;
 }
 
+std::size_t UiRenderer::fittingPrefix(std::string_view word, float size, float width) const {
+    std::size_t length = word.size();
+    while (length > 1 && measure(word.substr(0, length), size) > width) {
+        --length;
+        while (length > 1 && (static_cast<unsigned char>(word[length]) & 0xC0) == 0x80) {
+            --length;
+        }
+    }
+    return length;
+}
+
+void UiRenderer::wrapParagraph(std::string_view paragraph, float size, float width,
+                               std::vector<std::string>& lines) const {
+    std::string line;
+    while (!paragraph.empty()) {
+        const std::size_t space = paragraph.find(' ');
+        std::string_view word = paragraph.substr(0, space);
+        paragraph = space == std::string_view::npos ? std::string_view{} : paragraph.substr(space + 1);
+        if (word.empty()) {
+            continue;
+        }
+        const std::string candidate = line.empty() ? std::string(word) : line + " " + std::string(word);
+        if (measure(candidate, size) <= width) {
+            line = candidate;
+            continue;
+        }
+        if (!line.empty()) {
+            lines.push_back(std::move(line));
+        }
+        while (measure(word, size) > width) {
+            const std::size_t cut = fittingPrefix(word, size, width);
+            lines.emplace_back(word.substr(0, cut));
+            word = word.substr(cut);
+        }
+        line = std::string(word);
+    }
+    if (!line.empty()) {
+        lines.push_back(std::move(line));
+    }
+}
+
+std::vector<std::string> UiRenderer::wrap(std::string_view value, float size, float width) const {
+    std::vector<std::string> lines;
+    std::size_t start = 0;
+    while (start <= value.size()) {
+        const std::size_t newline = value.find('\n', start);
+        const std::size_t end = newline == std::string_view::npos ? value.size() : newline;
+        wrapParagraph(value.substr(start, end - start), size, width, lines);
+        if (newline == std::string_view::npos) {
+            break;
+        }
+        start = newline + 1;
+    }
+    return lines;
+}
+
 float UiRenderer::lineHeight(float size) const {
     const FINF_s* info = C2D_FontGetInfo(font_);
     return (info ? info->lineFeed : 30.0F) * size;
@@ -112,28 +170,13 @@ float UiRenderer::textWidth(std::string_view value, float size) {
     return width;
 }
 
-void UiRenderer::drawButton(const UiRect& rect, std::string_view label, bool primary) {
-    C2D_DrawRectSolid(rect.x, rect.y, 0.1F, rect.width, rect.height, primary ? Brand : Surface);
-    drawCentered(label, rect.x + rect.width * 0.5F, rect.y + 11.0F, 0.58F, primary ? Surface : Ink);
-}
-
-void UiRenderer::drawField(const UiRect& rect, std::string_view label, const std::string& value, bool password) {
-    C2D_DrawRectSolid(rect.x, rect.y, 0.1F, rect.width, rect.height, Surface);
-    drawText(label, rect.x + 10.0F, rect.y + 5.0F, 0.42F, Muted);
-    drawText(password ? std::string(value.size(), '*') : value, rect.x + 10.0F, rect.y + 21.0F, 0.52F, Ink);
-}
-
-void UiRenderer::drawPill(const UiRect& rect, float depth, u32 color) {
-    drawRoundedRect(rect.x, rect.y, rect.width, rect.height, 10.0F, depth, color);
-}
-
 void UiRenderer::drawWarmBackground() {
     const u32 bottom = C2D_Color32(255, 228, 204, 255);
     C2D_DrawRectangle(0.0F, 0.0F, 0.01F, 320.0F, 240.0F, WarmBackground, WarmBackground, bottom, bottom);
 }
 
 void UiRenderer::drawWarmTop(float eyeOffset) {
-    const float seconds = static_cast<float>(static_cast<double>(svcGetSystemTick()) / SYSCLOCK_ARM11);
+    const float seconds = static_cast<float>(Clock::seconds());
     const float breathe = 0.5F + 0.5F * std::sin(seconds * 0.9F);
     C2D_DrawRectangle(0.0F, 0.0F, 0.01F, 400.0F, 240.0F, WarmGlowTop, WarmGlowTop, WarmGlowBottom, WarmGlowBottom);
     for (int ring = 0; ring < 4; ++ring) {
@@ -144,7 +187,7 @@ void UiRenderer::drawWarmTop(float eyeOffset) {
 
 void UiRenderer::drawSpinner(float centerX, float centerY, float radius, u32 color) {
     constexpr int Segments = 12;
-    const float seconds = static_cast<float>(static_cast<double>(svcGetSystemTick()) / SYSCLOCK_ARM11);
+    const float seconds = static_cast<float>(Clock::seconds());
     const float head = seconds * 6.0F;
     const float dot = std::max(2.0F, radius * 0.22F);
     for (int index = 0; index < Segments; ++index) {
@@ -157,13 +200,21 @@ void UiRenderer::drawSpinner(float centerX, float centerY, float radius, u32 col
 }
 
 void UiRenderer::drawProgressBar(const UiRect& rect, float share, u32 track) {
-    drawPill(rect, 0.2F, track);
+    Gui::drawRoundedRect(rect, ControlRadius, 0.2F, track);
     const float width = rect.width * std::clamp(share, 0.0F, 1.0F);
     if (width < rect.height) {
         return;
     }
-    drawPill({rect.x, rect.y, width, rect.height}, 0.3F, WarmBrand);
-    drawPill({rect.x + 2.0F, rect.y + 1.5F, width - 4.0F, rect.height * 0.35F}, 0.31F, C2D_Color32(255, 190, 130, 160));
+    Gui::drawRoundedRect({rect.x, rect.y, width, rect.height}, ControlRadius, 0.3F, WarmBrand);
+    Gui::drawRoundedRect({rect.x + 2.0F, rect.y + 1.5F, width - 4.0F, rect.height * 0.35F}, ControlRadius, 0.31F, C2D_Color32(255, 190, 130, 160));
+}
+
+void UiRenderer::drawBusyBar(const UiRect& rect, u32 track) {
+    constexpr float BlockWidth = 60.0F;
+    const float cycle = std::fmod(static_cast<float>(Clock::seconds()) * 0.65F, 1.0F);
+    Gui::drawRoundedRect(rect, ControlRadius, 0.2F, track);
+    Gui::drawRoundedRect({rect.x + cycle * (rect.width - BlockWidth), rect.y, BlockWidth, rect.height}, ControlRadius, 0.3F,
+                         WarmBrand);
 }
 
 void UiRenderer::drawCheckMark(float centerX, float centerY, float radius) {
@@ -175,17 +226,17 @@ void UiRenderer::drawCheckMark(float centerX, float centerY, float radius) {
     C2D_DrawLine(centerX - 3.0F * s, centerY + 10.0F * s, Surface, centerX + 13.0F * s, centerY - 9.0F * s, Surface, 5.0F * s, 0.4F);
 }
 
-void UiRenderer::drawWarmButton(const UiRect& rect, std::string_view label, bool primary) {
-    drawPill({rect.x, rect.y + 3.0F, rect.width, rect.height}, 0.09F,
+void UiRenderer::drawButton(const UiRect& rect, std::string_view label, bool primary) {
+    Gui::drawRoundedRect({rect.x, rect.y + 3.0F, rect.width, rect.height}, ControlRadius, 0.09F,
              primary ? WarmBrandDark : C2D_Color32(234, 200, 176, 255));
-    drawPill(rect, 0.1F, primary ? WarmBrand : Surface);
+    Gui::drawRoundedRect(rect, ControlRadius, 0.1F, primary ? WarmBrand : Surface);
     drawCentered(label, rect.x + rect.width * 0.5F, rect.y + rect.height * 0.5F - 9.0F, 0.58F,
                  primary ? Surface : WarmInk);
 }
 
-void UiRenderer::drawWarmField(const UiRect& rect, std::string_view label, const std::string& value, bool password) {
-    drawPill({rect.x, rect.y + 2.0F, rect.width, rect.height}, 0.09F, C2D_Color32(234, 200, 176, 255));
-    drawPill(rect, 0.1F, Surface);
+void UiRenderer::drawField(const UiRect& rect, std::string_view label, const std::string& value, bool password) {
+    Gui::drawRoundedRect({rect.x, rect.y + 2.0F, rect.width, rect.height}, ControlRadius, 0.09F, C2D_Color32(234, 200, 176, 255));
+    Gui::drawRoundedRect(rect, ControlRadius, 0.1F, Surface);
     drawText(label, rect.x + 12.0F, rect.y + 5.0F, 0.42F, WarmMuted);
     drawText(password ? std::string(value.size(), '*') : value, rect.x + 12.0F, rect.y + 21.0F, 0.52F, WarmInk);
 }

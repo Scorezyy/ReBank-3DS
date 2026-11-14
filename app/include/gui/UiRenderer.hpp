@@ -6,6 +6,7 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 
 class UiRenderer {
 public:
@@ -18,21 +19,22 @@ public:
     float textWidth(std::string_view value, float size);
     float measure(std::string_view value, float size) const;
     float lineHeight(float size) const;
-    void drawButton(const UiRect& rect, std::string_view label, bool primary);
-    void drawField(const UiRect& rect, std::string_view label, const std::string& value, bool password);
-    void drawPill(const UiRect& rect, float depth, u32 color);
+    std::vector<std::string> wrap(std::string_view value, float size, float width) const;
     void drawWarmBackground();
     void drawWarmTop(float eyeOffset);
     void drawSpinner(float centerX, float centerY, float radius, u32 color);
     void drawProgressBar(const UiRect& rect, float share, u32 track);
+    void drawBusyBar(const UiRect& rect, u32 track);
     void drawCheckMark(float centerX, float centerY, float radius);
-    void drawWarmButton(const UiRect& rect, std::string_view label, bool primary);
-    void drawWarmField(const UiRect& rect, std::string_view label, const std::string& value, bool password);
+    void drawButton(const UiRect& rect, std::string_view label, bool primary);
+    void drawField(const UiRect& rect, std::string_view label, const std::string& value, bool password);
 
 private:
     enum class Anchor { Left, Center, Right };
 
     C2D_Text parse(std::string_view value);
+    std::size_t fittingPrefix(std::string_view word, float size, float width) const;
+    void wrapParagraph(std::string_view paragraph, float size, float width, std::vector<std::string>& lines) const;
     void draw(std::string_view value, float x, float y, float size, u32 color, Anchor anchor);
 
     C2D_Font font_ = nullptr;

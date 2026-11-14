@@ -12,6 +12,14 @@ bool flag(json_t* object, const char* key) {
     return json_is_true(json_object_get(object, key));
 }
 
+std::string encode(std::initializer_list<std::pair<const char*, json_t*>> fields) {
+    Document body = Document::object();
+    for (const auto& [key, value] : fields) {
+        body.set(key, value);
+    }
+    return body.dump();
+}
+
 Document Document::parse(const std::string& text) {
     json_error_t error{};
     return Document(json_loadb(text.data(), text.size(), JSON_REJECT_DUPLICATES, &error));
